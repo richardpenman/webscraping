@@ -1,6 +1,4 @@
 import re
-#import ElementSoup
-#from elementtree import ElementTree
 import libxml2dom
 
 
@@ -12,7 +10,7 @@ class sitescraper(object):
         self._model = model
 
 
-    def scrape(self, input, html=False, drop_tags=None):#['script', 'link']):
+    def scrape(self, input, html=False, drop_tags=None):
         """Scrape data from this input using model
         The html flag determines whether to extract the raw HTML instead of parsed text"""
 

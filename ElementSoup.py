@@ -33,8 +33,8 @@ def unescape(string):
 #     "best" available <b>TreeBuilder</b> implementation.
 # @return An Element instance representing the HTML root element.
 
-def parse(fp, builder=None, encoding=None):
-    html = fp.read()
+def parse(input, builder=None, encoding=None):
+    html = input.read() if hasattr(input, 'read') else input
     bob = builder
     def emit(soup):
         if isinstance(soup, BS.NavigableString):

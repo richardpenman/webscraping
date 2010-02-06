@@ -7,6 +7,7 @@ import os
 import gzip
 import re
 import time
+import urllib
 import urllib2
 import string
 from StringIO import StringIO
@@ -92,4 +93,4 @@ def unescape(text):
             except KeyError:
                 pass
         return text # leave as is
-    return re.sub("&#?\w+;", fixup, text)
+    return re.sub("&#?\w+;", fixup, urllib.unquote(text))

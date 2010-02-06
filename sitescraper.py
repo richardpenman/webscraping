@@ -1,5 +1,12 @@
 import re
-import libxml2dom
+from html5lib import HTMLParser, treebuilders
+#from elementtree import ElementTree
+try:
+    from xml.etree import cElementTree as ET
+except ImportError:
+    from xml.etree import ElementTree as ET
+from pdis.xpath import compile
+
 
 
 class sitescraper(object):
@@ -12,16 +19,16 @@ class sitescraper(object):
 
     def scrape(self, input, html=False, drop_tags=None):
         """Scrape data from this input using model
-        The html flag determines whether to extract the raw HTML instead of parsed text"""
-
+        The html flag determines whether to extract the raw HTML instead of parsed text
+        """
         tree = self.parse(input, drop_tags)
-        open('tree.html', 'w').write(libxml2dom.toString(tree))
+        #open('tree.html', 'w').write(self.html_content(tree))
         results = []
         for xpath in self._model:
             if isinstance(xpath, list):
-                results.append([self.extract_content(e, html) for e in tree.xpath(xpath[0])])
+                results.append([self.extract_content(e, html) for e in compile(xpath[0]).evaluate(tree)])
             else:
-                es = tree.xpath(xpath)
+                es = compile(xpath).evaluate(tree)
                 results.append(self.extract_content(es[0], html) if es else None)
         return results
 
@@ -34,7 +41,7 @@ class sitescraper(object):
             for tag in drop_tags:
                 html = re.compile('<' + tag + '[^>]*?/>', re.DOTALL).sub('', html)
                 html = re.compile('<' + tag + '[^>]*?>.*?</' + tag + '>', re.DOTALL).sub('', html)
-        return libxml2dom.parseString(html, html=1)
+        return HTMLParser(tree=treebuilders.getTreeBuilder("etree", ET)).parse(html)
 
 
     def extract_content(self, e, html):
@@ -43,7 +50,20 @@ class sitescraper(object):
         elif e is None:
             result = ''
         elif html:
-            result = e.toString()
+            result = self.html_content(e)
         else:
-            result = e.textContent
+            result = self.text_content(e)
         return result.strip()
+
+    def text_content(self, e):
+        """Recursively find text content
+        """
+        get_text = lambda t: t if t else ''
+        return get_text(e.text) + ''.join(self.text_content(c) for c in e) + get_text(e.tail)
+
+    def html_content(self, e):
+        """Extract HTML under this element
+        """
+        return (e.text if e.text else '') + \
+               ''.join([ET.tostring(c) for c in e.getchildren()]) + \
+               (e.tail if e.tail else '')

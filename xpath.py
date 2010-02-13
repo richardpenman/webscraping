@@ -1,0 +1,215 @@
+import re
+import urllib2
+from optparse import OptionParser
+
+
+
+def parse(html, xpath):
+    """Query HTML document using XPath
+    Supports indices, attributes, descendants
+    Can handle rough HTML but may miss content if key tags are not closed
+
+    >>> parse('<span>1</span><div>abc<a>LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a>LINK 3</a>jkl</div>', '/div/a')
+    ['LINK 1', 'LINK 3']
+    >>> parse('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]/a[@class="link"]')
+    ['LINK 1']
+    >>> parse('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]//a')
+    ['LINK 1', 'LINK 2']
+    >>> parse('<div>abc<a class="link">LINK 1</a></div>', '/div/a/@class')
+    ['link']
+    """
+    contexts = [html]
+    parent_attributes = []
+    for i, (separator, tag, index, attribute) in enumerate(xpath_iter(xpath)):
+        children = []
+        if tag == '..':
+            # parent
+            raise Exception('.. not supported')
+        elif tag.startswith('@'):
+            # selecting attribute
+            for attributes in parent_attributes:
+                children.append(attributes.get(tag[1:], ''))
+        else:
+            # have tag
+            parent_attributes = []
+            for context in contexts:
+                search = separator == '' and find_children or find_descendants
+                for i, child in enumerate(search(context, tag)):
+                    if index is None or index == i + 1:
+                        attributes = get_attributes(child)
+                        if attribute is None or attribute in attributes.items():
+                            # child matches tag and any defined indices or attributes
+                            children.append(get_content(child))
+                            parent_attributes.append(attributes)
+        contexts = children
+        if not contexts:
+            print 'No matches for <%s> (tag %d)' % (tag, i+1)
+            break
+    return contexts
+
+
+
+def xpath_iter(xpath):
+    """Return an iterator of the xpath parsed into the separator, tag, index, and attribute
+
+    >>> list(xpath_iter('/div[1]//span[@class="text"]'))
+    [('', 'div', 1, None), ('/', 'span', None, ('class', 'text'))]
+    """
+    for separator, token in re.compile('(|/|\.\.)/([^/]+)').findall(xpath):
+        index = attribute = None
+        if '[' in token:
+            tag, selector = token[:-1].split('[')
+            try:
+                index = int(selector)
+            except ValueError:
+                match = re.compile('@(.*?)=["\'](.*?)["\']').search(selector)    
+                if match:
+                    attribute = match.groups()
+                else:
+                    raise Exception('Unknown format: ' + selector)
+        else:
+            tag = token
+        yield separator, tag, index, attribute
+
+
+def get_attributes(html):
+    """Extract the attributes of the passed HTML tag
+
+    >>> get_attributes('<div id="ID" name="NAME">content <span>SPAN</span></div>')
+    {'id': 'ID', 'name': 'NAME'}
+    """
+    attributes, contents = re.compile('<(.*?)>(.*)</.*?>$', re.DOTALL).match(html).groups()
+    attributes = dict(re.compile('(\w+)=["\'](.*?)["\']', re.DOTALL).findall(attributes))
+    return attributes
+
+def get_content(html):
+    """Extract the attributes and child HTML of a the passed HTML tag
+
+    >>> get_content('<div id="ID" name="NAME">content <span>SPAN</span></div>')
+    'content <span>SPAN</span>'
+    """
+    return re.compile('<.*?>(.*)</.*?>$', re.DOTALL).match(html).groups()[0]
+
+
+
+def find_children(html, tag):
+    """Find children with this tag type
+
+    >>> find_children('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div')
+    ['<div>abc<div>def</div>abc</div>', '<div>jkl</div>']
+    """
+    results = []
+    found = True
+    while found:
+        html = jump_next_tag(html)
+        if html:
+            tag_html, html = split_tag(html)
+            if tag_html:
+                #print tag_html
+                if tag in ('*', get_tag(tag_html)):
+                    results.append(tag_html)
+            else:
+                found = False
+        else:
+            found = False
+    return results
+
+
+def find_descendants(html, tag):
+    """Find descendants with this tag type
+
+    >>> find_descendants('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div')
+    ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
+    """
+    results = []
+    for match in re.compile('<%s' % tag, re.DOTALL).finditer(html):
+        tag_html, _ = split_tag(html[match.start():])
+        results.append(tag_html)
+    return results
+
+
+def jump_next_tag(html):
+    """Return html at start of next tag
+
+    >>> jump_next_tag('<div>abc</div>')
+    '<div>abc</div>'
+    >>> jump_next_tag(' <div>abc</div>')
+    '<div>abc</div>'
+    >>> jump_next_tag('</span> <div>abc</div>')
+    '<div>abc</div>'
+    """
+    match = re.compile('<\w+', re.DOTALL).search(html)
+    if match:
+        return html[match.start():]
+    else:
+        return None
+
+
+def get_tag(html):
+    """Find tag type at this location
+
+    >>> get_tag('<div>abc</div>')
+    'div'
+    >>> get_tag(' <span>')
+    >>> get_tag('span')
+    """
+    match = re.match('<(\w+)', html)
+    if match:
+        return match.groups()[0]
+    else:
+        return None
+
+
+def split_tag(html):
+    """Extract starting tag from HTML
+
+    >>> split_tag('<div>abc<div>def</div>abc</div>ghi<div>jkl</div>')
+    ('<div>abc<div>def</div>abc</div>', 'ghi<div>jkl</div>')
+    >>> split_tag('<br /><div>abc</div>')
+    ('<br />', '<div>abc</div>')
+    """
+    tag = get_tag(html)
+    depth = 0
+    for match in re.compile('</?%s.*?>' % tag, re.DOTALL).finditer(html):
+        if html[match.start() + 1] == '/':
+            depth -= 1
+        elif html[match.end() - 2] == '/':
+            pass # tag starts and ends
+        else:
+            depth += 1
+        if depth == 0:
+            i = match.end()
+            return html[:i], html[i:]
+    return None, html
+
+
+
+def main():
+    usage = 'usage: %prog [options] xpath1 [xpath2 ...]'
+    parser = OptionParser(usage)
+    parser.add_option("-f", "--file", dest="filename", help="read html from FILENAME")
+    parser.add_option("-s", "--string", dest="string", help="read html from STRING")
+    parser.add_option("-u", "--url", dest="url", help="read html from URL")
+    parser.add_option("-d", "--doctest", action="store_true", dest="doctest")
+    (options, xpaths) = parser.parse_args()
+
+    if options.doctest:
+        import doctest
+        return doctest.testmod()
+    else:
+        if len(xpaths) == 0:
+            parser.error('Need atleast 1 xpath')
+
+        if options.filename:
+            html = open(options.filename).read()
+        elif options.string:
+            html = options.string
+        elif options.url:
+            html = urllib2.urlopen(options.url).read()
+        
+        results = [parse(html, xpath) for xpath in xpaths]
+        return results
+
+        
+if __name__ == '__main__':
+    print main()

@@ -9,6 +9,7 @@ import re
 import time
 import urllib
 import urllib2
+from urlparse import urlparse
 import string
 from StringIO import StringIO
 import htmlentitydefs
@@ -21,11 +22,16 @@ def download(url, delay=3, output_dir='.', use_cache=True):
     """Download this URL and return the HTML. Files are cached so only have to download once.
     sleep_secs is the amount of time to delay after downloading.
     """
-    output_file = url.replace('http:/', output_dir)
+    scheme, netloc, path, params, query, fragment = urlparse(url)
+    if path.endswith('/'):
+        path = path[:-1] # remove end slash
+        if not path:
+            path = '/index.html' # default file
+    output_file = netloc + path + ('?' + query if query else '')
     if use_cache and os.path.exists(output_file):
         html = open(output_file).read()
         if not html:
-            raise urllib2.HTTPError('Empty file')
+            print 'Empty file'
     else:
         print url
         if not os.path.exists(os.path.dirname(output_file)):
@@ -36,10 +42,11 @@ def download(url, delay=3, output_dir='.', use_cache=True):
         headers = {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
         try:
             response = urllib2.urlopen(urllib2.Request(url, None, headers))
-        except urllib2.HTTPError, e:
+        except urllib2.URLError, e:
             # create empty file, so don't repeat downloading again
+            print e
             open(output_file, 'w').write('')
-            raise e
+            html = ''
         else:
             # download completed successfully
             html = response.read()
@@ -73,6 +80,22 @@ def remove_tags(html, keep_children=True):
         html = re.compile('<.*?>.*?</.*?>', re.DOTALL).sub('', html)
     return re.compile('<[^<]*?>').sub('', html)
 
+
+def select_options(html, attributes=''):
+    """Extract options from HTML select box with given attributes
+    >>> html = "Go: <select id='abc'><option value='1'>a</option><option value='2'>b</option></select>"
+    >>> select_options(html, "id='abc'")
+    [('1', 'a'), ('2', 'b')]
+    """
+    select_re = re.compile('<select[^>]*?%s[^>]*?>.*?</select>' % attributes, re.DOTALL)
+    option_re = re.compile('<option[^>]*?value=[\'"](.*?)[\'"][^>]*?>(.*?)</option>', re.DOTALL)
+    try:
+        select_html = select_re.findall(html)[0]
+    except IndexError:
+        return []
+    else:
+        return option_re.findall(select_html)
+    
 
 def unescape(text):
     def fixup(m):

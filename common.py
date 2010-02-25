@@ -24,9 +24,7 @@ def download(url, delay=3, output_dir='.', use_cache=True):
     """
     scheme, netloc, path, params, query, fragment = urlparse(url)
     if path.endswith('/'):
-        path = path[:-1] # remove end slash
-        if not path:
-            path = '/index.html' # default file
+        path += 'index.html'
     output_file = netloc + path + ('?' + query if query else '')
     if use_cache and os.path.exists(output_file):
         html = open(output_file).read()

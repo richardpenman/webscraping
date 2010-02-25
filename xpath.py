@@ -2,6 +2,9 @@ import re
 import urllib2
 from optparse import OptionParser
 
+# tags that do not contain content and so can be safely skipped
+EMPTY_TAGS = 'br', 'hr'
+
 
 
 def parse(html, xpath):
@@ -18,9 +21,10 @@ def parse(html, xpath):
     >>> parse('<div>abc<a class="link">LINK 1</a></div>', '/div/a/@class')
     ['link']
     """
-    contexts = [html]
+    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html) # remove comments
+    contexts = [html] # initial context is entire webpage
     parent_attributes = []
-    for i, (separator, tag, index, attribute) in enumerate(xpath_iter(xpath)):
+    for tag_i, (separator, tag, index, attribute) in enumerate(xpath_iter(xpath)):
         children = []
         if tag == '..':
             # parent
@@ -34,16 +38,20 @@ def parse(html, xpath):
             parent_attributes = []
             for context in contexts:
                 search = separator == '' and find_children or find_descendants
-                for i, child in enumerate(search(context, tag)):
-                    if index is None or index == i + 1:
+                for child_i, child in enumerate(search(context, tag)):
+                    if index is None or index == child_i + 1:
+                        # matches index if defined
                         attributes = get_attributes(child)
                         if attribute is None or attribute in attributes.items():
                             # child matches tag and any defined indices or attributes
                             children.append(get_content(child))
                             parent_attributes.append(attributes)
-        contexts = children
+        if not children and tag == 'tbody':
+            pass # skip tbody, which firefox includes in xpath when does not exist
+        else:
+            contexts = children
         if not contexts:
-            print 'No matches for <%s> (tag %d)' % (tag, i+1)
+            print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s=%s]' % attribute if attribute else '', tag_i + 1)
             break
     return contexts
 
@@ -78,7 +86,7 @@ def get_attributes(html):
     >>> get_attributes('<div id="ID" name="NAME">content <span>SPAN</span></div>')
     {'id': 'ID', 'name': 'NAME'}
     """
-    attributes, contents = re.compile('<(.*?)>(.*)</.*?>$', re.DOTALL).match(html).groups()
+    attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
     attributes = dict(re.compile('(\w+)=["\'](.*?)["\']', re.DOTALL).findall(attributes))
     return attributes
 
@@ -103,9 +111,10 @@ def find_children(html, tag):
     while found:
         html = jump_next_tag(html)
         if html:
+            #print 'html:', html[:100] if html else None
             tag_html, html = split_tag(html)
             if tag_html:
-                #print tag_html
+                #print 'tag:', get_tag(tag_html)
                 if tag in ('*', get_tag(tag_html)):
                     results.append(tag_html)
             else:
@@ -138,9 +147,12 @@ def jump_next_tag(html):
     >>> jump_next_tag('</span> <div>abc</div>')
     '<div>abc</div>'
     """
-    match = re.compile('<\w+', re.DOTALL).search(html)
+    match = re.search('<(\w+)', html)
     if match:
-        return html[match.start():]
+        if match.groups()[0] in EMPTY_TAGS:
+            return jump_next_tag(html[1:])
+        else:
+            return html[match.start():]
     else:
         return None
 
@@ -150,8 +162,8 @@ def get_tag(html):
 
     >>> get_tag('<div>abc</div>')
     'div'
-    >>> get_tag(' <span>')
-    >>> get_tag('span')
+    >>> get_tag(' <div>')
+    >>> get_tag('div')
     """
     match = re.match('<(\w+)', html)
     if match:
@@ -167,6 +179,8 @@ def split_tag(html):
     ('<div>abc<div>def</div>abc</div>', 'ghi<div>jkl</div>')
     >>> split_tag('<br /><div>abc</div>')
     ('<br />', '<div>abc</div>')
+    >>> split_tag('<div>abc<div>def</div>abc</span>')
+    ('<div>abc<div>def</div>abc</span></div>', '')
     """
     tag = get_tag(html)
     depth = 0
@@ -180,7 +194,7 @@ def split_tag(html):
         if depth == 0:
             i = match.end()
             return html[:i], html[i:]
-    return None, html
+    return html + '</%s>' % tag, ''
 
 
 

@@ -18,7 +18,7 @@ socket.setdefaulttimeout(20)
 
 
 
-def download(url, delay=3, output_dir='.', use_cache=True):
+def download(url, delay=3, output_dir='.', use_cache=True, tmp_file='download'):
     """Download this URL and return the HTML. Files are cached so only have to download once.
     sleep_secs is the amount of time to delay after downloading.
     """
@@ -47,11 +47,16 @@ def download(url, delay=3, output_dir='.', use_cache=True):
             html = ''
         else:
             # download completed successfully
-            html = response.read()
-            if response.headers.get('content-encoding') == 'gzip':
-                # data came back gzip-compressed so decompress it          
-                html = gzip.GzipFile(fileobj=StringIO(html)).read()
-            open(output_file, 'w').write(html)
+            try:
+                html = response.read()
+            except socket.timeout:
+                html = ''
+            else:
+                if response.headers.get('content-encoding') == 'gzip':
+                    # data came back gzip-compressed so decompress it          
+                    html = gzip.GzipFile(fileobj=StringIO(html)).read()
+                open(tmp_file, 'w').write(html)
+                os.rename(tmp_file, output_file) # atomic write
     return to_ascii(html)
 
 

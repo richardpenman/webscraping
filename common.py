@@ -14,7 +14,6 @@ import string
 from StringIO import StringIO
 import htmlentitydefs
 import socket
-socket.setdefaulttimeout(20)
 
 
 
@@ -27,6 +26,7 @@ def download(url, delay=3, output_dir='.', use_cache=True, retry=False, tmp_file
     use_cache determines whether to load from cache if exists
     retry sets whether to try downloading webpage again if failed
     """
+    socket.setdefaulttimeout(20)
     scheme, netloc, path, params, query, fragment = urlparse(url)
     if path.endswith('/'):
         path += 'index.html'

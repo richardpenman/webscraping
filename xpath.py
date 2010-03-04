@@ -23,8 +23,7 @@ def parse(html, xpath, debug=False, remove=['link', 'script']):
     """
     orig_html = html
     html = clean_html(html, remove)
-    print html == orig_html, len(html), len(orig_html)
-    open('test.html', 'w').write(html)
+    #open('test.html', 'w').write(html)
     contexts = [html] # initial context is entire webpage
     parent_attributes = []
     for tag_i, (separator, tag, index, attribute) in enumerate(xpath_iter(xpath)):
@@ -66,9 +65,9 @@ def clean_html(html, tags):
     html = re.compile('<!--.*?-->', re.DOTALL).sub('', html) # remove comments
     if tags:
         for tag in tags:
-            html = re.compile('<' + tag + '[^>]*?/>', re.DOTALL).sub('', html)
-            html = re.compile('<' + tag + '[^>]*?>.*?</' + tag + '>', re.DOTALL).sub('', html)
-            html = re.compile('<' + tag + '[^>]*?>', re.DOTALL).sub('', html)
+            html = re.compile('<' + tag + '[^>]*?/>', re.DOTALL | re.IGNORECASE).sub('', html)
+            html = re.compile('<' + tag + '[^>]*?>.*?</' + tag + '>', re.DOTALL | re.IGNORECASE).sub('', html)
+            html = re.compile('<' + tag + '[^>]*?>', re.DOTALL | re.IGNORECASE).sub('', html)
     return html
 
 
@@ -102,8 +101,8 @@ def get_attributes(html):
     {'id': 'ID', 'name': 'NAME'}
     """
     attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
-    attributes = dict(re.compile('(\w+)=["\'](.*?)["\']', re.DOTALL).findall(attributes))
-    return attributes
+    return dict(re.compile('(\w+)="(.*?)"', re.DOTALL).findall(attributes) + re.compile("(\w+)='(.*?)'", re.DOTALL).findall(attributes))
+
 
 def get_content(html):
     """Extract the attributes and child HTML of a the passed HTML tag
@@ -130,7 +129,7 @@ def find_children(html, tag):
             tag_html, html = split_tag(html)
             if tag_html:
                 #print 'tag:', get_tag(tag_html)
-                if tag in ('*', get_tag(tag_html)):
+                if tag.lower() in ('*', get_tag(tag_html).lower()):
                     results.append(tag_html)
             else:
                 found = False
@@ -146,7 +145,7 @@ def find_descendants(html, tag):
     ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
     """
     results = []
-    for match in re.compile('<%s' % tag, re.DOTALL).finditer(html):
+    for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
         tag_html, _ = split_tag(html[match.start():])
         results.append(tag_html)
     return results
@@ -164,7 +163,7 @@ def jump_next_tag(html):
     """
     match = re.search('<(\w+)', html)
     if match:
-        if match.groups()[0] in EMPTY_TAGS:
+        if match.groups()[0].lower() in EMPTY_TAGS:
             return jump_next_tag(html[1:])
         else:
             return html[match.start():]
@@ -199,7 +198,7 @@ def split_tag(html):
     """
     tag = get_tag(html)
     depth = 0
-    for match in re.compile('</?%s.*?>' % tag, re.DOTALL).finditer(html):
+    for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
         if html[match.start() + 1] == '/':
             depth -= 1
         elif html[match.end() - 2] == '/':

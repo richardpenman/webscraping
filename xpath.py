@@ -7,7 +7,7 @@ EMPTY_TAGS = 'br', 'hr'
 
 
 
-def parse(html, xpath):
+def parse(html, xpath, debug=False, remove=['link', 'script']):
     """Query HTML document using XPath
     Supports indices, attributes, descendants
     Can handle rough HTML but may miss content if key tags are not closed
@@ -21,7 +21,10 @@ def parse(html, xpath):
     >>> parse('<div>abc<a class="link">LINK 1</a></div>', '/div/a/@class')
     ['link']
     """
-    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html) # remove comments
+    orig_html = html
+    html = clean_html(html, remove)
+    print html == orig_html, len(html), len(orig_html)
+    open('test.html', 'w').write(html)
     contexts = [html] # initial context is entire webpage
     parent_attributes = []
     for tag_i, (separator, tag, index, attribute) in enumerate(xpath_iter(xpath)):
@@ -51,10 +54,22 @@ def parse(html, xpath):
         else:
             contexts = children
         if not contexts:
-            print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s=%s]' % attribute if attribute else '', tag_i + 1)
+            if debug:
+                print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s=%s]' % attribute if attribute else '', tag_i + 1)
             break
     return contexts
 
+
+def clean_html(html, tags):
+    """Remove specified unhelpful tags and comments
+    """
+    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html) # remove comments
+    if tags:
+        for tag in tags:
+            html = re.compile('<' + tag + '[^>]*?/>', re.DOTALL).sub('', html)
+            html = re.compile('<' + tag + '[^>]*?>.*?</' + tag + '>', re.DOTALL).sub('', html)
+            html = re.compile('<' + tag + '[^>]*?>', re.DOTALL).sub('', html)
+    return html
 
 
 def xpath_iter(xpath):

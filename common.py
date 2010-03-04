@@ -18,9 +18,14 @@ socket.setdefaulttimeout(20)
 
 
 
-def download(url, delay=3, output_dir='.', use_cache=True, tmp_file='download'):
+def download(url, delay=3, output_dir='.', use_cache=True, retry=False, tmp_file='download'):
     """Download this URL and return the HTML. Files are cached so only have to download once.
-    sleep_secs is the amount of time to delay after downloading.
+
+    url is what to download
+    delay is the amount of time to delay after downloading
+    output_dir is where to store cached files
+    use_cache determines whether to load from cache if exists
+    retry sets whether to try downloading webpage again if failed
     """
     scheme, netloc, path, params, query, fragment = urlparse(url)
     if path.endswith('/'):
@@ -28,35 +33,37 @@ def download(url, delay=3, output_dir='.', use_cache=True, tmp_file='download'):
     output_file = netloc + path + ('?' + query if query else '')
     if use_cache and os.path.exists(output_file):
         html = open(output_file).read()
-        if not html:
-            print 'Empty file'
+        if html or not retry:
+            return html
+        else:
+            print 'Redownloading'
+    # need to download file
+    print url
+    if not os.path.exists(os.path.dirname(output_file)):
+        os.makedirs(os.path.dirname(output_file))
+    # crawl slowly to reduce risk of being blocked
+    time.sleep(delay) 
+    # set the user agent and compression for url requests
+    headers = {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
+    try:
+        response = urllib2.urlopen(urllib2.Request(url, None, headers))
+    except urllib2.URLError, e:
+        # create empty file, so don't repeat downloading again
+        print e
+        open(output_file, 'w').write('')
+        html = ''
     else:
-        print url
-        if not os.path.exists(os.path.dirname(output_file)):
-            os.makedirs(os.path.dirname(output_file))
-        # crawl slowly to reduce risk of being blocked
-        time.sleep(delay) 
-        # set the user agent and compression for url requests
-        headers = {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
+        # download completed successfully
         try:
-            response = urllib2.urlopen(urllib2.Request(url, None, headers))
-        except urllib2.URLError, e:
-            # create empty file, so don't repeat downloading again
-            print e
-            open(output_file, 'w').write('')
+            html = response.read()
+        except socket.timeout:
             html = ''
         else:
-            # download completed successfully
-            try:
-                html = response.read()
-            except socket.timeout:
-                html = ''
-            else:
-                if response.headers.get('content-encoding') == 'gzip':
-                    # data came back gzip-compressed so decompress it          
-                    html = gzip.GzipFile(fileobj=StringIO(html)).read()
-                open(tmp_file, 'w').write(html)
-                os.rename(tmp_file, output_file) # atomic write
+            if response.headers.get('content-encoding') == 'gzip':
+                # data came back gzip-compressed so decompress it          
+                html = gzip.GzipFile(fileobj=StringIO(html)).read()
+            open(tmp_file, 'w').write(html)
+            os.rename(tmp_file, output_file) # atomic write
     return to_ascii(html)
 
 

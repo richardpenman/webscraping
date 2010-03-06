@@ -127,3 +127,38 @@ def unescape(text):
                 pass
         return text # leave as is
     return re.sub("&#?\w+;", fixup, urllib.unquote(text))
+
+
+def pretty_duration(dt):
+    """Return english description of this time difference
+    """
+    if dt.days >= 2*365: 
+        return '%d years' % int(dt.days / 365) 
+    elif dt.days >= 365: 
+        return '1 year' 
+    elif dt.days >= 60: 
+        return '%d months' % int(dt.days / 30) 
+    elif dt.days > 21: 
+        return '1 month' 
+    elif dt.days >= 14: 
+        return '%d weeks' % int(dt.days / 7) 
+    elif dt.days >= 7: 
+        return '1 week' 
+    elif dt.days > 1: 
+        return '%d days' % dt.days 
+    elif dt.days == 1: 
+        return '1 day' 
+    elif dt.seconds >= 2*60*60: 
+        return '%d hours' % int(dt.seconds / 3600) 
+    elif dt.seconds >= 60*60: 
+        return '1 hour' 
+    elif dt.seconds >= 2*60: 
+        return '%d minutes' % int(dt.seconds / 60) 
+    elif dt.seconds >= 60: 
+        return '1 minute' 
+    elif dt.seconds > 1: 
+        return '%d seconds' % dt.seconds 
+    elif dt.seconds == 1: 
+        return '1 second' 
+    else: 
+        return ''

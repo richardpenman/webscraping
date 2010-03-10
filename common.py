@@ -14,10 +14,51 @@ import string
 from StringIO import StringIO
 import htmlentitydefs
 import socket
+import tempfile
+from threading import Thread
+import Queue
+
+
+def threaded_download(urls, proxies=[None]):
+    """Download these urls in parallel using the given list of proxies 
+    To use the same proxy multiple times in parallel provide it multiple times
+    None means use no proxy
+
+    Returns list of htmls in same order as urls
+    """
+    class Downloader(Thread):
+        def __init__(self, urls):
+            Thread.__init__(self)
+            self.urls, self.results = urls, {}
+
+        def run(self):
+            try:
+                while 1:
+                    url = self.urls.get(block=False)
+                    self.results[url] = download(url)
+            except Queue.Empty:
+                pass # finished
+
+    # put urls into thread safe queue
+    queue = Queue.Queue()
+    for url in urls:
+        queue.put(url)
+
+    downloaders = []
+    for proxy in proxies:
+        downloader = Downloader(queue)
+        downloaders.append(downloader)
+        downloader.start()
+
+    results = {}
+    for downloader in downloaders:
+        downloader.join()
+        results = dict(results, **downloader.results)
+    return [results[url] for url in urls]
 
 
 
-def download(url, delay=3, output_dir='.', use_cache=True, retry=False, tmp_file='download'):
+def download(url, delay=3, output_dir='.', use_cache=True, retry=False, proxy=None):
     """Download this URL and return the HTML. Files are cached so only have to download once.
 
     url is what to download
@@ -45,13 +86,16 @@ def download(url, delay=3, output_dir='.', use_cache=True, retry=False, tmp_file
     time.sleep(delay) 
     # set the user agent and compression for url requests
     headers = {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
+    opener = urllib2.build_opener()
+    if proxy:
+        opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
     try:
-        response = urllib2.urlopen(urllib2.Request(url, None, headers))
+        response = opener.open(urllib2.Request(url, None, headers))
     except urllib2.URLError, e:
         # create empty file, so don't repeat downloading again
         print e
-        open(output_file, 'w').write('')
         html = ''
+        open(output_file, 'w').write(html)
     else:
         # download completed successfully
         try:
@@ -62,6 +106,7 @@ def download(url, delay=3, output_dir='.', use_cache=True, retry=False, tmp_file
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 html = gzip.GzipFile(fileobj=StringIO(html)).read()
+            _, tmp_file = tempfile.mkstemp()
             open(tmp_file, 'w').write(html)
             os.rename(tmp_file, output_file) # atomic write
     return to_ascii(html)

@@ -17,48 +17,12 @@ import socket
 import tempfile
 from threading import Thread
 import Queue
-
-
-def threaded_download(urls, proxies=[None]):
-    """Download these urls in parallel using the given list of proxies 
-    To use the same proxy multiple times in parallel provide it multiple times
-    None means use no proxy
-
-    Returns list of htmls in same order as urls
-    """
-    class Downloader(Thread):
-        def __init__(self, urls):
-            Thread.__init__(self)
-            self.urls, self.results = urls, {}
-
-        def run(self):
-            try:
-                while 1:
-                    url = self.urls.get(block=False)
-                    self.results[url] = download(url)
-            except Queue.Empty:
-                pass # finished
-
-    # put urls into thread safe queue
-    queue = Queue.Queue()
-    for url in urls:
-        queue.put(url)
-
-    downloaders = []
-    for proxy in proxies:
-        downloader = Downloader(queue)
-        downloaders.append(downloader)
-        downloader.start()
-
-    results = {}
-    for downloader in downloaders:
-        downloader.join()
-        results = dict(results, **downloader.results)
-    return [results[url] for url in urls]
+import cookielib
 
 
 
-def download(url, delay=3, output_dir='.', use_cache=True, retry=False, proxy=None):
+
+def download(url, delay=3, headers=None, output_dir='.', use_cache=True, retry=False, proxy=None, flatten_path=False, ascii=True, opener=None):
     """Download this URL and return the HTML. Files are cached so only have to download once.
 
     url is what to download
@@ -66,12 +30,17 @@ def download(url, delay=3, output_dir='.', use_cache=True, retry=False, proxy=No
     output_dir is where to store cached files
     use_cache determines whether to load from cache if exists
     retry sets whether to try downloading webpage again if failed
+    proxy is a proxy to download content through
+    flatten_path will store file beneath directory rather than creating full nested structure
+    ascii sets whether to only return ascii characters
+    opener sets an optional opener to use
     """
     socket.setdefaulttimeout(20)
     scheme, netloc, path, params, query, fragment = urlparse(url)
     if path.endswith('/'):
         path += 'index.html'
-    output_file = netloc + path + ('?' + query if query else '')
+    output_file = netloc + ('/' + path[1:].replace('/', '_') if flatten_path else path) + ('?' + query if query else '')
+    output_file = os.path.join(output_dir, output_file)
     if use_cache and os.path.exists(output_file):
         html = open(output_file).read()
         if html or not retry:
@@ -80,13 +49,16 @@ def download(url, delay=3, output_dir='.', use_cache=True, retry=False, proxy=No
             print 'Redownloading'
     # need to download file
     print url
-    if not os.path.exists(os.path.dirname(output_file)):
+    try:
         os.makedirs(os.path.dirname(output_file))
+    except OSError, e:
+        if not os.path.exists(os.path.dirname(output_file)):
+            raise e
     # crawl slowly to reduce risk of being blocked
     time.sleep(delay) 
     # set the user agent and compression for url requests
-    headers = {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
-    opener = urllib2.build_opener()
+    headers = headers or {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
+    opener = opener or urllib2.build_opener()
     if proxy:
         opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
     try:
@@ -106,15 +78,61 @@ def download(url, delay=3, output_dir='.', use_cache=True, retry=False, proxy=No
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 html = gzip.GzipFile(fileobj=StringIO(html)).read()
-            _, tmp_file = tempfile.mkstemp()
-            open(tmp_file, 'w').write(html)
-            os.rename(tmp_file, output_file) # atomic write
-    return to_ascii(html)
+            temp = tempfile.NamedTemporaryFile(delete=False)
+            temp.file.write(html)
+            temp.file.close()
+            os.rename(temp.name, output_file) # atomic write
+            #open(output_file, 'w').write(html)
+    return to_ascii(html) if html else html
+
+
+def threaded_download(urls, proxies=[None], **kwargs):
+    """Download these urls in parallel using the given list of proxies 
+    To use the same proxy multiple times in parallel provide it multiple times
+    None means use no proxy
+
+    Returns list of htmls in same order as urls
+    """
+    class Downloader(Thread):
+        def __init__(self, urls, proxy):
+            Thread.__init__(self)
+            self.urls, self.proxy, self.results = urls, proxy, {}
+
+        def run(self):
+            try:
+                while 1:
+                    url = self.urls.get(block=False)
+                    self.results[url] = download(url, proxy=self.proxy, **kwargs)
+            except Queue.Empty:
+                pass # finished
+
+    # put urls into thread safe queue
+    queue = Queue.Queue()
+    for url in urls:
+        queue.put(url)
+
+    downloaders = []
+    for proxy in proxies:
+        downloader = Downloader(queue, proxy)
+        downloaders.append(downloader)
+        downloader.start()
+
+    results = {}
+    for downloader in downloaders:
+        downloader.join()
+        results = dict(results, **downloader.results)
+    return [results[url] for url in urls]
 
 
 def to_ascii(html):
     #html = html.decode('utf-8')
     return ''.join(c for c in html if ord(c) < 128)
+
+def to_int(s):
+    """Return integer from this string
+    """
+    return int('0' + ''.join(c for c in s if c.isdigit()))
+
 
 
 def unique(l):
@@ -152,7 +170,7 @@ def select_options(html, attributes=''):
         return option_re.findall(select_html)
     
 
-def unescape(text):
+def unescape(text, encoding='utf-8'):
     def fixup(m):
         text = m.group(0)
         if text[:2] == "&#":
@@ -171,7 +189,7 @@ def unescape(text):
             except KeyError:
                 pass
         return text # leave as is
-    return re.sub("&#?\w+;", fixup, urllib.unquote(text))
+    return re.sub("&#?\w+;", fixup, urllib.unquote(text.decode(encoding))).encode(encoding)
 
 
 def pretty_duration(dt):
@@ -207,3 +225,32 @@ def pretty_duration(dt):
         return '1 second' 
     else: 
         return ''
+
+
+def firefox_cookie(file):
+    """Create a cookie jar from this FireFox 3 sqlite cookie database
+    """
+    import sqlite3 
+    # copy firefox cookie file locally to avoid locking problems
+    sqlite_file = 'cookies.sqlite'
+    open(sqlite_file, 'w').write(open(file).read())
+    con = sqlite3.connect(sqlite_file)
+    cur = con.cursor()
+    cur.execute('select host, path, isSecure, expiry, name, value from moz_cookies')
+
+    # create standard cookies file that can be interpreted by cookie jar 
+    cookie_file = 'cookies.txt'
+    fp = open(cookie_file, 'w')
+    fp.write('# Netscape HTTP Cookie File\n')
+    fp.write('# http://www.netscape.com/newsref/std/cookie_spec.html\n')
+    fp.write('# This is a generated file!  Do not edit.\n')
+    ftstr = ['FALSE', 'TRUE']
+    for item in cur.fetchall():
+        row = '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (item[0], ftstr[item[0].startswith('.')], item[1], ftstr[item[2]], item[3], item[4], item[5])
+        fp.write(row)
+        #print row
+    fp.close()
+
+    cookie_jar = cookielib.MozillaCookieJar()
+    cookie_jar.load(cookie_file)
+    return cookie_jar

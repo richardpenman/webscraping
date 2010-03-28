@@ -161,14 +161,15 @@ def jump_next_tag(html):
     >>> jump_next_tag('</span> <div>abc</div>')
     '<div>abc</div>'
     """
-    match = re.search('<(\w+)', html)
-    if match:
-        if match.groups()[0].lower() in EMPTY_TAGS:
-            return jump_next_tag(html[1:])
+    while 1:
+        match = re.search('<(\w+)', html)
+        if match:
+            if match.groups()[0].lower() in EMPTY_TAGS:
+                html = html[1:]
+            else:
+                return html[match.start():]
         else:
-            return html[match.start():]
-    else:
-        return None
+            return None
 
 
 def get_tag(html):

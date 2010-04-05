@@ -3,7 +3,7 @@ import urllib2
 from optparse import OptionParser
 
 # tags that do not contain content and so can be safely skipped
-EMPTY_TAGS = 'br', 'hr'
+EMPTY_TAGS = 'br', 'hr', 'meta'
 
 
 

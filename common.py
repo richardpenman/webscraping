@@ -18,6 +18,7 @@ import tempfile
 from threading import Thread
 import Queue
 import cookielib
+import shutil
 
 
 
@@ -36,11 +37,7 @@ def download(url, delay=3, headers=None, output_dir='.', use_cache=True, retry=F
     opener sets an optional opener to use
     """
     socket.setdefaulttimeout(20)
-    scheme, netloc, path, params, query, fragment = urlparse(url)
-    if path.endswith('/'):
-        path += 'index.html'
-    output_file = netloc + ('/' + path[1:].replace('/', '_') if flatten_path else path) + ('?' + query if query else '')
-    output_file = os.path.join(output_dir, output_file)
+    output_file = url_dir(url, output_dir=output_dir, flatten_path=flatten_path)
     if use_cache and os.path.exists(output_file):
         html = open(output_file).read()
         if html or not retry:
@@ -49,13 +46,8 @@ def download(url, delay=3, headers=None, output_dir='.', use_cache=True, retry=F
             print 'Redownloading'
     # need to download file
     print url
-    try:
-        os.makedirs(os.path.dirname(output_file))
-    except OSError, e:
-        if not os.path.exists(os.path.dirname(output_file)):
-            raise e
     # crawl slowly to reduce risk of being blocked
-    time.sleep(delay) 
+    if delay > 0: time.sleep(delay) 
     # set the user agent and compression for url requests
     headers = headers or {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
     opener = opener or urllib2.build_opener()
@@ -78,12 +70,32 @@ def download(url, delay=3, headers=None, output_dir='.', use_cache=True, retry=F
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 html = gzip.GzipFile(fileobj=StringIO(html)).read()
+            # achieve atomic write by moving temporary file
             temp = tempfile.NamedTemporaryFile(delete=False)
             temp.file.write(html)
             temp.file.close()
-            os.rename(temp.name, output_file) # atomic write
+            shutil.move(temp.name, output_file) 
             #open(output_file, 'w').write(html)
     return to_ascii(html) if html else html
+
+
+
+def url_dir(url, output_dir, flatten_path=False):
+    """Return filepath where to store URL and create folders if necessary
+    """
+    scheme, netloc, path, params, query, fragment = urlparse(url)
+    if not path:
+        path = '/'
+    if path.endswith('/'):
+        path += 'index.html'
+    output_file = netloc + ('/' + path[1:].replace('/', '_') if flatten_path else path) + ('?' + query if query else '')
+    output_file = os.path.join(output_dir, output_file)
+    try:
+        os.makedirs(os.path.dirname(output_file))
+    except OSError, e:
+        if not os.path.exists(os.path.dirname(output_file)):
+            raise e
+    return output_file
 
 
 def threaded_download(urls, proxies=[None], **kwargs):

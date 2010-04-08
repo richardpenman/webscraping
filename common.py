@@ -23,14 +23,15 @@ import shutil
 
 
 
-def download(url, delay=3, headers=None, output_dir='.', use_cache=True, retry=False, proxy=None, flatten_path=False, ascii=True, opener=None):
+def download(url, delay=3, headers=None, output_dir='.', use_cache=True, use_remote=True, retry=False, proxy=None, flatten_path=False, ascii=True, opener=None):
     """Download this URL and return the HTML. Files are cached so only have to download once.
 
     url is what to download
     delay is the amount of time to delay after downloading
     output_dir is where to store cached files
     use_cache determines whether to load from cache if exists
-    retry sets whether to try downloading webpage again if failed
+    use_remote determines whether to download from remote website if not in cache
+    retry sets whether to try downloading webpage again if got error last time
     proxy is a proxy to download content through
     flatten_path will store file beneath directory rather than creating full nested structure
     ascii sets whether to only return ascii characters
@@ -44,6 +45,9 @@ def download(url, delay=3, headers=None, output_dir='.', use_cache=True, retry=F
             return html
         else:
             print 'Redownloading'
+    if not use_remote:
+        return ''
+
     # need to download file
     print url
     # crawl slowly to reduce risk of being blocked
@@ -201,7 +205,25 @@ def unescape(text, encoding='utf-8'):
             except KeyError:
                 pass
         return text # leave as is
+    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     return re.sub("&#?\w+;", fixup, urllib.unquote(text.decode(encoding))).encode(encoding)
+
+
+def extract_domain(url):
+    """Extract the domain from the given URL
+
+    >>> extract_domain('http://www.google.com.au/tos.html')
+    'google.com.au'
+    """
+    suffixes = 'ac', 'ad', 'ae', 'aero', 'af', 'ag', 'ai', 'al', 'am', 'an', 'ao', 'aq', 'ar', 'arpa', 'as', 'asia', 'at', 'au', 'aw', 'ax', 'az', 'ba', 'bb', 'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'biz', 'bj', 'bm', 'bn', 'bo', 'br', 'bs', 'bt', 'bv', 'bw', 'by', 'bz', 'ca', 'cat', 'cc', 'cd', 'cf', 'cg', 'ch', 'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'com', 'coop', 'cr', 'cu', 'cv', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'do', 'dz', 'ec', 'edu', 'ee', 'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm', 'gn', 'gov', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hm', 'hn', 'hr', 'ht', 'hu', 'id', 'ie', 'il', 'im', 'in', 'info', 'int', 'io', 'iq', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jobs', 'jp', 'ke', 'kg', 'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mg', 'mh', 'mil', 'mk', 'ml', 'mm', 'mn', 'mo', 'mobi', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz', 'na', 'name', 'nc', 'ne', 'net', 'nf', 'ng', 'ni', 'nl', 'no', 'np', 'nr', 'nu', 'nz', 'om', 'org', 'pa', 'pe', 'pf', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'pro', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro', 'rs', 'ru', 'rw', 'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'st', 'su', 'sv', 'sy', 'sz', 'tc', 'td', 'tel', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to', 'tp', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi', 'vn', 'vu', 'wf', 'ws', 'xn', 'ye', 'yt', 'za', 'zm', 'zw'
+    url = url.partition('http://')[-1].partition('/')[0].lower()
+    domain = []
+    for section in url.split('.'):
+        if section in suffixes:
+            domain.append(section)
+        else:
+            domain = [section]
+    return '.'.join(domain)
 
 
 def pretty_duration(dt):

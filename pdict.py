@@ -25,7 +25,7 @@ class PersistentDict(dict):
         compress_level: between 1-9 - in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds
         """
         self._conn = db.connect(filename)
-        self._conn.text_factory = lambda x: unicode(x, 'utf-8')#, "ignore")
+        self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
         CREATE TABLE IF NOT EXISTS config (
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
@@ -48,7 +48,7 @@ class PersistentDict(dict):
         """
         self._cursor.execute("SELECT value FROM config WHERE key=?;", (key,))
         row = self._cursor.fetchone()
-        if row and len(row) > 0:
+        if row:# and len(row) > 0:
             return self.deserialize(row[0])
         else:
             raise KeyError("Key `%s' does not exist" % key)

@@ -7,6 +7,10 @@ EMPTY_TAGS = 'br', 'hr', 'meta'
 
 
 
+class XPathException(Exception):
+    pass
+
+
 def parse(html, xpath, debug=False, remove=['link', 'script']):
     """Query HTML document using XPath
     Supports indices, attributes, descendants
@@ -144,6 +148,8 @@ def find_descendants(html, tag):
     >>> find_descendants('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div')
     ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
     """
+    if tag == '*':
+        raise XPathException("`*' not supported for //")
     results = []
     for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
         tag_html, _ = split_tag(html[match.start():])

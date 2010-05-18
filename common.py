@@ -9,6 +9,7 @@ import re
 import time
 import urllib
 import urllib2
+from datetime import datetime, timedelta
 from urlparse import urlparse
 import string
 from StringIO import StringIO
@@ -102,23 +103,25 @@ def url_dir(url, output_dir, flatten_path=False):
     return output_file
 
 
-def threaded_download(urls, proxies=[None], **kwargs):
+def threaded_download(urls, proxies=[None], use_memory=True, **kwargs):
     """Download these urls in parallel using the given list of proxies 
     To use the same proxy multiple times in parallel provide it multiple times
     None means use no proxy
 
-    Returns list of htmls in same order as urls
+    if use_memory is True then returns list of htmls in same order as urls
     """
     class Downloader(Thread):
-        def __init__(self, urls, proxy):
+        def __init__(self, id, urls, proxy):
             Thread.__init__(self)
-            self.urls, self.proxy, self.results = urls, proxy, {}
+            self.id, self.urls, self.proxy, self.results = id, urls, proxy, {}
 
         def run(self):
             try:
                 while 1:
                     url = self.urls.get(block=False)
-                    self.results[url] = download(url, proxy=self.proxy, **kwargs)
+                    html = download(url, proxy=self.proxy, **kwargs)
+                    if use_memory:
+                        self.results[url] = html
             except Queue.Empty:
                 pass # finished
 
@@ -128,8 +131,8 @@ def threaded_download(urls, proxies=[None], **kwargs):
         queue.put(url)
 
     downloaders = []
-    for proxy in proxies:
-        downloader = Downloader(queue, proxy)
+    for id, proxy in enumerate(proxies):
+        downloader = Downloader(id, queue, proxy)
         downloaders.append(downloader)
         downloader.start()
 
@@ -137,7 +140,8 @@ def threaded_download(urls, proxies=[None], **kwargs):
     for downloader in downloaders:
         downloader.join()
         results = dict(results, **downloader.results)
-    return [results[url] for url in urls]
+    if use_memory:
+        return [results[url] for url in urls]
 
 
 def to_ascii(html):
@@ -159,6 +163,12 @@ def unique(l):
         if e not in checked:
             checked.append(e)
     return checked
+
+
+def flatten(ls):
+    """Flatten sub lists into single list
+    """
+    return [e for l in ls for e in l]
 
 
 def remove_tags(html, keep_children=True):
@@ -216,7 +226,7 @@ def extract_domain(url):
     'google.com.au'
     """
     suffixes = 'ac', 'ad', 'ae', 'aero', 'af', 'ag', 'ai', 'al', 'am', 'an', 'ao', 'aq', 'ar', 'arpa', 'as', 'asia', 'at', 'au', 'aw', 'ax', 'az', 'ba', 'bb', 'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'biz', 'bj', 'bm', 'bn', 'bo', 'br', 'bs', 'bt', 'bv', 'bw', 'by', 'bz', 'ca', 'cat', 'cc', 'cd', 'cf', 'cg', 'ch', 'ci', 'ck', 'cl', 'cm', 'cn', 'co', 'com', 'coop', 'cr', 'cu', 'cv', 'cx', 'cy', 'cz', 'de', 'dj', 'dk', 'dm', 'do', 'dz', 'ec', 'edu', 'ee', 'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 'fo', 'fr', 'ga', 'gb', 'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gl', 'gm', 'gn', 'gov', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gw', 'gy', 'hk', 'hm', 'hn', 'hr', 'ht', 'hu', 'id', 'ie', 'il', 'im', 'in', 'info', 'int', 'io', 'iq', 'ir', 'is', 'it', 'je', 'jm', 'jo', 'jobs', 'jp', 'ke', 'kg', 'kh', 'ki', 'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly', 'ma', 'mc', 'md', 'me', 'mg', 'mh', 'mil', 'mk', 'ml', 'mm', 'mn', 'mo', 'mobi', 'mp', 'mq', 'mr', 'ms', 'mt', 'mu', 'mv', 'mw', 'mx', 'my', 'mz', 'na', 'name', 'nc', 'ne', 'net', 'nf', 'ng', 'ni', 'nl', 'no', 'np', 'nr', 'nu', 'nz', 'om', 'org', 'pa', 'pe', 'pf', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'pro', 'ps', 'pt', 'pw', 'py', 'qa', 're', 'ro', 'rs', 'ru', 'rw', 'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'st', 'su', 'sv', 'sy', 'sz', 'tc', 'td', 'tel', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to', 'tp', 'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi', 'vn', 'vu', 'wf', 'ws', 'xn', 'ye', 'yt', 'za', 'zm', 'zw'
-    url = url.partition('http://')[-1].partition('/')[0].lower()
+    url = re.sub('^.*://', '', url).partition('/')[0].lower()
     domain = []
     for section in url.split('.'):
         if section in suffixes:
@@ -229,6 +239,11 @@ def extract_domain(url):
 def pretty_duration(dt):
     """Return english description of this time difference
     """
+    if isinstance(dt, datetime):
+        # convert datetime to timedelta
+        dt = datetime.now() - dt
+    if not isinstance(dt, timedelta):
+        return ''
     if dt.days >= 2*365: 
         return '%d years' % int(dt.days / 365) 
     elif dt.days >= 365: 

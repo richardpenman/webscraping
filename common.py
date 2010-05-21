@@ -4,144 +4,15 @@
 #
 
 import os
-import gzip
 import re
 import time
 import urllib
-import urllib2
 from datetime import datetime, timedelta
-from urlparse import urlparse
 import string
-from StringIO import StringIO
 import htmlentitydefs
-import socket
-import tempfile
-from threading import Thread
-import Queue
 import cookielib
-import shutil
 
 
-
-
-def download(url, delay=3, headers=None, output_dir='.', use_cache=True, use_remote=True, retry=False, proxy=None, flatten_path=False, ascii=True, opener=None):
-    """Download this URL and return the HTML. Files are cached so only have to download once.
-
-    url is what to download
-    delay is the amount of time to delay after downloading
-    output_dir is where to store cached files
-    use_cache determines whether to load from cache if exists
-    use_remote determines whether to download from remote website if not in cache
-    retry sets whether to try downloading webpage again if got error last time
-    proxy is a proxy to download content through
-    flatten_path will store file beneath directory rather than creating full nested structure
-    ascii sets whether to only return ascii characters
-    opener sets an optional opener to use
-    """
-    socket.setdefaulttimeout(20)
-    output_file = url_dir(url, output_dir=output_dir, flatten_path=flatten_path)
-    if use_cache and os.path.exists(output_file):
-        html = open(output_file).read()
-        if html or not retry:
-            return html
-        else:
-            print 'Redownloading'
-    if not use_remote:
-        return ''
-
-    # need to download file
-    print url
-    # crawl slowly to reduce risk of being blocked
-    if delay > 0: time.sleep(delay) 
-    # set the user agent and compression for url requests
-    headers = headers or {'User-agent': 'Mozilla/5.0', 'Accept-encoding': 'gzip'}
-    opener = opener or urllib2.build_opener()
-    if proxy:
-        opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
-    try:
-        response = opener.open(urllib2.Request(url, None, headers))
-    except urllib2.URLError, e:
-        # create empty file, so don't repeat downloading again
-        print e
-        html = ''
-        open(output_file, 'w').write(html)
-    else:
-        # download completed successfully
-        try:
-            html = response.read()
-        except socket.timeout:
-            html = ''
-        else:
-            if response.headers.get('content-encoding') == 'gzip':
-                # data came back gzip-compressed so decompress it          
-                html = gzip.GzipFile(fileobj=StringIO(html)).read()
-            # achieve atomic write by moving temporary file
-            temp = tempfile.NamedTemporaryFile(delete=False)
-            temp.file.write(html)
-            temp.file.close()
-            shutil.move(temp.name, output_file) 
-            #open(output_file, 'w').write(html)
-    return to_ascii(html) if html else html
-
-
-
-def url_dir(url, output_dir, flatten_path=False):
-    """Return filepath where to store URL and create folders if necessary
-    """
-    scheme, netloc, path, params, query, fragment = urlparse(url)
-    if not path:
-        path = '/'
-    if path.endswith('/'):
-        path += 'index.html'
-    output_file = netloc + ('/' + path[1:].replace('/', '_') if flatten_path else path) + ('?' + query if query else '')
-    output_file = os.path.join(output_dir, output_file)
-    try:
-        os.makedirs(os.path.dirname(output_file))
-    except OSError, e:
-        if not os.path.exists(os.path.dirname(output_file)):
-            raise e
-    return output_file
-
-
-def threaded_download(urls, proxies=[None], use_memory=True, **kwargs):
-    """Download these urls in parallel using the given list of proxies 
-    To use the same proxy multiple times in parallel provide it multiple times
-    None means use no proxy
-
-    if use_memory is True then returns list of htmls in same order as urls
-    """
-    class Downloader(Thread):
-        def __init__(self, id, urls, proxy):
-            Thread.__init__(self)
-            self.id, self.urls, self.proxy, self.results = id, urls, proxy, {}
-
-        def run(self):
-            try:
-                while 1:
-                    url = self.urls.get(block=False)
-                    html = download(url, proxy=self.proxy, **kwargs)
-                    if use_memory:
-                        self.results[url] = html
-            except Queue.Empty:
-                pass # finished
-
-    # put urls into thread safe queue
-    queue = Queue.Queue()
-    for url in urls:
-        queue.put(url)
-
-    downloaders = []
-    for id, proxy in enumerate(proxies):
-        downloader = Downloader(id, queue, proxy)
-        downloaders.append(downloader)
-        downloader.start()
-
-    results = {}
-    for downloader in downloaders:
-        downloader.join()
-        results = dict(results, **downloader.results)
-    if use_memory:
-        return [results[url] for url in urls]
 
 
 def to_ascii(html):
@@ -234,6 +105,35 @@ def extract_domain(url):
         else:
             domain = [section]
     return '.'.join(domain)
+
+
+
+def extract_emails(html):
+    """Extract emails and look for common obfuscations
+
+    >>> extract_emails('')
+    []
+    >>> extract_emails('hello richard@sitescraper.net world')
+    ['richard@sitescraper.net']
+    >>> extract_emails('hello richard@<!-- trick comment -->sitescraper.net world')
+    ['richard@sitescraper.net']
+    >>> extract_emails('hello richard AT sitescraper DOT net world')
+    ['richard@sitescraper.net']
+    """
+    email_re = re.compile('[\w\.\+-]+@\w[\w\.\+-]+\.\w+')
+    # remove comments, which can obfuscate emails
+    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html)
+    emails = []
+    for email in email_re.findall(html):
+        if email not in emails:
+            emails.append(email)
+    # look for obfuscated email
+    for user, domain, ext in re.compile('([\w\.\+-]+) .?AT.? ([\w\.\+-]+) .?DOT.? (\w+)', re.IGNORECASE).findall(html):
+        email = '%s@%s.%s' % (user, domain, ext)
+        if email not in emails:
+            emails.append(email)
+    return emails
+
 
 
 def pretty_duration(dt):

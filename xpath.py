@@ -58,7 +58,7 @@ def parse(html, xpath, debug=False, remove=['link', 'script']):
             contexts = children
         if not contexts:
             if debug:
-                print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s=%s]' % attribute if attribute else '', tag_i + 1)
+                print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s="%s"]' % attribute if attribute else '', tag_i + 1)
             break
     return contexts
 
@@ -88,7 +88,7 @@ def xpath_iter(xpath):
             try:
                 index = int(selector)
             except ValueError:
-                match = re.compile('@(.*?)=["\'](.*?)["\']').search(selector)    
+                match = re.compile('@(.*?)=["\']?(.*?)["\']?$').search(selector)    
                 if match:
                     attribute = match.groups()
                 else:
@@ -101,11 +101,15 @@ def xpath_iter(xpath):
 def get_attributes(html):
     """Extract the attributes of the passed HTML tag
 
-    >>> get_attributes('<div id="ID" name="NAME">content <span>SPAN</span></div>')
-    {'id': 'ID', 'name': 'NAME'}
+    >>> get_attributes('<div id="ID" name="MY NAME" class=abc>content <span>SPAN</span></div>')
+    {'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
     attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
-    return dict(re.compile('(\w+)="(.*?)"', re.DOTALL).findall(attributes) + re.compile("(\w+)='(.*?)'", re.DOTALL).findall(attributes))
+    return dict(
+        re.compile('(\w+)="(.*?)"', re.DOTALL).findall(attributes) + 
+        re.compile("(\w+)='(.*?)'", re.DOTALL).findall(attributes) + 
+        re.compile("(\w+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes
+    )
 
 
 def get_content(html):

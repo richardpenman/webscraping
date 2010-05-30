@@ -3,6 +3,7 @@
 #
 
 import sqlite3 as db
+from datetime import datetime
 import zlib
 import threading
 try:
@@ -11,72 +12,79 @@ except ImportError:
     import pickle
 
 
+lock = threading.Lock() # need to lock writes between threads
+def synchronous(f):
+    def call(*args, **kwargs):
+        lock.acquire()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            lock.release()
+    return call
 
-class PersistentDict(dict):
+class PersistentDict(object):
     """stores and retrieves persistent data through a dict-like interface
     data is stored compressed on disk using sqlite3 
     """
-    lock = threading.Lock() # need to lock writes between threads
-
-    def __init__(self, filename=':memory', compress_level=6):
+    
+    @synchronous
+    def __init__(self, filename=':memory', compress_level=6, timeout=None):
         """initialize a new PersistentDict with the specified db file.
 
         filename: where to store sqlite database. Use in memory by default
         compress_level: between 1-9 - in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds
+        timeout: a timedelta object of how old data can be. Set to None to disable.
         """
-        self._conn = db.connect(filename)
+        self._conn = db.connect(filename, isolation_level=None, detect_types=db.PARSE_DECLTYPES|db.PARSE_COLNAMES)
         self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
         CREATE TABLE IF NOT EXISTS config (
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
-            value BLOB
+            value BLOB,
+            created timestamp DEFAULT (datetime('now', 'localtime')),
+            updated timestamp DEFAULT (datetime('now', 'localtime'))
         );"""
-        self._cursor = self._conn.cursor()
-        self._cursor.execute(sql)
-        self._conn.commit()
+        self._conn.execute(sql)
         self.compress_level = compress_level
+        self.timeout = timeout
+
+    #def __del__(self):
+    #    self._conn.close()
 
     
     def __contains__(self, key):
         """check the database to see if a key exists
         """
-        self._cursor.execute("SELECT COUNT(key) FROM config WHERE key=?;", (key,))
-        return int(self._cursor.fetchone()[0]) > 0
+        row = self._conn.execute("SELECT updated FROM config WHERE key=?;", (key,)).fetchone()
+        return row and self.is_fresh(row[0])
             
     def __getitem__(self, key):
         """return the value of the specified key
         """
-        self._cursor.execute("SELECT value FROM config WHERE key=?;", (key,))
-        row = self._cursor.fetchone()
-        if row:# and len(row) > 0:
-            return self.deserialize(row[0])
+        row = self._conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
+        if row:
+            if self.is_fresh(row[1]):
+                return self.deserialize(row[0])
+            else:
+                raise KeyError("Key `%s' is stale" % key)
         else:
             raise KeyError("Key `%s' does not exist" % key)
     
+    @synchronous
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
-        PersistentDict.lock.acquire()
-        try:
-            if key in self:
-                self._cursor.execute("UPDATE config SET value=? WHERE key=?;", (self.serialize(value), key))
-            else:
-                self._cursor.execute("INSERT INTO config (key, value) VALUES(?, ?);", (key, self.serialize(value)))
-            self._conn.commit()
-        finally:
-            PersistentDict.lock.release()
+        if key in self:
+            self._conn.execute("UPDATE config SET value=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
+        else:
+            self._conn.execute("INSERT INTO config (key, value) VALUES(?, ?);", (key, self.serialize(value)))
 
+    @synchronous
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
-        PersistentDict.lock.acquire()
-        try:
-            self._cursor.execute("DELETE FROM config WHERE key=?;", (key,))
-            if self._cursor.rowcount == 0:
-                raise KeyError("Key `%s' does not exist" % key)
-            self._conn.commit()
-        finally:
-            PersistentDict.lock.release()
+        key in self
+        self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
         
     def serialize(self, value):
         """convert object to a compressed blog string to save in the db
@@ -91,8 +99,12 @@ class PersistentDict(dict):
     def keys(self):
         """returns a list containing each key in the database
         """
-        self._cursor.execute("SELECT key FROM config;")
-        return [row[0] for row in self._cursor]
+        return [row[0] for row in self._conn.execute("SELECT key FROM config;").fetchmany()]
+
+    def is_fresh(self, t):
+        """returns whether this datetime has expired
+        """
+        return self.timeout is None or datetime.now() - t < self.timeout
 
 
 if __name__ == '__main__':

@@ -44,8 +44,9 @@ def parse(html, xpath, debug=False, remove=['link', 'script']):
             parent_attributes = []
             for context in contexts:
                 search = separator == '' and find_children or find_descendants
-                for child_i, child in enumerate(search(context, tag)):
-                    if index is None or index == child_i + 1:
+                matches = search(context, tag)
+                for child_i, child in enumerate(matches):
+                    if index is None or index == child_i + 1 or index == -1 and len(matches) == child_i + 1:
                         # matches index if defined
                         attributes = get_attributes(child)
                         if attribute is None or attribute in attributes.items():

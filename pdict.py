@@ -1,15 +1,16 @@
 #
-#
+# 
 #
 
-import sqlite3 as db
 from datetime import datetime
+import sqlite3
 import zlib
 import threading
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
+
 
 
 lock = threading.Lock() # need to lock writes between threads
@@ -22,20 +23,21 @@ def synchronous(f):
             lock.release()
     return call
 
+
 class PersistentDict(object):
     """stores and retrieves persistent data through a dict-like interface
     data is stored compressed on disk using sqlite3 
     """
     
     @synchronous
-    def __init__(self, filename=':memory', compress_level=6, timeout=None):
-        """initialize a new PersistentDict with the specified db file.
+    def __init__(self, filename=':memory:', compress_level=6, timeout=None):
+        """initialize a new PersistentDict with the specified database file.
 
-        filename: where to store sqlite database. Use in memory by default
-        compress_level: between 1-9 - in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds
-        timeout: a timedelta object of how old data can be. Set to None to disable.
+        filename: where to store sqlite database. Uses in memory by default.
+        compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
+        timeout: a timedelta object of how old data can be. By default is set to None to disable.
         """
-        self._conn = db.connect(filename, isolation_level=None, detect_types=db.PARSE_DECLTYPES|db.PARSE_COLNAMES)
+        self._conn = sqlite3.connect(filename, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
         CREATE TABLE IF NOT EXISTS config (
@@ -47,9 +49,6 @@ class PersistentDict(object):
         self._conn.execute(sql)
         self.compress_level = compress_level
         self.timeout = timeout
-
-    #def __del__(self):
-    #    self._conn.close()
 
     
     def __contains__(self, key):
@@ -89,7 +88,7 @@ class PersistentDict(object):
     def serialize(self, value):
         """convert object to a compressed blog string to save in the db
         """
-        return db.Binary(zlib.compress(pickle.dumps(value), self.compress_level))
+        return sqlite3.Binary(zlib.compress(pickle.dumps(value), self.compress_level))
     
     def deserialize(self, value):
         """convert compressed string from database back into an object

@@ -109,15 +109,15 @@ class Download(object):
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         variance is the amount of randomness in delay, 0-1
         """
-        key = 'delay_' + extract_domain(url)
-        if key in self.cache:
-            dt = datetime.now() - self.cache[key]
+        domain = extract_domain(url)
+        if domain in self.cache:
+            dt = datetime.now() - self.cache[domain]
             wait_secs = delay - dt.days * 24 * 60 * 60 - dt.seconds
             if wait_secs > 0:
                 # randomize the time so less suspicious
                 wait_secs = wait_secs - variance * delay + (2 * variance * delay * random.random())
                 time.sleep(max(0, wait_secs)) # make sure isn't negative time
-        self.cache[key] = datetime.now() # update database to now
+        self.cache[domain] = datetime.now() # update database to now
 
 
 
@@ -176,14 +176,14 @@ def threaded_get(urls, proxies=[None], return_html=True, **kwargs):
     class Helper(Thread):
         def __init__(self, urls, proxy):
             Thread.__init__(self)
-            self.urls, self.results = urls, {}
-            self.download = Download(proxy=proxy, **kwargs)
+            self.urls, self.proxy, self.results = urls, proxy, {}
 
         def run(self):
+            d = Download(proxy=self.proxy, **kwargs)
             try:
                 while 1:
                     url = self.urls.get(block=False)
-                    html = self.download.get(url, **kwargs)
+                    html = d.get(url, **kwargs)
                     if return_html:
                         self.results[url] = html
             except Queue.Empty:
@@ -195,8 +195,8 @@ def threaded_get(urls, proxies=[None], return_html=True, **kwargs):
         queue.put(url)
 
     downloaders = []
-    for id, proxy in enumerate(proxies):
-        downloader = Helper(id, queue, proxy)
+    for proxy in proxies:
+        downloader = Helper(queue, proxy)
         downloaders.append(downloader)
         downloader.start()
 
@@ -222,15 +222,14 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs
     class Helper(Thread):
         def __init__(self, urls):
             Thread.__init__(self)
-            self.urls = urls
-            self.download = Download(**kwargs)
-            self.results = {}
+            self.urls, self.results = urls, {}
 
         def run(self):
+            d = Download(**kwargs)
             try:
                 while 1:
                     url = self.urls.get(block=False)
-                    self.results[url] = download.crawl(url, max_urls=max_urls, max_depth=max_depth, **kwargs)
+                    self.results[url] = d.crawl(url, max_urls=max_urls, max_depth=max_depth, **kwargs)
             except Queue.Empty:
                 pass # finished
 
@@ -240,7 +239,7 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs
         queue.put(url)
     crawlers = []
     for i in range(num_threads):
-        crawler = Helper(i, queue)
+        crawler = Helper(queue)
         crawlers.append(crawler)
         crawler.start()
 

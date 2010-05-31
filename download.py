@@ -27,6 +27,9 @@ from pdict import PersistentDict
 class Download(object):
     DEFAULT_USER_AGENT = 'Mozilla/5.0'
     DEFAULT_CACHE_FILE = 'cache.db'
+    # known non-html extensions to avoid crawling
+    IGNORED_EXTENSIONS = '.ai', '.aif', '.aifc', '.aiff', '.asc', '.au', '.avi', '.bcpio', '.bin', '.c', '.cc', '.ccad', '.cdf', '.class', '.cpio', '.cpt', '.csh', '.css', '.csv', '.dcr', '.dir', '.dms', '.doc', '.drw', '.dvi', '.dwg', '.dxf', '.dxr', '.eps', '.etx', '.exe', '.ez', '.f', '.f90', '.fli', '.flv', '.gif', '.gtar', '.gz', '.h', '.hdf', '.hh', '.hqx', 'ice', '.ico', '.ief', '.iges', '.igs', '.ips', '.ipx', '.jpe', '.jpeg', '.jpg', '.js', '.kar', '.latex', '.lha', '.lsp', '.lzh', '.m', '.man', '.me', '.mesh', '.mid', '.midi', '.mif', '.mime', '.mov', '.movie', '.mp2', '.mp3', '.mpe', '.mpeg', '.mpg', '.mpga', '.ms', '.msh', '.nc', '.oda', '.pbm', '.pdb', '.pdf', '.pgm', '.pgn', '.png', '.pnm', '.pot', '.ppm', '.pps', '.ppt', '.ppz', '.pre', '.prt', '.ps', '.qt', '.ra', '.ram', '.ras', '.rgb', '.rm', '.roff', '.rpm', '.rtf', '.rtx', '.scm', '.set', '.sgm', '.sgml', '.sh', '.shar', '.silo', '.sit', '.skd', '.skm', '.skp', '.skt', '.smi', '.smil', '.snd', '.sol', '.spl', '.src', '.step', '.stl', '.stp', '.sv4cpio', '.sv4crc', '.swf', '.t', '.tar', '.tcl', '.tex', '.texi', '.tif', '.tiff', '.tr', '.tsi', '.tsp', '.tsv', '.txt', '.unv', '.ustar', '.vcd', '.vda', '.viv', '.vivo', '.vrml', '.w2p', '.wav', '.wrl', '.xbm', '.xlc', '.xll', '.xlm', '.xls', '.xlw', '.xml', '.xpm', '.xsl', '.xwd', '.xyz', '.zip'
+
 
     def __init__(self, cache_file=DEFAULT_CACHE_FILE, user_agent=DEFAULT_USER_AGENT, delay=5, proxy=None, opener=None, **kwargs):
         """
@@ -125,15 +128,13 @@ class Download(object):
         """Crawl website html and return list of URLs crawled
 
         seed_url: url to start crawling from
-        max_urls: maximum number of URLs to crawl (use negative number for no limit)
-        max_depth: maximum depth to follow links into website (use negative number for no limit)
+        max_urls: maximum number of URLs to crawl (use None for no limit)
+        max_depth: maximum depth to follow links into website (use None for no limit)
         obey_robots: whether to obey robots.txt
         max_size is passed to get() and is limited to 1MB by default
         force_text is passed to get() and is set to True by default so only crawl HTML content
         **kwargs is passed to get()
         """
-        # known non-html extensions to avoid crawling
-        ignored_extensions = '.ai', '.aif', '.aifc', '.aiff', '.asc', '.au', '.avi', '.bcpio', '.bin', '.c', '.cc', '.ccad', '.cdf', '.class', '.cpio', '.cpt', '.csh', '.css', '.csv', '.dcr', '.dir', '.dms', '.doc', '.drw', '.dvi', '.dwg', '.dxf', '.dxr', '.eps', '.etx', '.exe', '.ez', '.f', '.f90', '.fli', '.flv', '.gif', '.gtar', '.gz', '.h', '.hdf', '.hh', '.hqx', 'ice', '.ico', '.ief', '.iges', '.igs', '.ips', '.ipx', '.jpe', '.jpeg', '.jpg', '.js', '.kar', '.latex', '.lha', '.lsp', '.lzh', '.m', '.man', '.me', '.mesh', '.mid', '.midi', '.mif', '.mime', '.mov', '.movie', '.mp2', '.mp3', '.mpe', '.mpeg', '.mpg', '.mpga', '.ms', '.msh', '.nc', '.oda', '.pbm', '.pdb', '.pdf', '.pgm', '.pgn', '.png', '.pnm', '.pot', '.ppm', '.pps', '.ppt', '.ppz', '.pre', '.prt', '.ps', '.qt', '.ra', '.ram', '.ras', '.rgb', '.rm', '.roff', '.rpm', '.rtf', '.rtx', '.scm', '.set', '.sgm', '.sgml', '.sh', '.shar', '.silo', '.sit', '.skd', '.skm', '.skp', '.skt', '.smi', '.smil', '.snd', '.sol', '.spl', '.src', '.step', '.stl', '.stp', '.sv4cpio', '.sv4crc', '.swf', '.t', '.tar', '.tcl', '.tex', '.texi', '.tif', '.tiff', '.tr', '.tsi', '.tsp', '.tsv', '.txt', '.unv', '.ustar', '.vcd', '.vda', '.viv', '.vivo', '.vrml', '.w2p', '.wav', '.wrl', '.xbm', '.xlc', '.xll', '.xlm', '.xls', '.xlw', '.xml', '.xpm', '.xsl', '.xwd', '.xyz', '.zip'
         server = 'http://' + extract_domain(seed_url)
         robots = RobotFileParser()
         if obey_robots:
@@ -147,14 +148,14 @@ class Download(object):
                 break
             url, cur_depth = outstanding.pop(0)
             if url not in crawled:
+                self.get(url, max_size=max_size, force_html=force_html, **kwargs)
                 crawled.append(url)
-                html = self.get(url, max_size=max_size, force_html=force_html, **kwargs)
-                if cur_depth < max_depth or max_depth < 0:
+                if max_depth is None or cur_depth < max_depth:
                     # continue crawling
                     for scraped_url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
                         if '#' in scraped_url:
                             scraped_url = scraped_url[:scraped_url.index('#')] # remove internal links to prevent duplicates
-                        if os.path.splitext(scraped_url)[-1].lower() not in ignored_extensions and robots.can_fetch(user_agent, scraped_url):
+                        if os.path.splitext(scraped_url)[-1].lower() not in Download.IGNORED_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
                             scraped_url = urljoin(server, scraped_url) # support relative links
                             # check if same domain or sub-domain
                             this_server = extract_domain(scraped_url)

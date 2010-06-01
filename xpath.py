@@ -102,14 +102,14 @@ def xpath_iter(xpath):
 def get_attributes(html):
     """Extract the attributes of the passed HTML tag
 
-    >>> get_attributes('<div id="ID" name="MY NAME" class=abc>content <span>SPAN</span></div>')
-    {'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
+    >>> get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span>SPAN</span></div>')
+    {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
     attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
     return dict(
-        re.compile('(\w+)="(.*?)"', re.DOTALL).findall(attributes) + 
-        re.compile("(\w+)='(.*?)'", re.DOTALL).findall(attributes) + 
-        re.compile("(\w+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes
+        re.compile('([\w-]+)="(.*?)"', re.DOTALL).findall(attributes) + 
+        re.compile("([\w-]+)='(.*?)'", re.DOTALL).findall(attributes) + 
+        re.compile("([\w-]+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes
     )
 
 

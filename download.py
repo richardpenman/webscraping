@@ -101,7 +101,10 @@ class Download(object):
             else:
                 if response.headers.get('content-encoding') == 'gzip':
                     # data came back gzip-compressed so decompress it          
-                    content = gzip.GzipFile(fileobj=StringIO(content)).read()
+                    try:
+                        content = gzip.GzipFile(fileobj=StringIO(content)).read()
+                    except IOError:
+                        content = '' # invalid gzipped data
         return content
 
 

@@ -31,25 +31,14 @@ class Download(object):
     IGNORED_EXTENSIONS = '.ai', '.aif', '.aifc', '.aiff', '.asc', '.au', '.avi', '.bcpio', '.bin', '.c', '.cc', '.ccad', '.cdf', '.class', '.cpio', '.cpt', '.csh', '.css', '.csv', '.dcr', '.dir', '.dms', '.doc', '.drw', '.dvi', '.dwg', '.dxf', '.dxr', '.eps', '.etx', '.exe', '.ez', '.f', '.f90', '.fli', '.flv', '.gif', '.gtar', '.gz', '.h', '.hdf', '.hh', '.hqx', 'ice', '.ico', '.ief', '.iges', '.igs', '.ips', '.ipx', '.jpe', '.jpeg', '.jpg', '.js', '.kar', '.latex', '.lha', '.lsp', '.lzh', '.m', '.man', '.me', '.mesh', '.mid', '.midi', '.mif', '.mime', '.mov', '.movie', '.mp2', '.mp3', '.mpe', '.mpeg', '.mpg', '.mpga', '.ms', '.msh', '.nc', '.oda', '.pbm', '.pdb', '.pdf', '.pgm', '.pgn', '.png', '.pnm', '.pot', '.ppm', '.pps', '.ppt', '.ppz', '.pre', '.prt', '.ps', '.qt', '.ra', '.ram', '.ras', '.rgb', '.rm', '.roff', '.rpm', '.rtf', '.rtx', '.scm', '.set', '.sgm', '.sgml', '.sh', '.shar', '.silo', '.sit', '.skd', '.skm', '.skp', '.skt', '.smi', '.smil', '.snd', '.sol', '.spl', '.src', '.step', '.stl', '.stp', '.sv4cpio', '.sv4crc', '.swf', '.t', '.tar', '.tcl', '.tex', '.texi', '.tif', '.tiff', '.tr', '.tsi', '.tsp', '.tsv', '.txt', '.unv', '.ustar', '.vcd', '.vda', '.viv', '.vivo', '.vrml', '.w2p', '.wav', '.wrl', '.xbm', '.xlc', '.xll', '.xlm', '.xls', '.xlw', '.xml', '.xpm', '.xsl', '.xwd', '.xyz', '.zip'
 
 
-    def __init__(self, cache_file=DEFAULT_CACHE_FILE, user_agent=DEFAULT_USER_AGENT, delay=5, proxy=None, opener=None, **kwargs):
+    def __init__(self, cache_file=DEFAULT_CACHE_FILE, user_agent=DEFAULT_USER_AGENT, delay=5, proxy=None, opener=None, 
+            headers=None, data=None, use_cache=True, use_remote=True, retry=False, force_html=False, force_ascii=True, max_size=None):
         """
         cache_file sets where to store cached data
         user_agent sets the user_agent to download content with
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         proxy is a proxy to download content through
         opener sets an optional opener to use instead of using urllib2 directly
-        """
-        self.cache = PersistentDict(cache_file)
-        self.delay = delay
-        self.proxy = proxy
-        self.user_agent = user_agent
-        self.opener = opener
-
-
-    def get(self, url, headers=None, data=None, use_cache=True, use_remote=True, retry=False, force_html=False, force_ascii=True, max_size=None, **kwargs):
-        """Download this URL and return the HTML. Data is cached so only have to download once.
-
-        url is what to download
         headers are the headers to include in the request
         data is what to post at the URL
         retry sets whether to try downloading webpage again if got error last time
@@ -59,6 +48,40 @@ class Download(object):
         use_remote determines whether to download from remote website if not in cache
         max_size determines maximum number of bytes that will be downloaded
         """
+        self.cache = PersistentDict(cache_file)
+        self.delay = delay
+        self.proxy = proxy
+        self.user_agent = user_agent
+        self.opener = opener
+        self.headers = headers
+        self.data = data
+        self.use_cache = use_cache
+        self.use_remote = use_remote
+        self.retry = retry
+        self.force_html = force_html
+        self.force_ascii = force_ascii
+        self.max_size = max_size
+
+
+    def get(self, url, **kwargs):
+        """Download this URL and return the HTML. Data is cached so only have to download once.
+
+        url is what to download
+        kwargs can override any of the arguments passed to constructor
+        """
+        delay = kwargs.get('delay', self.delay)
+        proxy = kwargs.get('proxy', self.proxy)
+        user_agent = kwargs.get('user_agent', self.user_agent)
+        opener = kwargs.get('opener', self.opener)
+        headers = kwargs.get('headers', self.headers)
+        data = kwargs.get('data', self.data)
+        use_cache = kwargs.get('use_cache', self.use_cache)
+        use_remote = kwargs.get('use_remote', self.use_remote)
+        retry = kwargs.get('retry', self.retry)
+        force_html = kwargs.get('force_html', self.force_html)
+        force_ascii = kwargs.get('force_ascii', self.force_ascii)
+        max_size = kwargs.get('max_size', self.max_size)
+
         if use_cache and url in self.cache:
             html = self.cache[url]
             if retry and not html:
@@ -69,7 +92,7 @@ class Download(object):
             return '' # do not try downloading but return empty
 
         print url # need to download url
-        self.domain_delay(url, delay=self.delay) # crawl slowly for each domain to reduce risk of being blocked
+        self.domain_delay(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data)
         if max_size is not None and len(html) > max_size:
             html = '' # too big to store
@@ -108,22 +131,22 @@ class Download(object):
         return content
 
 
-    def domain_delay(self, url, delay, variance=0.5):
-        """Delay a minimum time for each domain by storing last access times in a pdict
+    def domain_delay(self, url, delay, proxy=None, variance=0.5):
+        """Delay a minimum time for each domain per proxy by storing last access times in a pdict
 
         url is what intend to download
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         variance is the amount of randomness in delay, 0-1
         """
-        domain = extract_domain(url)
-        if domain in self.cache:
-            dt = datetime.now() - self.cache[domain]
+        key = str(proxy) + ':' + extract_domain(url)
+        if key in self.cache:
+            dt = datetime.now() - self.cache[key]
             wait_secs = delay - dt.days * 24 * 60 * 60 - dt.seconds
             if wait_secs > 0:
                 # randomize the time so less suspicious
                 wait_secs = wait_secs - variance * delay + (2 * variance * delay * random.random())
                 time.sleep(max(0, wait_secs)) # make sure isn't negative time
-        self.cache[domain] = datetime.now() # update database to now
+        self.cache[key] = datetime.now() # update database timestamp to now
 
 
 

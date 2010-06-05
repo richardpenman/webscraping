@@ -161,6 +161,7 @@ class Download(object):
         force_text is passed to get() and is set to True by default so only crawl HTML content
         **kwargs is passed to get()
         """
+        user_agent = kwargs.get('user_agent', self.user_agent)
         server = 'http://' + extract_domain(seed_url)
         robots = RobotFileParser()
         if obey_robots:
@@ -174,7 +175,7 @@ class Download(object):
                 break
             url, cur_depth = outstanding.pop(0)
             if url not in crawled:
-                self.get(url, max_size=max_size, force_html=force_html, **kwargs)
+                html = self.get(url, max_size=max_size, force_html=force_html, **kwargs)
                 crawled.append(url)
                 if max_depth is None or cur_depth < max_depth:
                     # continue crawling

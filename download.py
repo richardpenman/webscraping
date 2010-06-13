@@ -126,7 +126,7 @@ class Download(object):
                     # data came back gzip-compressed so decompress it          
                     try:
                         content = gzip.GzipFile(fileobj=StringIO(content)).read()
-                    except IOError:
+                    except:
                         content = '' # invalid gzipped data
         return content
 

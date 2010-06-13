@@ -45,6 +45,7 @@ def parse(html, xpath, debug=False, remove=['link', 'script']):
             for context in contexts:
                 search = separator == '' and find_children or find_descendants
                 matches = search(context, tag)
+                print matches
                 for child_i, child in enumerate(matches):
                     if index is None or index == child_i + 1 or index == -1 and len(matches) == child_i + 1:
                         # matches index if defined
@@ -114,12 +115,13 @@ def get_attributes(html):
 
 
 def get_content(html):
-    """Extract the attributes and child HTML of a the passed HTML tag
+    """Extract the child HTML of a the passed HTML tag
 
     >>> get_content('<div id="ID" name="NAME">content <span>SPAN</span></div>')
     'content <span>SPAN</span>'
     """
-    return re.compile('<.*?>(.*)</.*?>$', re.DOTALL).match(html).groups()[0]
+    match = re.compile('<.*?>(.*)</.*?>$', re.DOTALL).match(html)
+    return match.groups()[0] if match else ''
 
 
 
@@ -154,7 +156,7 @@ def find_descendants(html, tag):
     ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
     """
     if tag == '*':
-        raise XPathException("`*' not supported for //")
+        raise XPathException("`*' not currently supported for // because too inefficient")
     results = []
     for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
         tag_html, _ = split_tag(html[match.start():])
@@ -209,15 +211,16 @@ def split_tag(html):
     ('<div>abc<div>def</div>abc</span></div>', '')
     """
     tag = get_tag(html)
-    depth = 0
+    depth = 0 # how far nested
     for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
         if html[match.start() + 1] == '/':
             depth -= 1
         elif html[match.end() - 2] == '/':
-            pass # tag starts and ends
+            pass # tag starts and ends (eg <br />)
         else:
             depth += 1
         if depth == 0:
+            # found top level match
             i = match.end()
             return html[:i], html[i:]
     return html + '</%s>' % tag, ''

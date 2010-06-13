@@ -32,7 +32,7 @@ class Download(object):
 
 
     def __init__(self, cache_file=DEFAULT_CACHE_FILE, user_agent=DEFAULT_USER_AGENT, delay=5, proxy=None, opener=None, 
-            headers=None, data=None, use_cache=True, use_remote=True, retry=False, force_html=False, force_ascii=True, max_size=None):
+            headers=None, data=None, use_cache=True, use_remote=True, retry=False, force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
         user_agent sets the user_agent to download content with
@@ -113,21 +113,13 @@ class Download(object):
         headers = headers or {'User-agent': self.user_agent, 'Accept-encoding': 'gzip'}
         try:
             response = opener.open(urllib2.Request(url, data, headers))
+            content = response.read()
+            if response.headers.get('content-encoding') == 'gzip':
+                # data came back gzip-compressed so decompress it          
+                content = gzip.GzipFile(fileobj=StringIO(content)).read()
         except Exception, e:
             print e
             content = ''
-        else:
-            try:
-                content = response.read()
-            except:
-                content = ''
-            else:
-                if response.headers.get('content-encoding') == 'gzip':
-                    # data came back gzip-compressed so decompress it          
-                    try:
-                        content = gzip.GzipFile(fileobj=StringIO(content)).read()
-                    except:
-                        content = '' # invalid gzipped data
         return content
 
 

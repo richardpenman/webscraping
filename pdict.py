@@ -38,7 +38,7 @@ class PersistentDict(object):
         timeout: a timedelta object of how old data can be. By default is set to None to disable.
         """
         self._conn = sqlite3.connect(filename, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
-        self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
+        #self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
         CREATE TABLE IF NOT EXISTS config (
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
@@ -88,7 +88,7 @@ class PersistentDict(object):
     def serialize(self, value):
         """convert object to a compressed blog string to save in the db
         """
-        return sqlite3.Binary(zlib.compress(pickle.dumps(value), self.compress_level))
+        return sqlite3.Binary(zlib.compress(pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL), self.compress_level))
     
     def deserialize(self, value):
         """convert compressed string from database back into an object

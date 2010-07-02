@@ -1,9 +1,28 @@
+#
+# Description:
+# This is an experimental module that implements a subset of the XPath standard:
+#  - tags
+#  - indices
+#  - attributes
+#  - descendants
+# It also adds a few extensions useful to my work:
+#  - attributes can contain regular expressions
+#  - indices can be negative
+#
+# Generally XPath solutions will normalize the HTML into XHTML before selecting nodes.
+# However this module tries to navigate the HTML structure directly without normalizing.
+# In some cases I have found this faster/more accurate than using lxml.html and in other cases less so.
+#
+# Author: Richard Penman (richard@sitescraper.net)
+#
+
+
 import re
 import urllib2
 from optparse import OptionParser
 
 # tags that do not contain content and so can be safely skipped
-EMPTY_TAGS = 'br', 'hr', 'meta'
+EMPTY_TAGS = 'br', 'hr'
 
 
 
@@ -11,10 +30,11 @@ class XPathException(Exception):
     pass
 
 
-def parse(html, xpath, debug=False, remove=[]):
+def parse(html, xpath, debug=False, remove=EMPTY_TAGS):
     """Query HTML document using XPath
-    Supports indices, attributes, descendants
-    Can handle rough HTML but may miss content if key tags are not closed
+    
+    debug sets whether to print debugging data
+    remove is a list of tags to ignore
 
     >>> parse('<span>1</span><div>abc<a>LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a>LINK 3</a>jkl</div>', '/div/a')
     ['LINK 1', 'LINK 3']

@@ -11,7 +11,7 @@ class XPathException(Exception):
     pass
 
 
-def parse(html, xpath, debug=False, remove=['link', 'script']):
+def parse(html, xpath, debug=False, remove=[]):
     """Query HTML document using XPath
     Supports indices, attributes, descendants
     Can handle rough HTML but may miss content if key tags are not closed

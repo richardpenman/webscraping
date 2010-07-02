@@ -13,7 +13,7 @@ from urlparse import urljoin
 from datetime import datetime
 from StringIO import StringIO
 import socket
-socket.setdefaulttimeout(20)
+socket.setdefaulttimeout(30)
 from threading import Thread
 import Queue
 from robotparser import RobotFileParser
@@ -91,9 +91,8 @@ class Download(object):
         if not use_remote:
             return '' # do not try downloading but return empty
 
-        print url # need to download url
         self.domain_delay(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
-        html = self.fetch(url, headers=headers, data=data)
+        html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener)
         if max_size is not None and len(html) > max_size:
             html = '' # too big to store
         elif force_html and not re.search('html|head|body', html):
@@ -104,20 +103,23 @@ class Download(object):
         return html
 
 
-    def fetch(self, url, headers=None, data=None):
+    def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None):
         """Simply download the url and return the content
         """
-        opener = self.opener or urllib2.build_opener()
-        if self.proxy:
-            opener.add_handler(urllib2.ProxyHandler({'http' : self.proxy}))
-        headers = headers or {'User-agent': self.user_agent, 'Accept-encoding': 'gzip'}
+        print url
+        opener = opener or urllib2.build_opener()
+        if proxy:
+            opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
+        headers = headers or {'User-agent': user_agent, 'Accept-encoding': 'gzip', 'Referrer': url}
         try:
             response = opener.open(urllib2.Request(url, data, headers))
             content = response.read()
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 content = gzip.GzipFile(fileobj=StringIO(content)).read()
+            #url = response.url
         except Exception, e:
+            # so many kinds of errors are possible here so just catch them all
             print e
             content = ''
         return content
@@ -209,6 +211,7 @@ def threaded_get(urls, proxies=[None], return_html=True, **kwargs):
             except Queue.Empty:
                 pass # finished
 
+    random.shuffle(urls)
     # put urls into thread safe queue
     queue = Queue.Queue()
     for url in urls:
@@ -253,6 +256,8 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs
             except Queue.Empty:
                 pass # finished
 
+    # randomize url order to balance requests across domains
+    random.shuffle(seed_urls)
     # put urls into thread safe queue
     queue = Queue.Queue()
     for url in seed_urls:

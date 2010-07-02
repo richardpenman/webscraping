@@ -16,11 +16,20 @@ import cookielib
 
 
 def to_ascii(html):
+    """Return ascii part of html
+    """
     #html = html.decode('utf-8')
     return ''.join(c for c in html if ord(c) < 128)
 
 def to_int(s):
     """Return integer from this string
+
+    >>> to_int('90')
+    90
+    >>> to_int('a90a')
+    90
+    >>> to_int('a')
+    0
     """
     return int('0' + ''.join(c for c in s if c.isdigit()))
 
@@ -28,6 +37,13 @@ def to_int(s):
 
 def unique(l):
     """Remove duplicates from list, while maintaining order
+
+    >>> unique([3,6,4,4,6])
+    [3, 6, 4]
+    >>> unique([])
+    []
+    >>> unique([3,6,4])
+    [3, 6, 4]
     """
     checked = []
     for e in l:
@@ -38,13 +54,32 @@ def unique(l):
 
 def flatten(ls):
     """Flatten sub lists into single list
+
+    >>> [[1,2,3], [4,5,6], [7,8,9]]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9]
     """
     return [e for l in ls for e in l]
+
+
+def first(l, default=''):
+    """Return first element from list or default value if empty
+
+    >>> first([1,2,3])
+    1
+    >>> first([], None)
+    None
+    """
+    return l[0] if l else default
 
 
 def remove_tags(html, keep_children=True):
     """Remove HTML tags leaving just text
     If keep children is True then keep text within child tags
+
+    >>> remove_tags('hello <b>world</b>!')
+    'hello world!'
+    >>> remove_tags('hello <b>world</b>!', False)
+    'hello !'
     """
     if not keep_children:
         html = re.compile('<.*?>.*?</.*?>', re.DOTALL).sub('', html)
@@ -53,6 +88,7 @@ def remove_tags(html, keep_children=True):
 
 def select_options(html, attributes=''):
     """Extract options from HTML select box with given attributes
+
     >>> html = "Go: <select id='abc'><option value='1'>a</option><option value='2'>b</option></select>"
     >>> select_options(html, "id='abc'")
     [('1', 'a'), ('2', 'b')]

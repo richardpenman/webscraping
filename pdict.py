@@ -38,7 +38,7 @@ class PersistentDict(object):
         timeout: a timedelta object of how old data can be. By default is set to None to disable.
         """
         self._conn = sqlite3.connect(filename, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
-        #self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
+        self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
         CREATE TABLE IF NOT EXISTS config (
             key TEXT NOT NULL PRIMARY KEY UNIQUE,

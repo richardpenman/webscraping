@@ -34,7 +34,7 @@ def parse(html, xpath, debug=False, remove=[]):
         children = []
         if tag == '..':
             # parent
-            raise Exception('.. not supported')
+            raise Exception('.. not yet supported')
         elif tag.startswith('@'):
             # selecting attribute
             for attributes in parent_attributes:
@@ -49,7 +49,7 @@ def parse(html, xpath, debug=False, remove=[]):
                     if index is None or index == child_i + 1 or index == -1 and len(matches) == child_i + 1:
                         # matches index if defined
                         attributes = get_attributes(child)
-                        if attribute is None or attribute in attributes.items():
+                        if match_attributes(attribute, attributes):
                             # child matches tag and any defined indices or attributes
                             children.append(get_content(child))
                             parent_attributes.append(attributes)
@@ -111,6 +111,30 @@ def get_attributes(html):
         re.compile("([\w-]+)='(.*?)'", re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes
     )
+
+
+def match_attributes(attribute, attributes):
+    """Returns True if desired attribute matches one in the set
+    Supports regex, which is not part of the XPath standard but is so useful!
+
+    >>> match_attributes(None, {})
+    True
+    >>> match_attributes(('class', 'test'), {})
+    False
+    >>> match_attributes(None, {'id':'test', 'class':'test2'})
+    True
+    >>> match_attributes(('class', 'test'), {'id':'test', 'class':'test2'})
+    False
+    >>> match_attributes(('class', 'test'), {'id':'test2', 'class':'test'})
+    True
+    >>> match_attributes(('class', 'test\d'), {'id':'test', 'class':'test2'})
+    True
+    >>> match_attributes(('class', 'test\d'), {'id':'test2', 'class':'test'})
+    False
+    """
+    if not attribute: return True
+    name, value = attribute
+    return re.match(value + '$', attributes.get(name, '')) is not None
 
 
 def get_content(html):

@@ -1,6 +1,8 @@
 #
+# Description:
 # Common web scraping related functions
 #
+# Author: Richard Penman (richard@sitescraper.net)
 #
 
 import os

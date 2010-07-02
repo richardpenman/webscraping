@@ -1,6 +1,12 @@
 #
-# 
+# Description:
+# pdict has a dictionary like interface and a sqlite backend
+# It uses pickle to store Python objects and strings, which are then compressed
+# Multithreading is supported
 #
+# Author: Richard Penman (richard@sitescraper.net)
+#
+
 
 from datetime import datetime
 import sqlite3

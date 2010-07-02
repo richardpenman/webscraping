@@ -1,6 +1,8 @@
 #
-# Common web scraping related functions
+# Description:
+# Helper methods to download and crawl web content using threads
 #
+# Author: Richard Penman (richard@sitescraper.net)
 #
 
 import os

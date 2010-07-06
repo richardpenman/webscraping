@@ -112,7 +112,7 @@ class Download(object):
         opener = opener or urllib2.build_opener()
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
-        headers = headers or {'User-agent': user_agent, 'Accept-encoding': 'gzip', 'Referrer': url}
+        headers = headers or {'User-agent': user_agent or Download.DEFAULT_USER_AGENT, 'Accept-encoding': 'gzip', 'Referrer': url}
         try:
             response = opener.open(urllib2.Request(url, data, headers))
             content = response.read()

@@ -88,7 +88,6 @@ class PersistentDict(object):
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
-        key in self
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
         
     def serialize(self, value):
@@ -104,7 +103,7 @@ class PersistentDict(object):
     def keys(self):
         """returns a list containing each key in the database
         """
-        return [row[0] for row in self._conn.execute("SELECT key FROM config;").fetchmany()]
+        return [row[0] for row in self._conn.execute("SELECT key FROM config;").fetchall()]
 
     def is_fresh(self, t):
         """returns whether this datetime has expired

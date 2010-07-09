@@ -29,8 +29,8 @@ from pdict import PersistentDict
 class Download(object):
     DEFAULT_USER_AGENT = 'Mozilla/5.0'
     DEFAULT_CACHE_FILE = 'cache.db'
-    # known non-html extensions to avoid crawling
-    IGNORED_EXTENSIONS = '.ai', '.aif', '.aifc', '.aiff', '.asc', '.au', '.avi', '.bcpio', '.bin', '.c', '.cc', '.ccad', '.cdf', '.class', '.cpio', '.cpt', '.csh', '.css', '.csv', '.dcr', '.dir', '.dms', '.doc', '.drw', '.dvi', '.dwg', '.dxf', '.dxr', '.eps', '.etx', '.exe', '.ez', '.f', '.f90', '.fli', '.flv', '.gif', '.gtar', '.gz', '.h', '.hdf', '.hh', '.hqx', 'ice', '.ico', '.ief', '.iges', '.igs', '.ips', '.ipx', '.jpe', '.jpeg', '.jpg', '.js', '.kar', '.latex', '.lha', '.lsp', '.lzh', '.m', '.man', '.me', '.mesh', '.mid', '.midi', '.mif', '.mime', '.mov', '.movie', '.mp2', '.mp3', '.mpe', '.mpeg', '.mpg', '.mpga', '.ms', '.msh', '.nc', '.oda', '.pbm', '.pdb', '.pdf', '.pgm', '.pgn', '.png', '.pnm', '.pot', '.ppm', '.pps', '.ppt', '.ppz', '.pre', '.prt', '.ps', '.qt', '.ra', '.ram', '.ras', '.rgb', '.rm', '.roff', '.rpm', '.rtf', '.rtx', '.scm', '.set', '.sgm', '.sgml', '.sh', '.shar', '.silo', '.sit', '.skd', '.skm', '.skp', '.skt', '.smi', '.smil', '.snd', '.sol', '.spl', '.src', '.step', '.stl', '.stp', '.sv4cpio', '.sv4crc', '.swf', '.t', '.tar', '.tcl', '.tex', '.texi', '.tif', '.tiff', '.tr', '.tsi', '.tsp', '.tsv', '.txt', '.unv', '.ustar', '.vcd', '.vda', '.viv', '.vivo', '.vrml', '.w2p', '.wav', '.wrl', '.xbm', '.xlc', '.xll', '.xlm', '.xls', '.xlw', '.xml', '.xpm', '.xsl', '.xwd', '.xyz', '.zip'
+    # known non-html extensions to avoid when crawling
+    MEDIA_EXTENSIONS = '.ai', '.aif', '.aifc', '.aiff', '.asc', '.au', '.avi', '.bcpio', '.bin', '.c', '.cc', '.ccad', '.cdf', '.class', '.cpio', '.cpt', '.csh', '.css', '.csv', '.dcr', '.dir', '.dms', '.doc', '.drw', '.dvi', '.dwg', '.dxf', '.dxr', '.eps', '.etx', '.exe', '.ez', '.f', '.f90', '.fli', '.flv', '.gif', '.gtar', '.gz', '.h', '.hdf', '.hh', '.hqx', 'ice', '.ico', '.ief', '.iges', '.igs', '.ips', '.ipx', '.jpe', '.jpeg', '.jpg', '.js', '.kar', '.latex', '.lha', '.lsp', '.lzh', '.m', '.man', '.me', '.mesh', '.mid', '.midi', '.mif', '.mime', '.mov', '.movie', '.mp2', '.mp3', '.mpe', '.mpeg', '.mpg', '.mpga', '.ms', '.msh', '.nc', '.oda', '.pbm', '.pdb', '.pdf', '.pgm', '.pgn', '.png', '.pnm', '.pot', '.ppm', '.pps', '.ppt', '.ppz', '.pre', '.prt', '.ps', '.qt', '.ra', '.ram', '.ras', '.rgb', '.rm', '.roff', '.rpm', '.rtf', '.rtx', '.scm', '.set', '.sgm', '.sgml', '.sh', '.shar', '.silo', '.sit', '.skd', '.skm', '.skp', '.skt', '.smi', '.smil', '.snd', '.sol', '.spl', '.src', '.step', '.stl', '.stp', '.sv4cpio', '.sv4crc', '.swf', '.t', '.tar', '.tcl', '.tex', '.texi', '.tif', '.tiff', '.tr', '.tsi', '.tsp', '.tsv', '.txt', '.unv', '.ustar', '.vcd', '.vda', '.viv', '.vivo', '.vrml', '.w2p', '.wav', '.wrl', '.xbm', '.xlc', '.xll', '.xlm', '.xls', '.xlw', '.xml', '.xpm', '.xsl', '.xwd', '.xyz', '.zip'
 
 
     def __init__(self, cache_file=DEFAULT_CACHE_FILE, user_agent=DEFAULT_USER_AGENT, delay=5, proxy=None, opener=None, 
@@ -178,7 +178,7 @@ class Download(object):
                     for scraped_url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
                         if '#' in scraped_url:
                             scraped_url = scraped_url[:scraped_url.index('#')] # remove internal links to prevent duplicates
-                        if os.path.splitext(scraped_url)[-1].lower() not in Download.IGNORED_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
+                        if os.path.splitext(scraped_url)[-1].lower() not in Download.MEDIA_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
                             scraped_url = urljoin(server, scraped_url) # support relative links
                             # check if same domain or sub-domain
                             this_server = extract_domain(scraped_url)
@@ -188,7 +188,7 @@ class Download(object):
 
 
 
-def threaded_get(urls, proxies=[None], return_html=True, **kwargs):
+def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
     """Download these urls in parallel
 
     urls are the webpages to download
@@ -196,6 +196,7 @@ def threaded_get(urls, proxies=[None], return_html=True, **kwargs):
         To use the same proxy in parallel provide it multiple times in the proxy list
         None means use no proxy but connect directly
     if return_html is True then returns list of htmls in same order as urls
+        be careful of the memory this will take up when urls is large
     """
     class Helper(Thread):
         def __init__(self, urls, proxy):
@@ -234,7 +235,7 @@ def threaded_get(urls, proxies=[None], return_html=True, **kwargs):
 
 
 
-def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs):
+def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, return_html=False, **kwargs):
     """Crawl websites in parallel
     Returns a dict of crawled urls for each site
 
@@ -254,7 +255,9 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs
             try:
                 while 1:
                     url = self.urls.get(block=False)
-                    self.results[url] = d.crawl(url, max_urls=max_urls, max_depth=max_depth, **kwargs)
+                    html = d.crawl(url, max_urls=max_urls, max_depth=max_depth, **kwargs)
+                    if return_html:
+                        self.results[url] = html
             except Queue.Empty:
                 pass # finished
 
@@ -270,9 +273,10 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs
         crawlers.append(crawler)
         crawler.start()
 
-    results = {}
-    for crawler in crawlers:
-        crawler.join()
-        results = dict(results, **crawler.results)
-    return results
+    if return_html:
+        results = {}
+        for crawler in crawlers:
+            crawler.join()
+            results = dict(results, **crawler.results)
+        return results
 

@@ -23,7 +23,7 @@ from robotparser import RobotFileParser
 from common import to_ascii, extract_domain
 from pdict import PersistentDict
 
-
+DEBUG = True
 
 
 class Download(object):
@@ -87,7 +87,7 @@ class Download(object):
         if use_cache and url in self.cache:
             html = self.cache[url]
             if retry and not html:
-                print 'Redownloading'
+                if DEBUG: print 'Redownloading'
             else:
                 return html
         if not use_remote:
@@ -108,7 +108,7 @@ class Download(object):
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None):
         """Simply download the url and return the content
         """
-        print url
+        if DEBUG: print url
         opener = opener or urllib2.build_opener()
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
@@ -122,7 +122,7 @@ class Download(object):
             #url = response.url
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
-            print e
+            if DEBUG: print e
             content = ''
         return content
 
@@ -146,7 +146,7 @@ class Download(object):
 
 
 
-    def crawl(self, seed_url, max_urls=30, max_depth=1, obey_robots=False, max_size=1000000, force_html=True, **kwargs):
+    def crawl(self, seed_url, max_urls=30, max_depth=1, obey_robots=False, max_size=1000000, force_html=True, return_html=False, **kwargs):
         """Crawl website html and return list of URLs crawled
 
         seed_url: url to start crawling from
@@ -163,7 +163,7 @@ class Download(object):
         if obey_robots:
             robots.parse(self.get(server + '/robots.txt').splitlines()) # load robots.txt
         outstanding = [(seed_url, 0), (server, 0)] # which URLs need to crawl
-        crawled = [] # urls that have crawled
+        crawled = {} if return_html else [] # urls that have crawled
 
         while outstanding: 
             # more URLs to crawl
@@ -172,14 +172,17 @@ class Download(object):
             url, cur_depth = outstanding.pop(0)
             if url not in crawled:
                 html = self.get(url, max_size=max_size, force_html=force_html, **kwargs)
-                crawled.append(url)
+                if return_html:
+                    crawled[url] = html
+                else:
+                    crawled.append(url)
                 if max_depth is None or cur_depth < max_depth:
                     # continue crawling
                     for scraped_url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
                         if '#' in scraped_url:
                             scraped_url = scraped_url[:scraped_url.index('#')] # remove internal links to prevent duplicates
                         if os.path.splitext(scraped_url)[-1].lower() not in Download.MEDIA_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
-                            scraped_url = urljoin(server, scraped_url) # support relative links
+                            scraped_url = urljoin(url, scraped_url) # support relative links
                             # check if same domain or sub-domain
                             this_server = extract_domain(scraped_url)
                             if this_server and (this_server in server or server in this_server):
@@ -235,7 +238,7 @@ def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
 
 
 
-def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, return_html=False, **kwargs):
+def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs):
     """Crawl websites in parallel
     Returns a dict of crawled urls for each site
 
@@ -246,18 +249,22 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, return_h
     **kwargs is passed to crawl()
     """
     class Helper(Thread):
+        count = 0
+
         def __init__(self, urls):
             Thread.__init__(self)
             self.urls, self.results = urls, {}
+            self.id = Helper.count
+            Helper.count += 1
 
         def run(self):
             d = Download(**kwargs)
             try:
                 while 1:
                     url = self.urls.get(block=False)
-                    html = d.crawl(url, max_urls=max_urls, max_depth=max_depth, **kwargs)
-                    if return_html:
-                        self.results[url] = html
+                    if DEBUG: print self.id, 'crawl', url
+                    urls = d.crawl(url, max_urls=max_urls, max_depth=max_depth, **kwargs)
+                    self.results[url] = urls
             except Queue.Empty:
                 pass # finished
 
@@ -273,10 +280,8 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, return_h
         crawlers.append(crawler)
         crawler.start()
 
-    if return_html:
-        results = {}
-        for crawler in crawlers:
-            crawler.join()
-            results = dict(results, **crawler.results)
-        return results
-
+    results = {}
+    for crawler in crawlers:
+        crawler.join()
+        results = dict(results, **crawler.results)
+    return results

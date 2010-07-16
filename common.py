@@ -158,7 +158,7 @@ def extract_emails(html):
     >>> extract_emails('hello richard AT sitescraper DOT net world')
     ['richard@sitescraper.net']
     """
-    email_re = re.compile('[\w\.\+-]+@\w[\w\.\+-]+\.\w+')
+    email_re = re.compile('[\w\.\+-]{1,64}@\w[\w\.\+-]{1,255}\.\w+')
     # remove comments, which can obfuscate emails
     html = re.compile('<!--.*?-->', re.DOTALL).sub('', html)
     emails = []
@@ -166,7 +166,7 @@ def extract_emails(html):
         if email not in emails:
             emails.append(email)
     # look for obfuscated email
-    for user, domain, ext in re.compile('([\w\.\+-]+) .?AT.? ([\w\.\+-]+) .?DOT.? (\w+)', re.IGNORECASE).findall(html):
+    for user, domain, ext in re.compile('([\w\.\+-]{1,64}) .?AT.? ([\w\.\+-]{1,255}) .?DOT.? (\w+)', re.IGNORECASE).findall(html):
         email = '%s@%s.%s' % (user, domain, ext)
         if email not in emails:
             emails.append(email)

@@ -84,8 +84,9 @@ class Download(object):
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
 
-        if use_cache and url in self.cache:
-            html = self.cache[url]
+        key = url + ' ' + data if data else url
+        if use_cache and key in self.cache:
+            html = self.cache[key]
             if retry and not html:
                 if DEBUG: print 'Redownloading'
             else:
@@ -101,7 +102,7 @@ class Download(object):
             html = '' # non-html content
         elif force_ascii:
             html = to_ascii(html) # remove non-ascii characters
-        self.cache[url] = html
+        self.cache[key] = html
         return html
 
 

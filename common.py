@@ -33,8 +33,13 @@ def to_int(s):
     >>> to_int('a')
     0
     """
-    return int('0' + ''.join(c for c in s if c.isdigit()))
+    return int(to_float(s))
 
+def to_float(s):
+    """Return float from this string
+    """
+    valid = string.digits + '.'
+    return float('0' + ''.join(c for c in s if c in valid))
 
 
 def unique(l):
@@ -72,6 +77,10 @@ def first(l, default=''):
     None
     """
     return l[0] if l else default
+def last(l, default=''):
+    """Return last element from list or default value if empty
+    """
+    return l[-1] if l else default
 
 
 def remove_tags(html, keep_children=True):
@@ -216,6 +225,10 @@ def pretty_duration(dt):
 
 def firefox_cookie(file):
     """Create a cookie jar from this FireFox 3 sqlite cookie database
+
+    >>> cj = firefox_cookie(file='/home/<user>/.mozilla/firefox/<random chars>.default/cookies.sqlite')
+    >>> opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+    >>> html = opener.open(url).read()
     """
     import sqlite3 
     # copy firefox cookie file locally to avoid locking problems

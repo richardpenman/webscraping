@@ -58,7 +58,7 @@ def parse(html, xpath, debug=False, remove=EMPTY_TAGS):
         elif tag.startswith('@'):
             # selecting attribute
             for attributes in parent_attributes:
-                children.append(attributes.get(tag[1:], ''))
+                children.append(attributes.get(tag[1:].lower(), ''))
         else:
             # have tag
             parent_attributes = []
@@ -126,7 +126,7 @@ def get_attributes(html):
     {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
     attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
-    return dict(
+    return dict((k.lower(), v) for (k, v) in
         re.compile('([\w-]+)="(.*?)"', re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)='(.*?)'", re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes

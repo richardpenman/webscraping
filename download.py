@@ -39,7 +39,7 @@ class Download(object):
         cache_file sets where to store cached data
         user_agent sets the user_agent to download content with
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
-        proxy is a proxy to download content through
+        proxy is a proxy to download content through. If a list is passed then will cycle through list.
         opener sets an optional opener to use instead of using urllib2 directly
         headers are the headers to include in the request
         data is what to post at the URL
@@ -72,7 +72,7 @@ class Download(object):
         kwargs can override any of the arguments passed to constructor
         """
         delay = kwargs.get('delay', self.delay)
-        proxy = kwargs.get('proxy', self.proxy)
+        proxy = self.get_proxy(kwargs.get('proxy', self.proxy))
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)
@@ -145,6 +145,14 @@ class Download(object):
                 time.sleep(max(0, wait_secs)) # make sure isn't negative time
         self.cache[key] = datetime.now() # update database timestamp to now
 
+
+    def get_proxy(self, proxies):
+        if proxies and isinstance(proxies, list):
+            proxy = proxies.pop(0)
+            proxies.append(proxy)
+        else:
+            proxy = proxies
+        return proxy
 
 
     def crawl(self, seed_url, max_urls=30, max_depth=1, obey_robots=False, max_size=1000000, force_html=True, return_html=False, **kwargs):

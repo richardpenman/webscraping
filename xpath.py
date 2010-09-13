@@ -20,6 +20,7 @@
 import re
 import urllib2
 from optparse import OptionParser
+from common import first, remove_tags
 
 # tags that do not contain content and so can be safely skipped
 EMPTY_TAGS = 'br', 'hr'
@@ -55,6 +56,10 @@ def parse(html, xpath, debug=False, remove=EMPTY_TAGS):
         if tag == '..':
             # parent
             raise Exception('.. not yet supported')
+        elif tag == 'text()':
+            # extract child text
+            for context in contexts:
+                children.append(remove_tags(context, keep_children=False))
         elif tag.startswith('@'):
             # selecting attribute
             for attributes in parent_attributes:
@@ -63,6 +68,7 @@ def parse(html, xpath, debug=False, remove=EMPTY_TAGS):
             # have tag
             parent_attributes = []
             for context in contexts:
+                # search direct children if / and all descendants if //
                 search = separator == '' and find_children or find_descendants
                 matches = search(context, tag)
                 for child_i, child in enumerate(matches):
@@ -82,6 +88,11 @@ def parse(html, xpath, debug=False, remove=EMPTY_TAGS):
                 print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s="%s"]' % attribute if attribute else '', tag_i + 1)
             break
     return contexts
+
+def parse_first(*args, **kwargs):
+    """Return first element from parse
+    """
+    return first(parse(*args, **kwargs))
 
 
 def clean_html(html, tags):
@@ -126,7 +137,7 @@ def get_attributes(html):
     {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
     attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
-    return dict((k.lower(), v) for (k, v) in
+    return dict((k.lower().strip(), v.strip()) for (k, v) in
         re.compile('([\w-]+)="(.*?)"', re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)='(.*?)'", re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes

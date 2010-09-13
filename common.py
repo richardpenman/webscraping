@@ -20,7 +20,6 @@ import cookielib
 def to_ascii(html):
     """Return ascii part of html
     """
-    #html = html.decode('utf-8')
     return ''.join(c for c in html if ord(c) < 128)
 
 def to_int(s):
@@ -115,6 +114,11 @@ def select_options(html, attributes=''):
     
 
 def unescape(text, encoding='utf-8'):
+    """Interpret escape characters
+
+    >>> unescape('&lt;hello&nbsp;&amp;&nbsp;world&gt;')
+    '<hello & world>'
+    """
     def fixup(m):
         text = m.group(0)
         if text[:2] == "&#":
@@ -226,7 +230,8 @@ def pretty_duration(dt):
 def firefox_cookie(file):
     """Create a cookie jar from this FireFox 3 sqlite cookie database
 
-    >>> cj = firefox_cookie(file='/home/<user>/.mozilla/firefox/<random chars>.default/cookies.sqlite')
+    >>> file = os.path.expanduser('~/.mozilla/firefox/<random chars>.default/cookies.sqlite')
+    >>> cj = firefox_cookie(file=file)
     >>> opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
     >>> html = opener.open(url).read()
     """

@@ -49,6 +49,7 @@ class PersistentDict(object):
         CREATE TABLE IF NOT EXISTS config (
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
             value BLOB,
+            meta BLOB,
             created timestamp DEFAULT (datetime('now', 'localtime')),
             updated timestamp DEFAULT (datetime('now', 'localtime'))
         );"""
@@ -110,6 +111,29 @@ class PersistentDict(object):
         """
         return self.timeout is None or datetime.now() - t < self.timeout
 
+    def get_meta(self, key):
+        """return the meta data for the specified key
+        """
+        row = self._conn.execute("SELECT meta FROM config WHERE key=?;", (key,)).fetchone()
+        if row:
+            return self.deserialize(row[0]) if row[0] else row[0]
+        else:
+            raise KeyError("Key `%s' does not exist" % key)
+    
+    @synchronous
+    def set_meta(self, key, value):
+        """set the meta data for the specified key
+        """
+        if key in self:
+            self._conn.execute("UPDATE config SET meta=? WHERE key=?;", (self.serialize(value), key))
+        else:
+            raise KeyError("Key `%s' does not exist" % key)
+
+    @synchronous
+    def __delitem__(self, key):
+        """remove the specifed value from the database
+        """
+        self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
 
 if __name__ == '__main__':
     # test performance of compression and verify stored data is correct

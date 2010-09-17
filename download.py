@@ -214,6 +214,9 @@ def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
             self.urls, self.proxy, self.results = urls, proxy, {}
 
         def run(self):
+            # XXX separate thread for puting in database
+            # XXX combine with threaded_crawl helper
+            # XXX change to process?
             d = Download(proxy=self.proxy, **kwargs)
             try:
                 while 1:
@@ -224,7 +227,6 @@ def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
             except Queue.Empty:
                 pass # finished
 
-    random.shuffle(urls)
     # put urls into thread safe queue
     queue = Queue.Queue()
     for url in urls:

@@ -19,9 +19,13 @@ TODO
 right click find xpath:
     http://doc.qt.nokia.com/4.6/webkit-domtraversal.html
     http://doc.qt.nokia.com/4.6/webkit-simpleselector.html
+textbox for jquery input
+    http://www.rkblog.rk.edu.pl/w/p/webkit-pyqt-rendering-web-pages/
 threaded multiple URLs
 timeout
 interface with cache to expand and not use pdict
+
+make scrape function sequential after dentist data
 """
 class NetworkAccessManager(QNetworkAccessManager):
     def __init__(self, proxy, allowed_extensions, cache_size=100):
@@ -87,6 +91,9 @@ class WebPage(QWebPage):
         """
         print 'Alert:', message
 
+    def javaScriptConsoleMessage(message, line_number, source_id):
+        print 'Console:', message, line_number, source_id
+
 
 class JQueryBrowser(QWebView):
     """Render webpages using webkit
@@ -138,6 +145,11 @@ class JQueryBrowser(QWebView):
         """
         return False # return False to stop crawling
 
+    def js(self, script):
+        """Shortcut to execute javascript
+        """
+        self.frame.evaluateJavaScript(script)
+
     def inject_jquery(self):
         """Inject jquery library into this webpage for easier manipulation
         """
@@ -147,7 +159,7 @@ class JQueryBrowser(QWebView):
         else:
             jquery_lib = urllib2.urlopen(url).read()
             self.cache[url] = jquery_lib
-        self.frame.evaluateJavaScript(jquery_lib)
+        self.js(jquery_lib)
 
     def _loadFinished(self, success):
         """slot for webpage finished loading

@@ -113,6 +113,7 @@ def xpath_iter(xpath):
     >>> list(xpath_iter('/div[1]//span[@class="text"]'))
     [('', 'div', 1, None), ('/', 'span', None, ('class', 'text'))]
     """
+    # XXX need to support multiple tag selectors
     for separator, token in re.compile('(|/|\.\.)/([^/]+)').findall(xpath):
         index = attribute = None
         if '[' in token:
@@ -122,7 +123,8 @@ def xpath_iter(xpath):
             except ValueError:
                 match = re.compile('@(.*?)=["\']?(.*?)["\']?$').search(selector)    
                 if match:
-                    attribute = match.groups()
+                    key, value = match.groups()
+                    attribute = key.lower(), value.lower()
                 else:
                     raise Exception('Unknown format: ' + selector)
         else:
@@ -137,7 +139,7 @@ def get_attributes(html):
     {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
     attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
-    return dict((k.lower().strip(), v.strip()) for (k, v) in
+    return dict((k.lower().strip(), v.lower().strip()) for (k, v) in
         re.compile('([\w-]+)="(.*?)"', re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)='(.*?)'", re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes

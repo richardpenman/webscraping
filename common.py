@@ -9,12 +9,16 @@ import os
 import re
 import time
 import urllib
-from datetime import datetime, timedelta
+import urlparse
 import string
 import htmlentitydefs
 import cookielib
+from datetime import datetime, timedelta
 
 
+
+# known media file extensions
+MEDIA_EXTENSIONS = ['.ai', '.aif', '.aifc', '.aiff', '.asc', '.au', '.avi', '.bcpio', '.bin', '.c', '.cc', '.ccad', '.cdf', '.class', '.cpio', '.cpt', '.csh', '.css', '.csv', '.dcr', '.dir', '.dms', '.doc', '.drw', '.dvi', '.dwg', '.dxf', '.dxr', '.eps', '.etx', '.exe', '.ez', '.f', '.f90', '.fli', '.flv', '.gif', '.gtar', '.gz', '.h', '.hdf', '.hh', '.hqx', 'ice', '.ico', '.ief', '.iges', '.igs', '.ips', '.ipx', '.jpe', '.jpeg', '.jpg', '.js', '.kar', '.latex', '.lha', '.lsp', '.lzh', '.m', '.man', '.me', '.mesh', '.mid', '.midi', '.mif', '.mime', '.mov', '.movie', '.mp2', '.mp3', '.mpe', '.mpeg', '.mpg', '.mpga', '.ms', '.msh', '.nc', '.oda', '.pbm', '.pdb', '.pdf', '.pgm', '.pgn', '.png', '.pnm', '.pot', '.ppm', '.pps', '.ppt', '.ppz', '.pre', '.prt', '.ps', '.qt', '.ra', '.ram', '.ras', '.rgb', '.rm', '.roff', '.rpm', '.rtf', '.rtx', '.scm', '.set', '.sgm', '.sgml', '.sh', '.shar', '.silo', '.sit', '.skd', '.skm', '.skp', '.skt', '.smi', '.smil', '.snd', '.sol', '.spl', '.src', '.step', '.stl', '.stp', '.sv4cpio', '.sv4crc', '.swf', '.t', '.tar', '.tcl', '.tex', '.texi', '.tif', '.tiff', '.tr', '.tsi', '.tsp', '.tsv', '.txt', '.unv', '.ustar', '.vcd', '.vda', '.viv', '.vivo', '.vrml', '.w2p', '.wav', '.wrl', '.xbm', '.xlc', '.xll', '.xlm', '.xls', '.xlw', '.xml', '.xpm', '.xsl', '.xwd', '.xyz', '.zip']
 
 
 def to_ascii(html):
@@ -39,6 +43,17 @@ def to_float(s):
     """
     valid = string.digits + '.'
     return float('0' + ''.join(c for c in s if c in valid))
+
+
+def get_extension(url):
+    """Return extension from given URL
+
+    >>> get_extension('hello_world.JPG')
+    '.jpg'
+    >>> get_extension('http://www.google-analytics.com/__utm.gif?utmwv=1.3&utmn=420639071')
+    '.gif'
+    """
+    return os.path.splitext(urlparse.urlsplit(url).path)[-1].lower()
 
 
 def unique(l):

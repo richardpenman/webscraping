@@ -17,21 +17,14 @@ socket.setdefaulttimeout(30)
 from threading import Thread
 import Queue
 from robotparser import RobotFileParser
-
-from common import to_ascii, extract_domain
-from pdict import PersistentDict
+from webscraping import common, pdict, settings
 
 DEBUG = True
 
 
 class Download(object):
-    DEFAULT_USER_AGENT = 'Mozilla/5.0'
-    DEFAULT_CACHE_FILE = 'cache.db'
-    # known non-html extensions to avoid when crawling
-    MEDIA_EXTENSIONS = ['.ai', '.aif', '.aifc', '.aiff', '.asc', '.au', '.avi', '.bcpio', '.bin', '.c', '.cc', '.ccad', '.cdf', '.class', '.cpio', '.cpt', '.csh', '.css', '.csv', '.dcr', '.dir', '.dms', '.doc', '.drw', '.dvi', '.dwg', '.dxf', '.dxr', '.eps', '.etx', '.exe', '.ez', '.f', '.f90', '.fli', '.flv', '.gif', '.gtar', '.gz', '.h', '.hdf', '.hh', '.hqx', 'ice', '.ico', '.ief', '.iges', '.igs', '.ips', '.ipx', '.jpe', '.jpeg', '.jpg', '.js', '.kar', '.latex', '.lha', '.lsp', '.lzh', '.m', '.man', '.me', '.mesh', '.mid', '.midi', '.mif', '.mime', '.mov', '.movie', '.mp2', '.mp3', '.mpe', '.mpeg', '.mpg', '.mpga', '.ms', '.msh', '.nc', '.oda', '.pbm', '.pdb', '.pdf', '.pgm', '.pgn', '.png', '.pnm', '.pot', '.ppm', '.pps', '.ppt', '.ppz', '.pre', '.prt', '.ps', '.qt', '.ra', '.ram', '.ras', '.rgb', '.rm', '.roff', '.rpm', '.rtf', '.rtx', '.scm', '.set', '.sgm', '.sgml', '.sh', '.shar', '.silo', '.sit', '.skd', '.skm', '.skp', '.skt', '.smi', '.smil', '.snd', '.sol', '.spl', '.src', '.step', '.stl', '.stp', '.sv4cpio', '.sv4crc', '.swf', '.t', '.tar', '.tcl', '.tex', '.texi', '.tif', '.tiff', '.tr', '.tsi', '.tsp', '.tsv', '.txt', '.unv', '.ustar', '.vcd', '.vda', '.viv', '.vivo', '.vrml', '.w2p', '.wav', '.wrl', '.xbm', '.xlc', '.xll', '.xlm', '.xls', '.xlw', '.xml', '.xpm', '.xsl', '.xwd', '.xyz', '.zip']
 
-
-    def __init__(self, cache_file=DEFAULT_CACHE_FILE, user_agent=DEFAULT_USER_AGENT, delay=5, proxy=None, opener=None, 
+    def __init__(self, cache_file=None, user_agent=None, delay=5, proxy=None, opener=None, 
             headers=None, data=None, use_cache=True, use_remote=True, retry=False, force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
@@ -48,10 +41,10 @@ class Download(object):
         use_remote determines whether to download from remote website if not in cache
         max_size determines maximum number of bytes that will be downloaded
         """
-        self.cache = PersistentDict(cache_file)
+        self.cache = pdict.PersistentDict(cache_file or settings.cache_file)
         self.delay = delay
         self.proxy = proxy
-        self.user_agent = user_agent
+        self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
         self.data = data
@@ -99,7 +92,7 @@ class Download(object):
         elif force_html and not re.search('html|head|body', html):
             html = '' # non-html content
         elif force_ascii:
-            html = to_ascii(html) # remove non-ascii characters
+            html = common.to_ascii(html) # remove non-ascii characters
         self.cache[key] = html
         return html
 
@@ -133,7 +126,7 @@ class Download(object):
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         variance is the amount of randomness in delay, 0-1
         """
-        key = str(proxy) + ':' + extract_domain(url)
+        key = str(proxy) + ':' + common.extract_domain(url)
         if key in self.cache:
             dt = datetime.now() - self.cache[key]
             wait_secs = delay - dt.days * 24 * 60 * 60 - dt.seconds
@@ -165,7 +158,7 @@ class Download(object):
         **kwargs is passed to get()
         """
         user_agent = kwargs.get('user_agent', self.user_agent)
-        server = 'http://' + extract_domain(seed_url)
+        server = 'http://' + common.extract_domain(seed_url)
         robots = RobotFileParser()
         if obey_robots:
             robots.parse(self.get(server + '/robots.txt').splitlines()) # load robots.txt
@@ -188,10 +181,10 @@ class Download(object):
                     for scraped_url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
                         if '#' in scraped_url:
                             scraped_url = scraped_url[:scraped_url.index('#')] # remove internal links to prevent duplicates
-                        if os.path.splitext(scraped_url)[-1].lower() not in Download.MEDIA_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
+                        if common.get_extension(scraped_url) not in common.MEDIA_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
                             scraped_url = urljoin(url, scraped_url) # support relative links
                             # check if same domain or sub-domain
-                            this_server = extract_domain(scraped_url)
+                            this_server = common.extract_domain(scraped_url)
                             if this_server and (this_server in server or server in this_server):
                                 outstanding.append((scraped_url, cur_depth+1))
         return crawled

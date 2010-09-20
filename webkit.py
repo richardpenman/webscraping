@@ -6,10 +6,11 @@
 import sys
 import os
 import urllib2
-from PyQt4 import QtGui, QtWebKit
-from PyQt4.QtCore import QString, QUrl
+from PyQt4.QtGui import QApplication, QDesktopServices
+from PyQt4.QtCore import QString, QUrl, QTimer
+from PyQt4.QtWebKit import QWebView, QWebPage
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
-from webscraping import common, download, pdict, xpath
+from webscraping import common, settings
  
 
 
@@ -24,19 +25,20 @@ interface with cache to expand and not use pdict
 """
 class NetworkAccessManager(QNetworkAccessManager):
     def __init__(self, proxy, allowed_extensions, cache_size=100):
-        """proxy is a QNetworkProxy
+        """Subclass QNetworkAccessManager to finer control network operations
+        proxy is a QNetworkProxy
         allowed_extensions is a list of extensions to allow
         cache_size is the maximum size of the cache (MB)
         """
         QNetworkAccessManager.__init__(self)
-
         # initialize the manager cache
         cache = QNetworkDiskCache()#this)
+        #QDesktopServices.storageLocation(QDesktopServices.CacheLocation)
         cache.setCacheDirectory('webkit_cache')
         cache.setMaximumCacheSize(cache_size * 1024 * 1024) # need to convert cache value to bytes
         self.setCache(cache)
         # allowed content extensions
-        self.banned_extensions = download.Download.MEDIA_EXTENSIONS
+        self.banned_extensions = common.MEDIA_EXTENSIONS
         for ext in allowed_extensions:
             if ext in self.banned_extensions:
                 self.banned_extensions.remove(ext)
@@ -55,21 +57,25 @@ class NetworkAccessManager(QNetworkAccessManager):
             else:
                 print request.url().toString()
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
+        #connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(requestError(QNetworkReply::NetworkError)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
-        print reply.attribute(QNetworkRequest.SourceIsFromCacheAttribute).toBool()
+        reply.error.connect(self.catch_error)
         return reply
 
     def is_forbidden(self, request):
         """Returns whether this request is permitted by checking URL extension
         XXX head request for mime?
         """
-        ext = os.path.splitext(str(request.url().toString()))[-1]
-        return ext in self.banned_extensions
+        return common.get_extension(str(request.url().toString())) in self.banned_extensions
+
+    def catch_error(self, eid):
+        if eid not in (301, ):
+            print 'Error:', eid, self.sender().url().toString()
 
 
-class WebPage(QtWebKit.QWebPage):
+class WebPage(QWebPage):
     def __init__(self, user_agent):
-        QtWebKit.QWebPage.__init__(self)
+        QWebPage.__init__(self)
         # set user agent
         self.user_agent = user_agent
 
@@ -82,52 +88,55 @@ class WebPage(QtWebKit.QWebPage):
         print 'Alert:', message
 
 
-class JQueryBrowser(QtWebKit.QWebView):
+class JQueryBrowser(QWebView):
     """Render webpages using webkit
     """
 
-    def __init__(self, url, gui=False, cache_file='cache.db', user_agent=None, proxy=None, allowed_extensions=['.html', '.css', '.js']):
+    def __init__(self, url, gui=False, user_agent=None, proxy=None, allowed_extensions=['.html', '.css', '.js'], timeout=20):
         """
         url is the seed URL where to start crawling
         gui is whether to show webkit window or run headless
-        cache_file is the filename of the cache file to use
         user_agent is used to set the user-agent when downloading content
         proxy is the proxy to download through
         allowed_extensions are the media types to allow
+        timeout is the maximum amount of seconds to wait for a request
         """
-        self.app = QtGui.QApplication(sys.argv) # must instantiate first
-        QtWebKit.QWebView.__init__(self)
-        webpage = WebPage(user_agent or QString('Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.2.9) Gecko/20100824 Firefox/3.6.9'))
+        self.app = QApplication(sys.argv) # must instantiate first
+        QWebView.__init__(self)
+        webpage = WebPage(user_agent or settings.user_agent)
         manager = NetworkAccessManager(proxy, allowed_extensions)
         webpage.setNetworkAccessManager(manager)
         self.setPage(webpage)
-        self.loadStarted.connect(self._loadStarted)
         self.loadFinished.connect(self._loadFinished)
-        self.cache = pdict.PersistentDict(cache_file) # cache to store webpages
-        self.history = []
-        self.go(url)
+        self.history = [] # track history of urls crawled
+        # initiate the timer
+        timer = QTimer()
+        timer.setInterval(1000 * timeout) # convert timeout to ms
+        timer.timeout.connect(self.error)
+        self.timer = timer
+        self.seed_url = url
+        self.start()
         if gui: self.show() 
         self.app.exec_()
 
-    def go(self, url, use_cache=True):
+
+    def start(self):
+        self.go(self.seed_url)
+
+    def error(self):
+        print 'timed out'
+        self.start()
+         
+    def go(self, url):
         """Load given url in webkit
         """
-        if use_cache and url in self.cache:
-            html = self.cache[url]
-            self.setHtml(QString(html), QUrl(url)) # creates crash if immediately load here XXX
-        else:
-            self.history.append(url)
-            self.load(QUrl(url))
+        self.history.append(url)
+        self.load(QUrl(url))
  
     def crawl(self, url, html):
         """This slot is called when the given URL has been crawled and returned this HTML
         """
         return False # return False to stop crawling
-
-    def jquery(self, js):
-        """Execute jquery function on current loaded webpage
-        """
-        self.frame.evaluateJavaScript('$' + js) 
 
     def inject_jquery(self):
         """Inject jquery library into this webpage for easier manipulation
@@ -140,22 +149,20 @@ class JQueryBrowser(QtWebKit.QWebView):
             self.cache[url] = jquery_lib
         self.frame.evaluateJavaScript(jquery_lib)
 
-    def _loadStarted(self):
-        pass
-
     def _loadFinished(self, success):
         """slot for webpage finished loading
         """
         current_url = str(self.url().toString())
+        if not success:
+            raise Exception('Failed to load URL: ' + current_url)
         self.frame = self.page().mainFrame()
         html = unicode(self.frame.toHtml())
-        if success:
-            self.cache[current_url] = html
-        else:
-            raise Exception('Failed to load URL: ' + current_url)
-
+        self.cache[current_url] = html
         self.inject_jquery()
-        if not self.crawl(current_url, html):
+
+        if self.crawl(current_url, html):
+            self.timer.start() # reset timer
+        else:
             self.app.quit() # call this to stop crawling # XXX automatic way?
 
 

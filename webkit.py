@@ -7,7 +7,7 @@ import sys
 import os
 import urllib2
 from PyQt4.QtGui import QApplication, QDesktopServices
-from PyQt4.QtCore import QString, QUrl, QTimer
+from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop
 from PyQt4.QtWebKit import QWebView, QWebPage
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
 from webscraping import common, settings
@@ -26,10 +26,17 @@ timeout
 interface with cache to expand and not use pdict
 
 make scrape function sequential after dentist data
+    http://www.pyside.org/docs/pyside/PySide/QtCore/QEventLoop.html?highlight=qeventloop
+
+add progress bar for loading page
+implement watir API
 """
 class NetworkAccessManager(QNetworkAccessManager):
+    """Subclass QNetworkAccessManager for finer control network operations
+    """
+
     def __init__(self, proxy, allowed_extensions, cache_size=100):
-        """Subclass QNetworkAccessManager to finer control network operations
+        """
         proxy is a QNetworkProxy
         allowed_extensions is a list of extensions to allow
         cache_size is the maximum size of the cache (MB)
@@ -49,7 +56,8 @@ class NetworkAccessManager(QNetworkAccessManager):
         # and proxy
         if proxy:
             self.setProxy(proxy)
-    
+
+
     def createRequest(self, operation, request, data):
         #print request.url().toString()
         # XXX cache all requests here
@@ -66,40 +74,49 @@ class NetworkAccessManager(QNetworkAccessManager):
         reply.error.connect(self.catch_error)
         return reply
 
+
     def is_forbidden(self, request):
         """Returns whether this request is permitted by checking URL extension
         XXX head request for mime?
         """
         return common.get_extension(str(request.url().toString())) in self.banned_extensions
 
+
     def catch_error(self, eid):
         if eid not in (301, ):
             print 'Error:', eid, self.sender().url().toString()
 
 
+
 class WebPage(QWebPage):
+    """Override QWebPage to set user agent and javascript messages
+    """
+
     def __init__(self, user_agent):
         QWebPage.__init__(self)
-        # set user agent
         self.user_agent = user_agent
+
 
     def userAgentForUrl(self, url):
         return self.user_agent
+
 
     def javaScriptAlert(self, frame, message):
         """Override default javascript alert popup
         """
         print 'Alert:', message
 
-    def javaScriptConsoleMessage(message, line_number, source_id):
+
+    def javaScriptConsoleMessage(self, message, line_number, source_id):
         print 'Console:', message, line_number, source_id
+
 
 
 class JQueryBrowser(QWebView):
     """Render webpages using webkit
     """
 
-    def __init__(self, url, gui=False, user_agent=None, proxy=None, allowed_extensions=['.html', '.css', '.js'], timeout=20):
+    def __init__(self, gui=False, user_agent=None, proxy=None, allowed_extensions=['.html', '.css', '.js'], timeout=20):
         """
         url is the seed URL where to start crawling
         gui is whether to show webkit window or run headless
@@ -114,76 +131,78 @@ class JQueryBrowser(QWebView):
         manager = NetworkAccessManager(proxy, allowed_extensions)
         webpage.setNetworkAccessManager(manager)
         self.setPage(webpage)
-        self.loadFinished.connect(self._loadFinished)
-        self.history = [] # track history of urls crawled
-        # initiate the timer
-        timer = QTimer()
-        timer.setInterval(1000 * timeout) # convert timeout to ms
-        timer.timeout.connect(self.error)
-        self.timer = timer
-        self.seed_url = url
-        self.start()
+        self.setHtml('<html><head></head><body>No content loaded</body></html>', QUrl('http://localhost'))
+        self.timeout = timeout
+        self.jquery_lib = None
+        QTimer.singleShot(0, self.crawl) # start crawling when all events processed
         if gui: self.show() 
-        self.app.exec_()
+        self.app.exec_() # start GUI thread
 
-
-    def start(self):
-        self.go(self.seed_url)
 
     def error(self):
         print 'timed out'
         self.start()
-         
-    def go(self, url):
-        """Load given url in webkit
+        
+
+    def get(self, url=None):
+        """Load given url in webkit and return html when loaded
         """
-        self.history.append(url)
-        self.load(QUrl(url))
- 
-    def crawl(self, url, html):
-        """This slot is called when the given URL has been crawled and returned this HTML
+        if url:
+            self.load(QUrl(url))
+        loop = QEventLoop()
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        self.loadFinished.connect(loop.quit)
+    
+        timer.start(self.timeout * 1000)
+        loop.exec_() # delay here until download finished or timeout
+    
+        if timer.isActive():
+            # downloaded successfully
+            timer.stop()
+            html = unicode(self.page().mainFrame().toHtml())
+            #self.cache[current_url] = html
+            self.inject_jquery()
+        else:
+            # didn't download in time
+            print 'Download timeout'
+            html = ''
+        return html
+
+
+    def currentURL(self):
+        """Return current URL
         """
-        return False # return False to stop crawling
+        return str(self.url().toString())
+
 
     def js(self, script):
-        """Shortcut to execute javascript
+        """Shortcut to execute javascript on current document
         """
-        self.frame.evaluateJavaScript(script)
+        self.page().mainFrame().evaluateJavaScript(script)
+
 
     def inject_jquery(self):
         """Inject jquery library into this webpage for easier manipulation
         """
-        url = 'http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js'
-        if url in self.cache:
-            jquery_lib = self.cache[url]
-        else:
-            jquery_lib = urllib2.urlopen(url).read()
-            self.cache[url] = jquery_lib
-        self.js(jquery_lib)
+        # XXX embed header in document, use cache
+        if self.jquery_lib is None:
+            url = 'http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js'
+            self.jquery_lib = urllib2.urlopen(url).read()
+        self.js(self.jquery_lib)
 
-    def _loadFinished(self, success):
-        """slot for webpage finished loading
+
+    def crawl(self):
+        """Override this method in subclass
         """
-        current_url = str(self.url().toString())
-        if not success:
-            raise Exception('Failed to load URL: ' + current_url)
-        self.frame = self.page().mainFrame()
-        html = unicode(self.frame.toHtml())
-        self.cache[current_url] = html
-        self.inject_jquery()
-
-        if self.crawl(current_url, html):
-            self.timer.start() # reset timer
-        else:
-            self.app.quit() # call this to stop crawling # XXX automatic way?
+        self.get('http://code.google.com/p/webscraping/')
+        self.get('http://code.google.com/p/sitescraper/')
+        QTimer.singleShot(5000, self.app.quit)
 
 
-class TestBrowser(JQueryBrowser):
-    def crawl(self, url, html):
-        return True
 
 
 if __name__ == '__main__':
     proxy = QNetworkProxy(QNetworkProxy.HttpProxy, '127.0.0.1', 8118)
-    TestBrowser(url='http://whatsmyuseragent.com/', gui=True, proxy=proxy)
-    #TestBrowser(url='http://www.ioerror.us/ip/', gui=True)
+    JQueryBrowser(gui=True, proxy=proxy)

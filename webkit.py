@@ -45,7 +45,7 @@ class NetworkAccessManager(QNetworkAccessManager):
         # initialize the manager cache
         cache = QNetworkDiskCache()#this)
         #QDesktopServices.storageLocation(QDesktopServices.CacheLocation)
-        cache.setCacheDirectory('webkit_cache')
+        cache.setCacheDirectory('.webkit_cache')
         cache.setMaximumCacheSize(cache_size * 1024 * 1024) # need to convert cache value to bytes
         self.setCache(cache)
         # allowed content extensions

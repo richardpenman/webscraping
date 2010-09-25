@@ -139,7 +139,7 @@ def get_attributes(html):
     {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
     attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
-    return dict((k.lower().strip(), v.lower().strip()) for (k, v) in
+    return dict((k.lower().strip(), v) for (k, v) in
         re.compile('([\w-]+)="(.*?)"', re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)='(.*?)'", re.DOTALL).findall(attributes) + 
         re.compile("([\w-]+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes
@@ -165,9 +165,11 @@ def match_attributes(attribute, attributes):
     >>> match_attributes(('class', 'test\d'), {'id':'test2', 'class':'test'})
     False
     """
-    if not attribute: return True
-    name, value = attribute
-    return re.match(value + '$', attributes.get(name, '')) is not None
+    if attribute:
+        name, value = attribute
+        return re.match(re.compile(value + '$', re.IGNORECASE), attributes.get(name, '')) is not None
+    else:
+        return True
 
 
 def get_content(html):

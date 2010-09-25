@@ -106,8 +106,9 @@ def remove_tags(html, keep_children=True):
     >>> remove_tags('hello <b>world</b>!', False)
     'hello !'
     """
+    # XXX does not work for multiple nested tags
     if not keep_children:
-        html = re.compile('<.*?>.*?</.*?>', re.DOTALL).sub('', html)
+        html = re.compile('<.*?>(.*?)</.*?>', re.DOTALL).sub('', html)
     return re.compile('<[^<]*?>').sub('', html)
 
 

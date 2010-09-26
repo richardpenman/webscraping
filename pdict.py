@@ -65,7 +65,7 @@ class PersistentDict(object):
         return row and self.is_fresh(row[0])
             
     def __getitem__(self, key):
-        """return the value of the specified key
+        """return the value of the specified key or raise KeyError if not found
         """
         row = self._conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
         if row:
@@ -111,6 +111,18 @@ class PersistentDict(object):
         """
         return self.timeout is None or datetime.now() - t < self.timeout
 
+    def get(self, key, default=None):
+        """Get value at key and return default if not defined
+        """
+        value = default
+        if key:
+            try:
+                value = self[key]
+            except KeyError:
+                pass
+        return value
+
+
     def get_meta(self, key):
         """return the meta data for the specified key
         """
@@ -134,6 +146,8 @@ class PersistentDict(object):
         """remove the specifed value from the database
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
+
+
 
 if __name__ == '__main__':
     # test performance of compression and verify stored data is correct

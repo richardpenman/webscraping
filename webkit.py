@@ -7,13 +7,14 @@ import sys
 import os
 import urllib2
 from PyQt4.QtGui import QApplication, QDesktopServices
-from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop
+from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice
 from PyQt4.QtWebKit import QWebView, QWebPage
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
-from webscraping import common, settings
+from webscraping import common, pdict, settings
  
 
 
+TOR_PROXY = QNetworkProxy(QNetworkProxy.HttpProxy, '127.0.0.1', 8118)
 """
 TODO
 right click find xpath:
@@ -35,7 +36,7 @@ class NetworkAccessManager(QNetworkAccessManager):
     """Subclass QNetworkAccessManager for finer control network operations
     """
 
-    def __init__(self, proxy, allowed_extensions, cache_size=100):
+    def __init__(self, proxy, allowed_extensions, cache_size=100, cache_dir='.webkit_cache'):
         """
         proxy is a QNetworkProxy
         allowed_extensions is a list of extensions to allow
@@ -43,9 +44,9 @@ class NetworkAccessManager(QNetworkAccessManager):
         """
         QNetworkAccessManager.__init__(self)
         # initialize the manager cache
-        cache = QNetworkDiskCache()#this)
+        cache = QNetworkDiskCache()
         #QDesktopServices.storageLocation(QDesktopServices.CacheLocation)
-        cache.setCacheDirectory('.webkit_cache')
+        cache.setCacheDirectory(cache_dir)
         cache.setMaximumCacheSize(cache_size * 1024 * 1024) # need to convert cache value to bytes
         self.setCache(cache)
         # allowed content extensions
@@ -59,18 +60,24 @@ class NetworkAccessManager(QNetworkAccessManager):
 
 
     def createRequest(self, operation, request, data):
-        #print request.url().toString()
-        # XXX cache all requests here
         if operation == self.GetOperation:
             if self.is_forbidden(request):
                 # deny GET request for banned media type by setting dummy URL
-                #print 'denied'
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             else:
                 print request.url().toString()
+        else:
+            pass
+            #print 'POST'
+            #print request.url().toString()
+            #data.open(QIODevice.ReadOnly)
+            #print data.readAll()
+            #print data.peek(100000000000)
+            #data.seek(0)
+            #data.close()
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
-        #connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(requestError(QNetworkReply::NetworkError)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
+        #reply.finished.connect(self.catch_finished)
         reply.error.connect(self.catch_error)
         return reply
 
@@ -89,7 +96,7 @@ class NetworkAccessManager(QNetworkAccessManager):
 
 
 class WebPage(QWebPage):
-    """Override QWebPage to set user agent and javascript messages
+    """Override QWebPage to set User-Agent and JavaScript messages
     """
 
     def __init__(self, user_agent):
@@ -102,12 +109,14 @@ class WebPage(QWebPage):
 
 
     def javaScriptAlert(self, frame, message):
-        """Override default javascript alert popup
+        """Override default JavaScript alert popup and print results
         """
         print 'Alert:', message
 
 
     def javaScriptConsoleMessage(self, message, line_number, source_id):
+        """Print JavaScript console messages
+        """
         print 'Console:', message, line_number, source_id
 
 
@@ -116,9 +125,9 @@ class JQueryBrowser(QWebView):
     """Render webpages using webkit
     """
 
-    def __init__(self, gui=False, user_agent=None, proxy=None, allowed_extensions=['.html', '.css', '.js'], timeout=20):
+    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_extensions=['.html', '.css', '.js'], timeout=20, cache_file=None, debug=False):
         """
-        url is the seed URL where to start crawling
+        base_url is the domain that will be crawled
         gui is whether to show webkit window or run headless
         user_agent is used to set the user-agent when downloading content
         proxy is the proxy to download through
@@ -129,14 +138,29 @@ class JQueryBrowser(QWebView):
         QWebView.__init__(self)
         webpage = WebPage(user_agent or settings.user_agent)
         manager = NetworkAccessManager(proxy, allowed_extensions)
+        manager.finished.connect(self.finished)
         webpage.setNetworkAccessManager(manager)
         self.setPage(webpage)
         self.setHtml('<html><head></head><body>No content loaded</body></html>', QUrl('http://localhost'))
         self.timeout = timeout
+        self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
+        self.base_url = base_url
+        self.debug = debug
         self.jquery_lib = None
         QTimer.singleShot(0, self.crawl) # start crawling when all events processed
         if gui: self.show() 
         self.app.exec_() # start GUI thread
+
+
+    def current_url(self):
+        """Return current URL
+        """
+        return str(self.url().toString())
+
+    def current_html(self):
+        """Return current rendered HTML
+        """
+        return unicode(self.page().mainFrame().toHtml())
 
 
     def error(self):
@@ -144,25 +168,33 @@ class JQueryBrowser(QWebView):
         self.start()
         
 
-    def get(self, url=None):
+    def get(self, url=None, script=None, key=None):
         """Load given url in webkit and return html when loaded
         """
-        if url:
+        self.base_url = self.base_url or url # set base URL if not set
+        html = self.cache.get(key)
+        if html:
+            if self.debug: print 'load cache', key 
+            self.setHtml(html, QUrl(self.base_url))
+        elif url:
             self.load(QUrl(url))
+        elif script:
+            self.js(script)
+
         loop = QEventLoop()
         timer = QTimer()
         timer.setSingleShot(True)
         timer.timeout.connect(loop.quit)
         self.loadFinished.connect(loop.quit)
-    
         timer.start(self.timeout * 1000)
         loop.exec_() # delay here until download finished or timeout
     
         if timer.isActive():
             # downloaded successfully
             timer.stop()
-            html = unicode(self.page().mainFrame().toHtml())
-            #self.cache[current_url] = html
+            html = self.current_html()
+            if key:
+                self.cache[key] = html
             self.inject_jquery()
         else:
             # didn't download in time
@@ -170,11 +202,8 @@ class JQueryBrowser(QWebView):
             html = ''
         return html
 
-
-    def currentURL(self):
-        """Return current URL
-        """
-        return str(self.url().toString())
+    def jsget(self, script, key=None):
+        return self.get(script=script, key=key)
 
 
     def js(self, script):
@@ -201,8 +230,14 @@ class JQueryBrowser(QWebView):
         QTimer.singleShot(5000, self.app.quit)
 
 
+    def finished(self, reply):
+        """Override this in subclasses to process downloaded urls
+        """
+        pass
+
+
+
 
 
 if __name__ == '__main__':
-    proxy = QNetworkProxy(QNetworkProxy.HttpProxy, '127.0.0.1', 8118)
-    JQueryBrowser(gui=True, proxy=proxy)
+    JQueryBrowser(gui=True)

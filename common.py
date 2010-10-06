@@ -1,13 +1,14 @@
 #
-# Description:
-# Common web scraping related functions
-#
+# Description: Common web scraping related functions
 # Author: Richard Penman (richard@sitescraper.net)
+# License: LGPL
 #
 
 import os
 import re
 import time
+import csv
+import string
 import urllib
 import urlparse
 import string
@@ -91,6 +92,7 @@ def first(l, default=''):
     None
     """
     return l[0] if l else default
+
 def last(l, default=''):
     """Return last element from list or default value if empty
     """
@@ -106,28 +108,11 @@ def remove_tags(html, keep_children=True):
     >>> remove_tags('hello <b>world</b>!', False)
     'hello !'
     """
-    # XXX does not work for multiple nested tags
     if not keep_children:
+        # XXX does not work for multiple nested tags
         html = re.compile('<.*?>(.*?)</.*?>', re.DOTALL).sub('', html)
     return re.compile('<[^<]*?>').sub('', html)
 
-
-def select_options(html, attributes=''):
-    """Extract options from HTML select box with given attributes
-
-    >>> html = "Go: <select id='abc'><option value='1'>a</option><option value='2'>b</option></select>"
-    >>> select_options(html, "id='abc'")
-    [('1', 'a'), ('2', 'b')]
-    """
-    select_re = re.compile('<select[^>]*?%s[^>]*?>.*?</select>' % attributes, re.DOTALL)
-    option_re = re.compile('<option[^>]*?value=[\'"](.*?)[\'"][^>]*?>(.*?)</option>', re.DOTALL)
-    try:
-        select_html = select_re.findall(html)[0]
-    except IndexError:
-        return []
-    else:
-        return option_re.findall(select_html)
-    
 
 def unescape(text, encoding='utf-8'):
     """Interpret escape characters
@@ -157,6 +142,18 @@ def unescape(text, encoding='utf-8'):
     return re.sub("&#?\w+;", fixup, urllib.unquote(text.decode(encoding))).encode(encoding)
 
 
+def safe(s):
+    """Return safe version of string for URLs
+    """
+    safe_chars = string.letters + string.digits + ' '
+    return ''.join(c for c in s if c in safe_chars).replace(' ', '-')
+
+def pretty(s):
+    """Return pretty version of string for display
+    """
+    return re.sub('[-_]', ' ', s).title()
+
+
 def extract_domain(url):
     """Extract the domain from the given URL
 
@@ -172,34 +169,6 @@ def extract_domain(url):
         else:
             domain = [section]
     return '.'.join(domain)
-
-
-
-def extract_emails(html):
-    """Extract emails and look for common obfuscations
-
-    >>> extract_emails('')
-    []
-    >>> extract_emails('hello richard@sitescraper.net world')
-    ['richard@sitescraper.net']
-    >>> extract_emails('hello richard@<!-- trick comment -->sitescraper.net world')
-    ['richard@sitescraper.net']
-    >>> extract_emails('hello richard AT sitescraper DOT net world')
-    ['richard@sitescraper.net']
-    """
-    email_re = re.compile('[\w\.\+-]{1,64}@\w[\w\.\+-]{1,255}\.\w+')
-    # remove comments, which can obfuscate emails
-    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html)
-    emails = []
-    for email in email_re.findall(html):
-        if email not in emails:
-            emails.append(email)
-    # look for obfuscated email
-    for user, domain, ext in re.compile('([\w\.\+-]{1,64}) .?AT.? ([\w\.\+-]{1,255}) .?DOT.? (\w+)', re.IGNORECASE).findall(html):
-        email = '%s@%s.%s' % (user, domain, ext)
-        if email not in emails:
-            emails.append(email)
-    return emails
 
 
 
@@ -243,7 +212,7 @@ def pretty_duration(dt):
         return ''
 
 
-def firefox_cookie(file):
+def firefox_cookie(file, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file='cookies.txt'):
     """Create a cookie jar from this FireFox 3 sqlite cookie database
 
     >>> file = os.path.expanduser('~/.mozilla/firefox/<random chars>.default/cookies.sqlite')
@@ -251,17 +220,16 @@ def firefox_cookie(file):
     >>> opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
     >>> html = opener.open(url).read()
     """
+    # XXX remove temporary files
     import sqlite3 
     # copy firefox cookie file locally to avoid locking problems
-    sqlite_file = 'cookies.sqlite'
-    open(sqlite_file, 'w').write(open(file).read())
-    con = sqlite3.connect(sqlite_file)
+    open(tmp_sqlite_file, 'w').write(open(file).read())
+    con = sqlite3.connect(tmp_sqlite_file)
     cur = con.cursor()
     cur.execute('select host, path, isSecure, expiry, name, value from moz_cookies')
 
     # create standard cookies file that can be interpreted by cookie jar 
-    cookie_file = 'cookies.txt'
-    fp = open(cookie_file, 'w')
+    fp = open(tmp_cookie_file, 'w')
     fp.write('# Netscape HTTP Cookie File\n')
     fp.write('# http://www.netscape.com/newsref/std/cookie_spec.html\n')
     fp.write('# This is a generated file!  Do not edit.\n')
@@ -273,5 +241,5 @@ def firefox_cookie(file):
     fp.close()
 
     cookie_jar = cookielib.MozillaCookieJar()
-    cookie_jar.load(cookie_file)
+    cookie_jar.load(tmp_cookie_file)
     return cookie_jar

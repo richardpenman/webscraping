@@ -1,11 +1,11 @@
 #
 # Description:
-# This is an experimental module that implements a subset of the XPath standard:
+# This module implements a subset of the XPath standard:
 #  - tags
 #  - indices
 #  - attributes
 #  - descendants
-# It also adds a few extensions useful to my work:
+# Plus a few extensions useful to my work:
 #  - attributes can contain regular expressions
 #  - indices can be negative
 #
@@ -14,8 +14,14 @@
 # In some cases I have found this faster/more accurate than using lxml.html and in other cases less so.
 #
 # Author: Richard Penman (richard@sitescraper.net)
+# License: LGPL
 #
-
+#
+# TODO:
+#  - convert to class to more efficiently handle html
+#  -  and buffer tree selections
+#  - parent
+#  - search by text
 
 import re
 import urllib2
@@ -31,15 +37,15 @@ class XPathException(Exception):
     pass
 
 
-def parse(html, xpath, debug=False, remove=EMPTY_TAGS):
+def search(html, xpath, debug=False, remove=EMPTY_TAGS):
     """Query HTML document using XPath
     
     debug sets whether to print debugging data
     remove is a list of tags to ignore
 
-    >>> parse('<span>1</span><div>abc<a>LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a>LINK 3</a>jkl</div>', '/div/a')
+    >>> search('<span>1</span><div>abc<a>LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a>LINK 3</a>jkl</div>', '/div/a')
     ['LINK 1', 'LINK 3']
-    >>> parse('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]/a[@class="link"]')
+    >>> search('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]/a[@class="link"]')
     ['LINK 1']
     >>> parse('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]//a')
     ['LINK 1', 'LINK 2']
@@ -89,10 +95,19 @@ def parse(html, xpath, debug=False, remove=EMPTY_TAGS):
             break
     return contexts
 
-def parse_first(*args, **kwargs):
+def parse(*args, **kwargs):
+    print 'parse is deprecated'
+    return search(*args, **kwargs)
+
+
+def get(*args, **kwargs):
     """Return first element from parse
     """
-    return first(parse(*args, **kwargs))
+    return first(search(*args, **kwargs))
+
+def parse_first(*args, **kwargs):
+    print 'parse_first is deprecated'
+    return get(*args, **kwargs)
 
 
 def clean_html(html, tags):

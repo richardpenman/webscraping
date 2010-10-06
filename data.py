@@ -14,11 +14,14 @@ def get_excerpt(html, try_meta=True, max_chars=255):
     try_meta indicates whether to try extracting from meta description tag
     max_chars is the maximum number of characters for the excerpt
     """
+    # try extracting meta description tag
     excerpt = xpath.get(html, '/html/head/meta[@name="description"]') if try_meta else None
     if not excerpt:
-        content = common.remove_tags(xpath.get(html, '/html/body', remove=['hr', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']))
+        # remove these tags and then find biggest text block
+        bad_tags = 'hr', 'br', 'script', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
+        content = common.remove_tags(xpath.get(html, '/html/body', remove=bad_tags))
         excerpt = max((len(p.strip()), p) for p in content.splitlines())[1]
-    return excerpt.strip()[:max_chars]
+    return common.unescape(excerpt.strip())[:max_chars]
 
 
 def extract_emails(html):

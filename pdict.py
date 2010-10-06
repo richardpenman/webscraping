@@ -5,6 +5,7 @@
 # Multithreading is supported
 #
 # Author: Richard Penman (richard@sitescraper.net)
+# License: LGPL
 #
 
 
@@ -92,14 +93,14 @@ class PersistentDict(object):
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
         
     def serialize(self, value):
-        """convert object to a compressed blog string to save in the db
+        """convert object to a compressed pickled string to save in the db
         """
         return sqlite3.Binary(zlib.compress(pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL), self.compress_level))
     
     def deserialize(self, value):
-        """convert compressed string from database back into an object
+        """convert compressed pickled string from database back into an object
         """
-        return pickle.loads(zlib.decompress(value))
+        return pickle.loads(zlib.decompress(value)) if value else value
 
     def keys(self):
         """returns a list containing each key in the database
@@ -112,34 +113,34 @@ class PersistentDict(object):
         return self.timeout is None or datetime.now() - t < self.timeout
 
     def get(self, key, default=None):
-        """Get value at key and return default if not defined
+        """Get data at key and return default if not defined
         """
-        value = default
+        data = default
         if key:
-            try:
-                value = self[key]
-            except KeyError:
-                pass
-        return value
+            row = self._conn.execute("SELECT value, meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
+            if row:
+                data = dict(
+                    value=self.deserialize(row[0]),
+                    meta=self.deserialize(row[1]),
+                    created=row[2],
+                    updated=row[3]
+                )
+        return data
 
 
-    def get_meta(self, key):
-        """return the meta data for the specified key
-        """
-        row = self._conn.execute("SELECT meta FROM config WHERE key=?;", (key,)).fetchone()
-        if row:
-            return self.deserialize(row[0]) if row[0] else row[0]
-        else:
-            raise KeyError("Key `%s' does not exist" % key)
-    
     @synchronous
-    def set_meta(self, key, value):
-        """set the meta data for the specified key
+    def set(self, key, data):
+        """set the data for the specified key
+
+        data is a dict {'value': ..., 'meta': ..., 'created': ..., 'updated': ...}
         """
-        if key in self:
-            self._conn.execute("UPDATE config SET meta=? WHERE key=?;", (self.serialize(value), key))
-        else:
-            raise KeyError("Key `%s' does not exist" % key)
+        current_data = self.get(key)
+        current_data.update(data)
+        value = self.serialize(data.get('value'))
+        meta = self.serialize(data.get('meta'))
+        created = data.get('created')
+        updated = data.get('updated')
+        self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated))
 
     @synchronous
     def __delitem__(self, key):

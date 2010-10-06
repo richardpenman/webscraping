@@ -1,6 +1,7 @@
 #
 # Description: Helper methods to download and crawl web content using threads
 # Author: Richard Penman (richard@sitescraper.net)
+# License: LGPL
 #
 
 import os
@@ -13,7 +14,6 @@ from urlparse import urljoin
 from datetime import datetime
 from StringIO import StringIO
 import socket
-socket.setdefaulttimeout(30)
 from threading import Thread
 import Queue
 from robotparser import RobotFileParser
@@ -24,23 +24,26 @@ DEBUG = True
 
 class Download(object):
 
-    def __init__(self, cache_file=None, user_agent=None, delay=5, proxy=None, opener=None, 
-            headers=None, data=None, use_cache=True, use_remote=True, retry=False, force_html=False, force_ascii=False, max_size=None):
+    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, proxy=None, opener=None, 
+            headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=1, force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
         user_agent sets the user_agent to download content with
+        timeout is the maximum amount of time to wait for http response
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         proxy is a proxy to download content through. If a list is passed then will cycle through list.
         opener sets an optional opener to use instead of using urllib2 directly
         headers are the headers to include in the request
         data is what to post at the URL
         retry sets whether to try downloading webpage again if got error last time
+        num_retries sets how many times to try downloading a URL after getting an error
         force_html sets whether to download non-text data
         force_ascii sets whether to only return ascii characters
         use_cache determines whether to load from cache if exists
         use_remote determines whether to download from remote website if not in cache
         max_size determines maximum number of bytes that will be downloaded
         """
+        socket.setdefaulttimeout(timeout)
         self.cache = pdict.PersistentDict(cache_file or settings.cache_file)
         self.delay = delay
         self.proxy = proxy
@@ -51,6 +54,7 @@ class Download(object):
         self.use_cache = use_cache
         self.use_remote = use_remote
         self.retry = retry
+        self.num_retries = num_retries
         self.force_html = force_html
         self.force_ascii = force_ascii
         self.max_size = max_size
@@ -71,6 +75,7 @@ class Download(object):
         use_cache = kwargs.get('use_cache', self.use_cache)
         use_remote = kwargs.get('use_remote', self.use_remote)
         retry = kwargs.get('retry', self.retry)
+        num_retries = kwargs.get('num_retries', self.num_retries)
         force_html = kwargs.get('force_html', self.force_html)
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
@@ -86,7 +91,7 @@ class Download(object):
             return '' # do not try downloading but return empty
 
         self.domain_delay(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
-        html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener)
+        html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if max_size is not None and len(html) > max_size:
             html = '' # too big to store
         elif force_html and not re.search('html|head|body', html):
@@ -97,7 +102,7 @@ class Download(object):
         return html
 
 
-    def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None):
+    def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None, num_retries=1):
         """Simply download the url and return the content
         """
         if DEBUG: print url
@@ -115,7 +120,11 @@ class Download(object):
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
             if DEBUG: print e
-            content = ''
+            if num_retries > 0:
+                if DEBUG: print 'Retrying'
+                content = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
+            else:
+                content = ''
         return content
 
 
@@ -128,12 +137,12 @@ class Download(object):
         """
         key = str(proxy) + ':' + common.extract_domain(url)
         if key in self.cache:
+            # time since cache last accessed for this domain+proxy combination
             dt = datetime.now() - self.cache[key]
             wait_secs = delay - dt.days * 24 * 60 * 60 - dt.seconds
-            if wait_secs > 0:
-                # randomize the time so less suspicious
-                wait_secs = wait_secs - variance * delay + (2 * variance * delay * random.random())
-                time.sleep(max(0, wait_secs)) # make sure isn't negative time
+            # randomize the time so less suspicious
+            wait_secs += (variance * delay * (random.random() - 0.5))
+            time.sleep(max(0, wait_secs)) # make sure isn't negative time
         self.cache[key] = datetime.now() # update database timestamp to now
 
 

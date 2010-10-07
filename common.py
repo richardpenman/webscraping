@@ -122,10 +122,10 @@ def unescape(text, encoding='utf-8'):
     """
     def fixup(m):
         text = m.group(0)
-        if text[:2] == "&#":
+        if text[:2] == '&#':
             # character reference
             try:
-                if text[:3] == "&#x":
+                if text[:3] == '&#x':
                     return unichr(int(text[3:-1], 16))
                 else:
                     return unichr(int(text[2:-1]))
@@ -138,8 +138,7 @@ def unescape(text, encoding='utf-8'):
             except KeyError:
                 pass
         return text # leave as is
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-    return re.sub("&#?\w+;", fixup, urllib.unquote(text.decode(encoding))).encode(encoding)
+    return re.sub('&#?\w+;', fixup, urllib.unquote(text).decode(encoding, 'ignore')).encode(encoding, 'ignore')
 
 
 def safe(s):

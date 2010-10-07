@@ -83,20 +83,10 @@ class NetworkAccessManager(QNetworkAccessManager):
             #data.close()
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
-        #reply.readyRead.connect(self.ready)
-        #reply = NetworkReply(self, reply)
+        reply = NetworkReply(reply)
         #reply.finished.connect(self.catch_finished)
         reply.error.connect(self.catch_error)
-        #reply.data = ''
         return reply
-
-    def ready(self):
-        print 'READY!'
-        reply = self.sender()
-        #pos = reply.pos()
-        #reply.seek(len(reply.data))
-        reply.data += reply.peek(sys.maxint)
-        #reply.seek(pos)
 
 
     def is_forbidden(self, request):
@@ -112,13 +102,11 @@ class NetworkAccessManager(QNetworkAccessManager):
         return forbidden
 
 
-
     def catch_finished(self):
         reply = self.sender()
+        print 'Finished'
         print reply.url().toString()
-        print 'finished'
-        #print reply.readAll()
-        reply.reset()
+        print reply.data
 
     def catch_error(self, eid):
         if DEBUG and eid not in (301, ):
@@ -126,54 +114,35 @@ class NetworkAccessManager(QNetworkAccessManager):
 
 
 class NetworkReply(QNetworkReply):
-    def __init__(self, parent, reply):
-        self.reply = reply
-        QNetworkReply.__init__(self, parent)
-        # XXX causes error: RuntimeError: no access to protected functions or signals for objects not created from Python
+    def __init__(self, reply):
+        QNetworkReply.__init__(self)
+        self.reply = reply # reply to proxy
+        self.data = '' # contains downloaded data
+        self.buffer = '' # contains buffer of data to read
         
-        # handle these to forward
+        # connect signal from proxy reply
         reply.metaDataChanged.connect(self.applyMetaData)
         reply.readyRead.connect(self.readInternal)
         reply.error.connect(self.errorInternal)
-        # forward signals
         reply.finished.connect(self.finished)
         reply.uploadProgress.connect(self.uploadProgress)
         reply.downloadProgress.connect(self.downloadProgress)
 
         self.setOpenMode(QNetworkReply.ReadOnly)
-        self.data = self.buffer = ''
 
 
-    #def __getattr__(self, attr):
-    #    """Send undefined methods straight through to proxied reply
-    #    """
-    #    print attr
-    #    return None
-    #    return getattr(self.reply, attr)
-
-    def operation(self):
-        return self.reply.operation()
-
-    def request(self): 
-        return self.reply.request()
-
-    def url(self):
-        return self.reply.url()
+    def __getattribute__(self, attr):
+        """Send undefined methods straight through to proxied reply
+        """
+        # send these attributes through to proxy reply 
+        if attr in ('operation', 'request', 'url', 'abort', 'close', 'isSequential'):
+            return self.reply.__getattribute__(attr)
+        else:
+            return QNetworkReply.__getattribute__(self, attr)
 
     def abort(self):
-        self.reply.abort()
- 
-    def close(self):
-        self.reply.close()
-
-    def isSequential(self):
-        return self.reply.isSequential()
-
+        pass # qt requires that this be defined
     
-    def setReadBufferSize(self, size):
-        QNetworkReply.setReadBufferSize(size)
-        self.reply.setReadBufferSize(size)
-
     def applyMetaData(self):
         for header in self.reply.rawHeaderList():
             self.setRawHeader(header, self.reply.rawHeader(header))
@@ -191,6 +160,7 @@ class NetworkReply(QNetworkReply):
         self.setAttribute(QNetworkRequest.CacheLoadControlAttribute, self.reply.attribute(QNetworkRequest.CacheLoadControlAttribute))
         self.setAttribute(QNetworkRequest.CacheSaveControlAttribute, self.reply.attribute(QNetworkRequest.CacheSaveControlAttribute))
         self.setAttribute(QNetworkRequest.SourceIsFromCacheAttribute, self.reply.attribute(QNetworkRequest.SourceIsFromCacheAttribute))
+        # attribute is undefined
         #self.setAttribute(QNetworkRequest.DoNotBufferUploadDataAttribute, self.reply.attribute(QNetworkRequest.DoNotBufferUploadDataAttribute))
         self.metaDataChanged.emit()
 
@@ -198,160 +168,25 @@ class NetworkReply(QNetworkReply):
         self.error.emit(e)
         self.setError(e, str(e))
 
+    def bytesAvailable(self):
+        """How many bytes in the buffer are available to be read
+        """
+        return len(self.buffer)
+
     def readInternal(self):
-        print 'ready'
+        """New data available to read
+        """
         s = self.reply.readAll()
         self.data += s
         self.buffer += s
         self.readyRead.emit()
 
-    def bytesAvailable(self):
-        print 'bytes avail'
-        return len(self.buffer) + self.reply.bytesAvailable()
-
-    def bytesToWrite(self):
-        print 'btytes to write'
-        return -1
-
-    def canReadLine(self):
-        print 'can read'
-        return False
-    def waitForReadyRead(self, t):
-        print 'wait ready'
-        return False
-    def waitForBytesWritten(self, t):
-        print 'wait written'
-        return False
-
-    def readAll(self):
-        print 'read all'
-        return self.data
-
-    def read(self, size):
-        print 'read'
-
-    def readLine(self):
-        print 'line'
-
-    def isReadable(self):
-        print 'is read'
-
-    def seek(self, s):
-        print 'seek'
-
-    def isFinished(self):
-        print 'is finished'
-
-    def isRunning(self):
-        print 'is running'
-
-
-    def attribute (self,code):
-        print 'attribute'
-    def errorCode (self):
-        print 'errorcode'
-    def hasRawHeader (self,headerName):
-        print 'has raw header'
-    def header (self,header):
-        print 'header'
-    def ignoreSslErrors (self, errors=None):
-        print 'ignore ssl'
-    def manager (self):
-        print 'manager'
-    def rawHeader (self,headerName):
-        print 'rawheader'
-    def rawHeaderList (self):
-        print 'raw headerlist'
-    def readBufferSize (self):
-        print 'read buffer'
-    def setError (self,errorCode, errorString):
-        print 'set error'
-    def setReadBufferSize (self,size):
-        print 'setreadbuffersize'
-    def setSslConfiguration (self,configuration):
-        print 'setssl'
-    def sslConfiguration (self):
-        print 'sskcibf;'
-
-    def sslErrors (self,errors):
-        print 'sslerrors'
-    def aboutToClose (self):
-        print 'about'
-    def atEnd (self):
-        print 'at end'
-    def bytesToWrite (self):
-        print 'bytes to write'
-    def bytesWritten (self, bytes):
-        print 'bytes written'
-    def canReadLine (self):
-        print 'canread'
-    def close (self):
-        print 'close'
-    def errorString (self):
-        print 'errors tring'
-    def getChar (self):
-        print 'getchar'
-    def isOpen (self):
-        print 'isopen'
-    def isReadable (self):
-        print 'is readable'
-    def isSequential (self):
-        print 'issequential'
-    def isTextModeEnabled (self):
-        print 'istext'
-    def isWritable (self):
-        print 'iswrite'
-    def open (self, mode):
-        print 'open'
-    def openMode (self):
-        print 'openmode'
-        return self.reply.openMode()
-
-    def peek (self, maxlen):
-        print 'peek'
-    def pos (self):
-        print 'pos'
-    def putChar (self,c):
-        print 'putcha'
-    def readChannelFinished (self):
-        print 'read channel'
-    def readData (self, data, maxlen):
-        print 'read daa'
-    def reset (self):
-        print 'reset'
-    def seek (self, pos):
-        print 'seek;'
-    def setErrorString (self,errorString):
-        print 'set error'
-    def setOpenMode (self, openMode):
-        print 'setopen mode'
-        #self.reply.setOpenMode(openMode)
-    def setTextModeEnabled (self, enabled):
-        print 'setttextmodeeb'
-    def size (self):
-        print 'size'
-    def ungetChar (self,c):
-        print 'ungetchar'
-    def waitForBytesWritten (self,msecs):
-        print 'wait for btes'
-    def waitForReadyRead (self,msecs):
-        print 'wait for ready read'
-    def write (self,data):
-        print 'write'
-    def writeData (self,data, len):
-        print 'writedata'
-
-
-    def readData(self, data, size):
-        #size = self.reply.readData(data, size)
-        #self.data += data
-        print 'read data'
-        #return data
-        #return size
+    def readData(self, size):
+        """Return up to size bytes from buffer
+        """
         size = min(size, len(self.buffer))
         data, self.buffer = self.buffer[:size], self.buffer[size:]
-        print data
-        return size
+        return str(data)
 
 
 class WebPage(QWebPage):

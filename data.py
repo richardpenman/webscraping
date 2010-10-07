@@ -8,19 +8,20 @@ import csv
 from webscraping import common, xpath
 
 
-def get_excerpt(html, try_meta=True, max_chars=255):
+def get_excerpt(html, try_meta=False, max_chars=255):
     """Extract excerpt from this HTML by finding largest text block
 
     try_meta indicates whether to try extracting from meta description tag
     max_chars is the maximum number of characters for the excerpt
     """
     # try extracting meta description tag
-    excerpt = xpath.get(html, '/html/head/meta[@name="description"]') if try_meta else None
+    excerpt = xpath.get(html, '/html/head/meta[@name="description"]') if try_meta else ''
     if not excerpt:
         # remove these tags and then find biggest text block
         bad_tags = 'hr', 'br', 'script', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
         content = common.remove_tags(xpath.get(html, '/html/body', remove=bad_tags))
-        excerpt = max((len(p.strip()), p) for p in content.splitlines())[1]
+        if content:
+            excerpt = max((len(p.strip()), p) for p in content.splitlines())[1]
     return common.unescape(excerpt.strip())[:max_chars]
 
 

@@ -155,12 +155,14 @@ class Download(object):
         return proxy
 
 
-    def crawl(self, seed_url, max_urls=30, max_depth=1, obey_robots=False, max_size=1000000, force_html=True, return_html=False, **kwargs):
+    def crawl(self, seed_url, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', obey_robots=False, max_size=1000000, force_html=True, return_html=False, **kwargs):
         """Crawl website html and return list of URLs crawled
 
         seed_url: url to start crawling from
         max_urls: maximum number of URLs to crawl (use None for no limit)
         max_depth: maximum depth to follow links into website (use None for no limit)
+        allowed_urls: regex for allowed urls
+        banned_urls: regex for banned urls
         obey_robots: whether to obey robots.txt
         max_size is passed to get() and is limited to 1MB by default
         force_text is passed to get() and is set to True by default so only crawl HTML content
@@ -171,6 +173,8 @@ class Download(object):
         robots = RobotFileParser()
         if obey_robots:
             robots.parse(self.get(server + '/robots.txt').splitlines()) # load robots.txt
+        allowed_urls = re.compile(allowed_urls)
+        banned_urls = re.compile(banned_urls)
         outstanding = [(seed_url, 0), (server, 0)] # which URLs need to crawl
         crawled = {} if return_html else [] # urls that have crawled
 
@@ -189,13 +193,16 @@ class Download(object):
                     # continue crawling
                     for scraped_url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
                         if '#' in scraped_url:
-                            scraped_url = scraped_url[:scraped_url.index('#')] # remove internal links to prevent duplicates
+                            scraped_url = scraped_url[:scraped_url.index('#')] # remove internal links to avoid duplicates
                         if common.get_extension(scraped_url) not in common.MEDIA_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
                             scraped_url = urljoin(url, scraped_url) # support relative links
-                            # check if same domain or sub-domain
-                            this_server = common.extract_domain(scraped_url)
-                            if this_server and (this_server in server or server in this_server):
-                                outstanding.append((scraped_url, cur_depth+1))
+                            #print allowed_urls.match(scraped_url), banned_urls.match(scraped_url), scraped_url
+                            # does url pass regex check
+                            if allowed_urls.match(scraped_url) and not banned_urls.match(scraped_url):
+                                # check if same domain or sub-domain
+                                this_server = common.extract_domain(scraped_url)
+                                if this_server and (this_server in server or server in this_server):
+                                    outstanding.append((scraped_url, cur_depth+1))
         return crawled
 
 

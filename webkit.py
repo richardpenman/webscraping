@@ -49,8 +49,8 @@ class NetworkAccessManager(QNetworkAccessManager):
         """
         QNetworkAccessManager.__init__(self)
         # initialize the manager cache
-        cache = QNetworkDiskCache()
         #QDesktopServices.storageLocation(QDesktopServices.CacheLocation)
+        cache = QNetworkDiskCache()
         cache.setCacheDirectory(cache_dir)
         cache.setMaximumCacheSize(cache_size * 1024 * 1024) # need to convert cache value to bytes
         self.setCache(cache)
@@ -69,23 +69,16 @@ class NetworkAccessManager(QNetworkAccessManager):
         if operation == self.GetOperation:
             if self.is_forbidden(request):
                 # deny GET request for banned media type by setting dummy URL
+                # XXX abort properly
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             elif DEBUG:
                 print request.url().toString()
-        else:
-            pass
-            #print 'POST'
-            #print request.url().toString()
-            #data.open(QIODevice.ReadOnly)
-            #print data.readAll()
-            #print data.peek(100000000000)
-            #data.seek(0)
-            #data.close()
-        request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
+        #request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
-        reply = NetworkReply(reply)
-        #reply.finished.connect(self.catch_finished)
         reply.error.connect(self.catch_error)
+        reply.data = ''
+        #if 1 or common.get_extension(str(request.url().toString())) not in ('.js', '.css'):
+        #    reply = NetworkReply(reply)
         return reply
 
 
@@ -102,47 +95,170 @@ class NetworkAccessManager(QNetworkAccessManager):
         return forbidden
 
 
-    def catch_finished(self):
-        reply = self.sender()
-        print 'Finished'
-        print reply.url().toString()
-        print reply.data
-
     def catch_error(self, eid):
         if DEBUG and eid not in (301, ):
+            # XXX show string type of error
             print 'Error:', eid, self.sender().url().toString()
 
 
+# XXX not working properly for js, css, cache - try pasting all methods back again to see what gets called differently
 class NetworkReply(QNetworkReply):
     def __init__(self, reply):
         QNetworkReply.__init__(self)
         self.reply = reply # reply to proxy
         self.data = '' # contains downloaded data
         self.buffer = '' # contains buffer of data to read
+        self.setOpenMode(QNetworkReply.ReadOnly)
         
         # connect signal from proxy reply
         reply.metaDataChanged.connect(self.applyMetaData)
         reply.readyRead.connect(self.readInternal)
-        reply.error.connect(self.errorInternal)
+        #reply.error.connect(self.errorInternal)
         reply.finished.connect(self.finished)
         reply.uploadProgress.connect(self.uploadProgress)
         reply.downloadProgress.connect(self.downloadProgress)
 
-        self.setOpenMode(QNetworkReply.ReadOnly)
-
-
+    
     def __getattribute__(self, attr):
         """Send undefined methods straight through to proxied reply
         """
         # send these attributes through to proxy reply 
         if attr in ('operation', 'request', 'url', 'abort', 'close', 'isSequential'):
+            #print attr
             return self.reply.__getattribute__(attr)
         else:
             return QNetworkReply.__getattribute__(self, attr)
-
+    
     def abort(self):
         pass # qt requires that this be defined
-    
+
+    def bytesToWrite(self):
+        print 'btytes to write'
+        return -1
+
+    def canReadLine(self):
+        print 'can read'
+        return False
+    def waitForReadyRead(self, t):
+        print 'wait ready'
+        return False
+    def waitForBytesWritten(self, t):
+        print 'wait written'
+        return False
+
+    def readAll(self):
+        print 'read all'
+        return self.data
+
+    def read(self, size):
+        print 'read'
+
+    def readLine(self):
+        print 'line'
+
+    def isReadable(self):
+        print 'is read'
+
+    def seek(self, s):
+        print 'seek'
+
+    def isFinished(self):
+        print 'is finished'
+
+    def isRunning(self):
+        print 'is running'
+
+
+    def attribute (self,code):
+        print 'attribute'
+    def errorCode (self):
+        print 'errorcode'
+    def hasRawHeader (self,headerName):
+        print 'has raw header'
+    def header (self,header):
+        print 'header'
+    def ignoreSslErrors (self, errors=None):
+        print 'ignore ssl'
+    def manager (self):
+        print 'manager'
+    def rawHeader (self,headerName):
+        print 'rawheader'
+    def rawHeaderList (self):
+        print 'raw headerlist'
+    def readBufferSize (self):
+        print 'read buffer'
+    def setError (self,errorCode, errorString):
+        print 'set error'
+    def setReadBufferSize (self,size):
+        print 'setreadbuffersize'
+    def setSslConfiguration (self,configuration):
+        print 'setssl'
+    def sslConfiguration (self):
+        print 'sskcibf;'
+
+    def sslErrors (self,errors):
+        print 'sslerrors'
+    def aboutToClose (self):
+        print 'about'
+    def atEnd (self):
+        print 'at end'
+    def bytesToWrite (self):
+        print 'bytes to write'
+    def bytesWritten (self, bytes):
+        print 'bytes written'
+    def canReadLine (self):
+        print 'canread'
+    def close (self):
+        print 'close'
+    def errorString (self):
+        print 'errors tring'
+    def getChar (self):
+        print 'getchar'
+    def isOpen (self):
+        print 'isopen'
+    def isReadable (self):
+        print 'is readable'
+    def isTextModeEnabled (self):
+        print 'istext'
+    def isWritable (self):
+        print 'iswrite'
+    def open (self, mode):
+        print 'open'
+    def openMode (self):
+        print 'openmode'
+        return self.reply.openMode()
+
+    def peek (self, maxlen):
+        print 'peek'
+    def pos (self):
+        print 'pos'
+    def putChar (self,c):
+        print 'putcha'
+    def readChannelFinished (self):
+        print 'read channel'
+    def readData (self, data, maxlen):
+        print 'read daa'
+    def reset (self):
+        print 'reset'
+    def seek (self, pos):
+        print 'seek;'
+    def setErrorString (self,errorString):
+        print 'set error'
+    def setTextModeEnabled (self, enabled):
+        print 'setttextmodeeb'
+    def size (self):
+        print 'size'
+    def ungetChar (self,c):
+        print 'ungetchar'
+    def waitForBytesWritten (self,msecs):
+        print 'wait for btes'
+    def waitForReadyRead (self,msecs):
+        print 'wait for ready read'
+    def write (self,data):
+        print 'write'
+    def writeData (self,data, len):
+        print 'writedata'
+
     def applyMetaData(self):
         for header in self.reply.rawHeaderList():
             self.setRawHeader(header, self.reply.rawHeader(header))
@@ -164,19 +280,19 @@ class NetworkReply(QNetworkReply):
         #self.setAttribute(QNetworkRequest.DoNotBufferUploadDataAttribute, self.reply.attribute(QNetworkRequest.DoNotBufferUploadDataAttribute))
         self.metaDataChanged.emit()
 
-    def errorInternal(self, e):
-        self.error.emit(e)
-        self.setError(e, str(e))
+    #def errorInternal(self, e):
+    #    self.error.emit(e)
+    #    self.setError(e, str(e))
 
     def bytesAvailable(self):
         """How many bytes in the buffer are available to be read
         """
-        return len(self.buffer)
+        return len(self.buffer) + self.reply.bytesAvailable()
 
     def readInternal(self):
         """New data available to read
         """
-        s = self.reply.readAll()
+        s = str(self.reply.readAll())
         self.data += s
         self.buffer += s
         self.readyRead.emit()
@@ -186,7 +302,7 @@ class NetworkReply(QNetworkReply):
         """
         size = min(size, len(self.buffer))
         data, self.buffer = self.buffer[:size], self.buffer[size:]
-        return str(data)
+        return data
 
 
 class WebPage(QWebPage):
@@ -230,7 +346,7 @@ class JQueryBrowser(QWebView):
     """Render webpages using webkit
     """
 
-    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=['.css', '.js'], allowed_regex='.*?', timeout=20, delay=5, cache_file=None):
+    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=['css', 'js'], allowed_regex='.*?', timeout=20, delay=5, cache_file=None):
         """
         base_url is the domain that will be crawled
         gui is whether to show webkit window or run headless
@@ -278,23 +394,22 @@ class JQueryBrowser(QWebView):
     def get(self, url=None, script=None, key=None, retries=1):
         """Load given url in webkit and return html when loaded
         """
+        t1 = datetime.now()
         self.base_url = self.base_url or url # set base URL if not set
         html = self.cache.get(key, {}).get('value')
         if html:
             self.debug('Load cache ' + key)
             self.setHtml(html, QUrl(self.base_url))
         else:
-            if url:
-                self.load(QUrl(url))
-            elif script:
-                self.js(script)
-
-            t1 = datetime.now()
             loop = QEventLoop()
             timer = QTimer()
             timer.setSingleShot(True)
             timer.timeout.connect(loop.quit)
             self.loadFinished.connect(loop.quit)
+            if url:
+                self.load(QUrl(url))
+            elif script:
+                self.js(script)
             timer.start(self.timeout * 1000)
             loop.exec_() # delay here until download finished or timeout
         
@@ -313,19 +428,25 @@ class JQueryBrowser(QWebView):
                 else:
                     self.debug('Timed out')
                     html = ''
-
         if html:
             self.inject_jquery()
         return html
 
+
     def wait(self, t1):
         """Wait for delay time
         """
-        dt = datetime.now() - t1
-        wait_secs = self.delay - dt.days * 24 * 60 * 60 - dt.seconds
+        keep_waiting = True
+        while keep_waiting:
+            self.app.processEvents()
+            dt = datetime.now() - t1
+            wait_secs = self.delay - dt.days * 24 * 60 * 60 - dt.seconds
+            #print 'wait', wait_secs
+            keep_waiting = wait_secs > 0
         # randomize the delay so less suspicious
-        wait_secs += 0.5 * self.delay * (random.random() - 0.5)
-        time.sleep(max(0, wait_secs)) # XXX change to exec
+        #wait_secs += 0.5 * self.delay * (random.random() - 0.5)
+        #time.sleep(max(0, wait_secs))
+
 
     def jsget(self, script, key=None):
         """Execute JavaScript that will cause page submission, and wait for page to load
@@ -352,17 +473,22 @@ class JQueryBrowser(QWebView):
     def crawl(self):
         """Override this method in subclass to crawl website
         """
-        html = self.get('http://code.google.com/p/webscraping/')
-        self.get('http://code.google.com/p/sitescraper/')
-        QTimer.singleShot(5000, self.app.quit)
+        #self.get('http://code.google.com/p/webscraping/')
+        #self.get('http://code.google.com/p/sitescraper/')
+        #self.get('http://nmlsconsumeraccess.org')
+        self.load(QUrl('http://nmlsconsumeraccess.org/Home.aspx/SubSearch?searchText=California&entityType=&state=&page=1'))
+        #html = self.get('http://sitescraper.net')
+        #self.load(QUrl('http://www.google.com.au'))
+        QTimer.singleShot(10000, self.app.quit)
 
 
     def finished(self, reply):
         """Override this method in subclasses to process downloaded urls
         """
-        pass #reply.url().toString()
+        pass #print reply.url().toString(), ':', len(reply.data)
         
 
 
 if __name__ == '__main__':
-    JQueryBrowser(gui=True)
+    DEBUG = True
+    JQueryBrowser(gui=True)#, allowed_media=[])

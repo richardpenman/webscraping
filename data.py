@@ -60,7 +60,7 @@ class UnicodeWriter(object):
         self.writer = csv.writer(open(filename, 'w'))
 
     def writerow(self, row):
-        self.writer.writerow([unicode(col).encode('utf-8') for col in row])
+        self.writer.writerow([unicode(col, errors='replace').encode('utf-8', 'replace') for col in row])
 
     def writerows(self, rows):
         for row in rows:

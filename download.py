@@ -155,7 +155,7 @@ class Download(object):
         return proxy
 
 
-    def crawl(self, seed_url, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', obey_robots=False, max_size=1000000, force_html=True, return_html=False, **kwargs):
+    def crawl(self, seed_url, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', obey_robots=False, max_size=1000000, force_html=True, return_html=False, recrawl=True, **kwargs):
         """Crawl website html and return list of URLs crawled
 
         seed_url: url to start crawling from
@@ -166,6 +166,7 @@ class Download(object):
         obey_robots: whether to obey robots.txt
         max_size is passed to get() and is limited to 1MB by default
         force_text is passed to get() and is set to True by default so only crawl HTML content
+        recrawl sets whether to return content already downloaded previously
         **kwargs is passed to get()
         """
         user_agent = kwargs.get('user_agent', self.user_agent)
@@ -175,34 +176,41 @@ class Download(object):
             robots.parse(self.get(server + '/robots.txt').splitlines()) # load robots.txt
         allowed_urls = re.compile(allowed_urls)
         banned_urls = re.compile(banned_urls)
-        outstanding = [(seed_url, 0), (server, 0)] # which URLs need to crawl
-        crawled = {} if return_html else [] # urls that have crawled
+        outstanding = [(seed_url, 0)]#, (server, 0)] # which URLs need to crawl
+        found = set() # urls that have already found
+        crawled = {} if return_html else [] # urls that have successfully crawled
+        # XXX recrawl ftonr page
 
-        while outstanding: 
-            # more URLs to crawl
-            if len(crawled) == max_urls:
-                break
-            url, cur_depth = outstanding.pop(0)
-            if url not in crawled:
-                html = self.get(url, max_size=max_size, force_html=force_html, **kwargs)
-                if return_html:
-                    crawled[url] = html
-                else:
-                    crawled.append(url)
-                if max_depth is None or cur_depth < max_depth:
-                    # continue crawling
-                    for scraped_url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
-                        if '#' in scraped_url:
-                            scraped_url = scraped_url[:scraped_url.index('#')] # remove internal links to avoid duplicates
-                        if common.get_extension(scraped_url) not in common.MEDIA_EXTENSIONS and robots.can_fetch(user_agent, scraped_url):
-                            scraped_url = urljoin(url, scraped_url) # support relative links
-                            #print allowed_urls.match(scraped_url), banned_urls.match(scraped_url), scraped_url
-                            # does url pass regex check
-                            if allowed_urls.match(scraped_url) and not banned_urls.match(scraped_url):
-                                # check if same domain or sub-domain
-                                this_server = common.extract_domain(scraped_url)
-                                if this_server and (this_server in server or server in this_server):
-                                    outstanding.append((scraped_url, cur_depth+1))
+        while outstanding and len(crawled) != max_urls: 
+            # crawl next url in queue
+            cur_url, cur_depth = outstanding.pop(0)
+            html = self.get(cur_url, max_size=max_size, force_html=force_html, **kwargs)
+            if return_html:
+                crawled[cur_url] = html
+            else:
+                crawled.append(cur_url)
+
+            if cur_depth != max_depth:
+                # extract links to continue crawling
+                for url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
+                    url = url[:url.index('#')] if '#' in url else url  # remove internal links to avoid duplicates
+                    url = urljoin(cur_url, url) # support relative links
+                    #print allowed_urls.match(url), banned_urls.match(url), url
+                    #url not in crawled and not in outstanding # check if have already crawled
+                    if url not in found:
+                        # check if a media file
+                        if common.get_extension(url) not in common.MEDIA_EXTENSIONS:
+                            # not blocked by robots.txt
+                            if robots.can_fetch(user_agent, url):
+                                # passes regex
+                                if allowed_urls.match(url) and not banned_urls.match(url):
+                                    # only crawl within website
+                                    cur_server = common.extract_domain(url)
+                                    if cur_server and (cur_server in server or server in cur_server):
+                                        # allowed to recrawl
+                                        if recrawl or url not in self.cache: 
+                                            outstanding.append((url, cur_depth+1))
+                    found.add(url)
         return crawled
 
 
@@ -281,7 +289,7 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs
                 while 1:
                     url = self.urls.get(block=False)
                     if DEBUG: print self.id, 'crawl', url
-                    urls = d.crawl(url, max_urls=max_urls, max_depth=max_depth, **kwargs)
+                    urls = d.crawl(url, allowed_urls=url, max_urls=max_urls, max_depth=max_depth, **kwargs)
                     self.results[url] = urls
             except Queue.Empty:
                 pass # finished

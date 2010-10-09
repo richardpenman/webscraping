@@ -77,8 +77,8 @@ class NetworkAccessManager(QNetworkAccessManager):
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
         reply.data = ''
-        #if 1 or common.get_extension(str(request.url().toString())) not in ('.js', '.css'):
-        #    reply = NetworkReply(reply)
+        if common.get_extension(str(request.url().toString())) not in ('js', 'css'):
+            reply = NetworkReply(reply)
         return reply
 
 
@@ -423,9 +423,11 @@ class JQueryBrowser(QWebView):
             else:
                 # didn't download in time
                 if retries > 0:
+                    print 'timeout - retrying'
                     self.debug('Timeout - retrying')
                     html = self.get(url, script, key, retries-1)
                 else:
+                    print 'timed out'
                     self.debug('Timed out')
                     html = ''
         if html:
@@ -448,10 +450,10 @@ class JQueryBrowser(QWebView):
         #time.sleep(max(0, wait_secs))
 
 
-    def jsget(self, script, key=None):
+    def jsget(self, script, key=None, retries=1):
         """Execute JavaScript that will cause page submission, and wait for page to load
         """
-        return self.get(script=script, key=key)
+        return self.get(script=script, key=key, retries=retries)
 
 
     def js(self, script):

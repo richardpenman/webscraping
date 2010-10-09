@@ -56,11 +56,11 @@ def extract_emails(html):
 class UnicodeWriter(object):
     """A CSV writer that produces Excel-compatibly CSV files from unicode data.
     """
-    def __init__(self, filename, **kwds):
+    def __init__(self, filename):
         self.writer = csv.writer(open(filename, 'w'))
 
     def writerow(self, row):
-        self.writer.writerow([unicode(col, errors='replace').encode('utf-8', 'replace') for col in row])
+        self.writer.writerow([col.encode('utf-8', 'ignore') for col in row])
 
     def writerows(self, rows):
         for row in rows:

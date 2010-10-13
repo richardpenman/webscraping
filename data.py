@@ -56,13 +56,35 @@ def extract_emails(html):
 class UnicodeWriter(object):
     """A CSV writer that produces Excel-compatibly CSV files from unicode data.
     """
-    def __init__(self, filename):
+    def __init__(self, filename, encoding='utf-8'):
         self.writer = csv.writer(open(filename, 'w'))
+        self.encoding = encoding
+
+    def cell(self, s):
+        if isinstance(s, basestring):
+            try:
+                s = s.decode(self.encoding, 'ignore')
+            except UnicodeError:
+                pass
+            try:
+                s = s.encode(self.encoding, 'ignore')
+            except UnicodeError:
+                pass
+        return s
 
     def writerow(self, row):
-        self.writer.writerow([col.encode('utf-8', 'ignore') for col in row])
+        self.writer.writerow([self.cell(col) for col in row])
 
     def writerows(self, rows):
         for row in rows:
             self.writerow(row)
 
+    def writedicts(self, rows):
+        """Write dict to CSV file
+        """
+        header = None
+        for d in rows:
+            if header is None:
+                header = sorted(d.keys())
+                self.writerow([col.title() for col in header])
+            self.writerow([d[col] for col in header])

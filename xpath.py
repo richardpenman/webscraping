@@ -25,6 +25,7 @@
 
 import re
 import urllib2
+from urlparse import urljoin
 from optparse import OptionParser
 from common import first, remove_tags
 
@@ -298,6 +299,11 @@ def split_tag(html):
             return html[:i], html[i:]
     return html + '</%s>' % tag, ''
 
+
+def get_links(html, url=None):
+    """Return all links from html and convert relative to absolute if source url is provided
+    """
+    return [(urljoin(url, link) if url else link) for link in search(html, '//a/@href')]
 
 
 def main():

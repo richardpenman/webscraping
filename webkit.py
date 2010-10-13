@@ -73,12 +73,12 @@ class NetworkAccessManager(QNetworkAccessManager):
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             elif DEBUG:
                 print request.url().toString()
-        #request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
+        request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
         reply.data = ''
-        if common.get_extension(str(request.url().toString())) not in ('js', 'css'):
-            reply = NetworkReply(reply)
+        #if common.get_extension(str(request.url().toString())) not in ('js', 'css'):
+        #    reply = NetworkReply(reply)
         return reply
 
 

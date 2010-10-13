@@ -9,6 +9,7 @@ import gzip
 import re
 import time
 import random
+import urllib
 import urllib2
 from urlparse import urljoin
 from datetime import datetime
@@ -80,7 +81,7 @@ class Download(object):
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
 
-        key = url + ' ' + data if data else url
+        key = url + ' ' + str(data) if data else url
         if use_cache and key in self.cache:
             html = self.cache[key]
             if retry and not html:
@@ -94,7 +95,7 @@ class Download(object):
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if max_size is not None and len(html) > max_size:
             html = '' # too big to store
-        elif force_html and not re.search('html|head|body', html):
+        elif force_html and not common.is_html(html):
             html = '' # non-html content
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
@@ -110,6 +111,7 @@ class Download(object):
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
         headers = headers or {'User-agent': user_agent or Download.DEFAULT_USER_AGENT, 'Accept-encoding': 'gzip', 'Referrer': url}
+        data = urllib.urlencode(data) if isinstance(data, dict) else data
         try:
             response = opener.open(urllib2.Request(url, data, headers))
             content = response.read()
@@ -174,7 +176,7 @@ class Download(object):
         robots = RobotFileParser()
         if obey_robots:
             robots.parse(self.get(server + '/robots.txt').splitlines()) # load robots.txt
-        allowed_urls = re.compile(allowed_urls)
+        allowed_urls = re.compile(allowed_urls or seed_url)
         banned_urls = re.compile(banned_urls)
         outstanding = [(seed_url, 0)]#, (server, 0)] # which URLs need to crawl
         found = set() # urls that have already found
@@ -264,7 +266,7 @@ def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
 
 
 
-def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs):
+def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', **kwargs):
     """Crawl websites in parallel
     Returns a dict of crawled urls for each site
 
@@ -289,13 +291,13 @@ def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, **kwargs
                 while 1:
                     url = self.urls.get(block=False)
                     if DEBUG: print self.id, 'crawl', url
-                    urls = d.crawl(url, allowed_urls=url, max_urls=max_urls, max_depth=max_depth, **kwargs)
+                    urls = d.crawl(url, max_urls=max_urls, max_depth=max_depth, allowed_urls=allowed_urls, banned_urls=banned_urls, **kwargs)
                     self.results[url] = urls
             except Queue.Empty:
                 pass # finished
 
     # randomize url order to balance requests across domains
-    random.shuffle(seed_urls)
+    #random.shuffle(seed_urls)
     # put urls into thread safe queue
     queue = Queue.Queue()
     for url in seed_urls:

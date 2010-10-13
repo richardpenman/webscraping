@@ -46,6 +46,12 @@ def to_float(s):
     return float('0' + ''.join(c for c in s if c in valid))
 
 
+def is_html(html):
+    """Returns whether content is HTML
+    """
+    return re.search('html|head|body', html) is not None
+
+
 def get_extension(url):
     """Return extension from given URL
 

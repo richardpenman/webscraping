@@ -27,7 +27,7 @@ import re
 import urllib2
 from urlparse import urljoin
 from optparse import OptionParser
-from common import first, remove_tags
+from common import first, remove_tags, unique
 
 # tags that do not contain content and so can be safely skipped
 EMPTY_TAGS = 'br', 'hr'
@@ -303,7 +303,7 @@ def split_tag(html):
 def get_links(html, url=None):
     """Return all links from html and convert relative to absolute if source url is provided
     """
-    return [(urljoin(url, link) if url else link) for link in search(html, '//a/@href')]
+    return unique([(urljoin(url, link) if url else link) for link in search(html, '//a/@href') if not link.startswith('#')])
 
 
 def main():

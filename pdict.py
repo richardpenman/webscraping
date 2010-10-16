@@ -51,10 +51,17 @@ class PersistentDict(object):
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
             value BLOB,
             meta BLOB,
+            url TEXT,
             created timestamp DEFAULT (datetime('now', 'localtime')),
             updated timestamp DEFAULT (datetime('now', 'localtime'))
-        );"""
+        );
+        """
         self._conn.execute(sql)
+        self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
+        try:
+            self._conn.execute("ALTER TABLE config ADD COLUMN url TEXT;")
+        except sqlite3.OperationalError:
+            pass # already have column
         self.compress_level = compress_level
         self.timeout = timeout
 
@@ -117,30 +124,31 @@ class PersistentDict(object):
         """
         data = default
         if key:
-            row = self._conn.execute("SELECT value, meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
+            row = self._conn.execute("SELECT value, meta, url, created, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 data = dict(
                     value=self.deserialize(row[0]),
                     meta=self.deserialize(row[1]),
-                    created=row[2],
-                    updated=row[3]
+                    url=row[2],
+                    created=row[3],
+                    updated=row[4]
                 )
         return data
 
-
     @synchronous
-    def set(self, key, data):
+    def set(self, key, new_data):
         """set the data for the specified key
 
-        data is a dict {'value': ..., 'meta': ..., 'created': ..., 'updated': ...}
+        data is a dict {'value': ..., 'meta': ..., 'url': ..., 'created': ..., 'updated': ...}
         """
         current_data = self.get(key)
-        current_data.update(data)
-        value = self.serialize(data.get('value'))
-        meta = self.serialize(data.get('meta'))
-        created = data.get('created')
-        updated = data.get('updated')
-        self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated))
+        current_data.update(new_data)
+        value = self.serialize(current_data.get('value'))
+        meta = self.serialize(current_data.get('meta'))
+        url = current_data.get('url')
+        created = current_data.get('created')
+        updated = current_data.get('updated')
+        self._conn.execute("UPDATE config SET value=?, meta=?, url=?, created=?, updated=? WHERE key=?;", (value, meta, url, created, updated, key))
 
     @synchronous
     def __delitem__(self, key):

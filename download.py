@@ -82,24 +82,32 @@ class Download(object):
         max_size = kwargs.get('max_size', self.max_size)
 
         key = url + ' ' + str(data) if data else url
-        if use_cache and key in self.cache:
-            html = self.cache[key]
-            if retry and not html:
-                if DEBUG: print 'Redownloading'
-            else:
-                return html
+        if use_cache:
+            try:
+                html = self.cache[key]
+                if retry and not html:
+                    if DEBUG: print 'Redownloading'
+                else:
+                    return html
+            except KeyError:
+                pass # have not downloaded yet
         if not use_remote:
             return '' # do not try downloading but return empty
 
         self.domain_delay(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
-        html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
+        html, redirect_url = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if max_size is not None and len(html) > max_size:
+            if DEBUG: print 'Too big:', len(html)
             html = '' # too big to store
         elif force_html and not common.is_html(html):
+            if DEBUG: print 'Not html'
             html = '' # non-html content
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
         self.cache[key] = html
+        if redirect_url != url:
+            # set where url redirected to
+            self.cache.set(key, dict(url=redirect_url))
         return html
 
 
@@ -118,16 +126,16 @@ class Download(object):
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 content = gzip.GzipFile(fileobj=StringIO(content)).read()
-            #url = response.url
+            redirect_url = response.url # store where redirected to
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
             if DEBUG: print e
             if num_retries > 0:
                 if DEBUG: print 'Retrying'
-                content = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
+                content, redirect_url = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
             else:
-                content = ''
-        return content
+                content, redirect_url = '', url
+        return content, redirect_url
 
 
     def domain_delay(self, url, delay, proxy=None, variance=0.5):
@@ -137,7 +145,7 @@ class Download(object):
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         variance is the amount of randomness in delay, 0-1
         """
-        key = str(proxy) + ':' + common.extract_domain(url)
+        key = str(proxy) + ':' + common.get_domain(url)
         if key in self.cache:
             # time since cache last accessed for this domain+proxy combination
             dt = datetime.now() - self.cache[key]
@@ -172,7 +180,7 @@ class Download(object):
         **kwargs is passed to get()
         """
         user_agent = kwargs.get('user_agent', self.user_agent)
-        server = 'http://' + common.extract_domain(seed_url)
+        server = 'http://' + common.get_domain(seed_url)
         robots = RobotFileParser()
         if obey_robots:
             robots.parse(self.get(server + '/robots.txt').splitlines()) # load robots.txt
@@ -207,8 +215,7 @@ class Download(object):
                                 # passes regex
                                 if allowed_urls.match(url) and not banned_urls.match(url):
                                     # only crawl within website
-                                    cur_server = common.extract_domain(url)
-                                    if cur_server and (cur_server in server or server in cur_server):
+                                    if common.same_domain(cur_server, url):
                                         # allowed to recrawl
                                         if recrawl or url not in self.cache: 
                                             outstanding.append((url, cur_depth+1))

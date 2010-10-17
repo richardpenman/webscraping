@@ -303,7 +303,15 @@ def split_tag(html):
 def get_links(html, url=None):
     """Return all links from html and convert relative to absolute if source url is provided
     """
-    return unique([(urljoin(url, link) if url else link) for link in search(html, '//a/@href') if not link.startswith('#')])
+    a_links = search(html, '//a/@href')
+    js_links = re.findall('location.href ?= ?[\'"](.*?)[\'"]', html)
+    def normalize_link(link):
+        if '#' in link:
+            link = link[:link.index('#')]
+        if url:
+            link = urljoin(url, link)
+        return link
+    return unique([normalize_link(link) for link in a_links + js_links if normalize_link(link)])
 
 
 def main():

@@ -58,10 +58,10 @@ class PersistentDict(object):
         """
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
-        try:
-            self._conn.execute("ALTER TABLE config ADD COLUMN url TEXT;")
-        except sqlite3.OperationalError:
-            pass # already have column
+        #try:
+        #    self._conn.execute("ALTER TABLE config ADD COLUMN url TEXT;")
+        #except sqlite3.OperationalError:
+        #    pass # already have column
         self.compress_level = compress_level
         self.timeout = timeout
 
@@ -88,10 +88,11 @@ class PersistentDict(object):
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
-        if key in self:
-            self._conn.execute("UPDATE config SET value=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
-        else:
+        try:
             self._conn.execute("INSERT INTO config (key, value) VALUES(?, ?);", (key, self.serialize(value)))
+        except sqlite3.IntegrityError:
+            # already exists, so update
+            self._conn.execute("UPDATE config SET value=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
 
     @synchronous
     def __delitem__(self, key):
@@ -145,10 +146,14 @@ class PersistentDict(object):
         current_data.update(new_data)
         value = self.serialize(current_data.get('value'))
         meta = self.serialize(current_data.get('meta'))
-        url = current_data.get('url')
+        #url = current_data.get('url')
         created = current_data.get('created')
         updated = current_data.get('updated')
-        self._conn.execute("UPDATE config SET value=?, meta=?, url=?, created=?, updated=? WHERE key=?;", (value, meta, url, created, updated, key))
+        #keys = new_data.keys() + ['key']
+        #values = [new_data[key] for key in keys] + [key]
+        #self._conn.execute("INSERT INTO config (%s) VALUES(%s);" % (', '.join(keys), ', '.join(['?'] * len(keys))), values)
+        # already exists, so update
+        self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated, key))
 
     @synchronous
     def __delitem__(self, key):

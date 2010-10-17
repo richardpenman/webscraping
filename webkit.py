@@ -61,8 +61,22 @@ class NetworkAccessManager(QNetworkAccessManager):
             if ext in self.banned_extensions:
                 self.banned_extensions.remove(ext)
         # and proxy
+        self.setProxy(proxy)
+
+
+    def setProxy(self, proxy):
+        """Allow setting string as proxy
+        """
+        if isinstance(proxy, basestring):
+            match = re.match('(http://)?(.*?):(\d+)', proxy)
+            if match:
+                scheme, ip, port = match.groups()
+                proxy = QNetworkProxy(QNetworkProxy.HttpProxy, ip, int(port))
+            else:
+                print 'Invalid proxy:', proxy
+                proxy = None
         if proxy:
-            self.setProxy(proxy)
+            QNetworkAccessManager.setProxy(self, proxy)
 
 
     def createRequest(self, operation, request, data):
@@ -78,7 +92,8 @@ class NetworkAccessManager(QNetworkAccessManager):
         reply.error.connect(self.catch_error)
         reply.data = ''
         #if common.get_extension(str(request.url().toString())) not in ('js', 'css'):
-        #    reply = NetworkReply(reply)
+        if 'Search' in str(request.url().toString()):
+            reply = NetworkReply(reply)
         return reply
 
 
@@ -477,8 +492,8 @@ class JQueryBrowser(QWebView):
         """
         #self.get('http://code.google.com/p/webscraping/')
         #self.get('http://code.google.com/p/sitescraper/')
-        #self.get('http://nmlsconsumeraccess.org')
-        self.load(QUrl('http://nmlsconsumeraccess.org/Home.aspx/SubSearch?searchText=California&entityType=&state=&page=1'))
+        self.get('http://nmlsconsumeraccess.org')
+        #self.load(QUrl('http://nmlsconsumeraccess.org/Home.aspx/SubSearch?searchText=California&entityType=&state=&page=1'))
         #html = self.get('http://sitescraper.net')
         #self.load(QUrl('http://www.google.com.au'))
         QTimer.singleShot(10000, self.app.quit)
@@ -493,4 +508,4 @@ class JQueryBrowser(QWebView):
 
 if __name__ == '__main__':
     DEBUG = True
-    JQueryBrowser(gui=True)#, allowed_media=[])
+    JQueryBrowser(gui=True, proxy=TOR_PROXY)#, allowed_media=[])

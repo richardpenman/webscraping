@@ -95,7 +95,7 @@ class Download(object):
             return '' # do not try downloading but return empty
 
         self.domain_delay(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
-        html, redirect_url = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
+        html, final_url = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if max_size is not None and len(html) > max_size:
             if DEBUG: print 'Too big:', len(html)
             html = '' # too big to store
@@ -105,9 +105,8 @@ class Download(object):
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
         self.cache[key] = html
-        if redirect_url != url:
-            # set where url redirected to
-            self.cache.set(key, dict(url=redirect_url))
+        # set where url redirected to
+        self.cache.set(key, dict(meta=dict(initial_url=url, final_url=final_url)))
         return html
 
 
@@ -126,16 +125,16 @@ class Download(object):
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 content = gzip.GzipFile(fileobj=StringIO(content)).read()
-            redirect_url = response.url # store where redirected to
+            final_url = response.url # store where redirected to
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
             if DEBUG: print e
             if num_retries > 0:
                 if DEBUG: print 'Retrying'
-                content, redirect_url = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
+                content, final_url = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
             else:
-                content, redirect_url = '', url
-        return content, redirect_url
+                content, final_url = '', url
+        return content, final_url
 
 
     def domain_delay(self, url, delay, proxy=None, variance=0.5):
@@ -180,10 +179,10 @@ class Download(object):
         **kwargs is passed to get()
         """
         user_agent = kwargs.get('user_agent', self.user_agent)
-        server = 'http://' + common.get_domain(seed_url)
         robots = RobotFileParser()
         if obey_robots:
-            robots.parse(self.get(server + '/robots.txt').splitlines()) # load robots.txt
+            robots_url = 'http://' + common.get_domain(seed_url) + '/robots.txt'
+            robots.parse(self.get(robots_url).splitlines()) # load robots.txt
         allowed_urls = re.compile(allowed_urls or seed_url)
         banned_urls = re.compile(banned_urls)
         outstanding = [(seed_url, 0)]#, (server, 0)] # which URLs need to crawl
@@ -215,7 +214,7 @@ class Download(object):
                                 # passes regex
                                 if allowed_urls.match(url) and not banned_urls.match(url):
                                     # only crawl within website
-                                    if common.same_domain(cur_server, url):
+                                    if common.same_domain(seed_url, url):
                                         # allowed to recrawl
                                         if recrawl or url not in self.cache: 
                                             outstanding.append((url, cur_depth+1))

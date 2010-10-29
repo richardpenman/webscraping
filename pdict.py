@@ -51,7 +51,6 @@ class PersistentDict(object):
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
             value BLOB,
             meta BLOB,
-            url TEXT,
             created timestamp DEFAULT (datetime('now', 'localtime')),
             updated timestamp DEFAULT (datetime('now', 'localtime'))
         );
@@ -125,14 +124,13 @@ class PersistentDict(object):
         """
         data = default
         if key:
-            row = self._conn.execute("SELECT value, meta, url, created, updated FROM config WHERE key=?;", (key,)).fetchone()
+            row = self._conn.execute("SELECT value, meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 data = dict(
                     value=self.deserialize(row[0]),
                     meta=self.deserialize(row[1]),
-                    url=row[2],
-                    created=row[3],
-                    updated=row[4]
+                    created=row[2],
+                    updated=row[3]
                 )
         return data
 
@@ -140,7 +138,7 @@ class PersistentDict(object):
     def set(self, key, new_data):
         """set the data for the specified key
 
-        data is a dict {'value': ..., 'meta': ..., 'url': ..., 'created': ..., 'updated': ...}
+        data is a dict {'value': ..., 'meta': ..., 'created': ..., 'updated': ...}
         """
         current_data = self.get(key)
         current_data.update(new_data)

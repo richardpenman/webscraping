@@ -29,11 +29,12 @@ right click find xpath:
 textbox for jquery input
     http://www.rkblog.rk.edu.pl/w/p/webkit-pyqt-rendering-web-pages/
 threaded multiple URLs
-timeout
 interface with cache to expand and not use pdict
 
-make scrape function sequential after dentist data
-    http://www.pyside.org/docs/pyside/PySide/QtCore/QEventLoop.html?highlight=qeventloop
+problems with networkreply:
+    js/css errors
+    cache only works first time
+    proxy doesn't work
 
 add progress bar for loading page
 implement watir API
@@ -87,7 +88,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             elif DEBUG:
                 print request.url().toString()
-        request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
+        #request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
         reply.data = ''
@@ -114,6 +115,7 @@ class NetworkAccessManager(QNetworkAccessManager):
         if DEBUG and eid not in (301, ):
             # XXX show string type of error
             print 'Error:', eid, self.sender().url().toString()
+            #errorString()
 
 
 # XXX not working properly for js, css, cache - try pasting all methods back again to see what gets called differently
@@ -406,8 +408,13 @@ class JQueryBrowser(QWebView):
         return unicode(self.page().mainFrame().toHtml())
 
 
-    def get(self, url=None, script=None, key=None, retries=1):
+    def get(self, url=None, script=None, key=None, retries=1, inject=True):
         """Load given url in webkit and return html when loaded
+
+        script is some javasript to exexute that will change the loaded page (eg form submission)
+        key is where to cache downloaded HTML
+        retries is how many times to try downloading this URL or executing this script
+        inject is whether to inject JQuery into the document
         """
         t1 = datetime.now()
         self.base_url = self.base_url or url # set base URL if not set
@@ -440,12 +447,12 @@ class JQueryBrowser(QWebView):
                 if retries > 0:
                     print 'timeout - retrying'
                     self.debug('Timeout - retrying')
-                    html = self.get(url, script, key, retries-1)
+                    html = self.get(url, script, key, retries-1, inject)
                 else:
                     print 'timed out'
                     self.debug('Timed out')
                     html = ''
-        if html:
+        if html and inject:
             self.inject_jquery()
         return html
 
@@ -465,10 +472,10 @@ class JQueryBrowser(QWebView):
         #time.sleep(max(0, wait_secs))
 
 
-    def jsget(self, script, key=None, retries=1):
+    def jsget(self, script, key=None, retries=1, inject=True):
         """Execute JavaScript that will cause page submission, and wait for page to load
         """
-        return self.get(script=script, key=key, retries=retries)
+        return self.get(script=script, key=key, retries=retries, inject=inject)
 
 
     def js(self, script):
@@ -490,10 +497,8 @@ class JQueryBrowser(QWebView):
     def crawl(self):
         """Override this method in subclass to crawl website
         """
-        #self.get('http://code.google.com/p/webscraping/')
-        #self.get('http://code.google.com/p/sitescraper/')
-        self.get('http://nmlsconsumeraccess.org')
-        #self.load(QUrl('http://nmlsconsumeraccess.org/Home.aspx/SubSearch?searchText=California&entityType=&state=&page=1'))
+        self.get('http://code.google.com/p/webscraping/')
+        self.get('http://code.google.com/p/sitescraper/')
         #html = self.get('http://sitescraper.net')
         #self.load(QUrl('http://www.google.com.au'))
         QTimer.singleShot(10000, self.app.quit)

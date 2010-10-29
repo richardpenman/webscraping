@@ -21,13 +21,15 @@
 #  - convert to class to more efficiently handle html
 #  -  and buffer tree selections
 #  - parent
-#  - search by text
+#  - search by text: text() == '...'
+#  - return xpath for most similar to text
+#
 
 import re
 import urllib2
-from urlparse import urljoin
+from urlparse import urljoin, urlsplit
 from optparse import OptionParser
-from common import first, remove_tags, unique
+from webscraping import common
 
 # tags that do not contain content and so can be safely skipped
 EMPTY_TAGS = 'br', 'hr'
@@ -66,7 +68,7 @@ def search(html, xpath, debug=False, remove=EMPTY_TAGS):
         elif tag == 'text()':
             # extract child text
             for context in contexts:
-                children.append(remove_tags(context, keep_children=False))
+                children.append(common.remove_tags(context, keep_children=False))
         elif tag.startswith('@'):
             # selecting attribute
             for attributes in parent_attributes:
@@ -104,7 +106,7 @@ def parse(*args, **kwargs):
 def get(*args, **kwargs):
     """Return first element from parse
     """
-    return first(search(*args, **kwargs))
+    return common.first(search(*args, **kwargs))
 
 def parse_first(*args, **kwargs):
     print 'parse_first is deprecated'
@@ -300,18 +302,39 @@ def split_tag(html):
     return html + '</%s>' % tag, ''
 
 
-def get_links(html, url=None):
+def get_links(html, url=None, local=True, external=True):
     """Return all links from html and convert relative to absolute if source url is provided
+
+    local determines whether to include links from same domain
+    external determines whether to include linkes from other domains
     """
+    def normalize_link(link):
+        if urlsplit(link).scheme in ('http', 'https', ''):
+            if '#' in link:
+                link = link[:link.index('#')]
+            if url:
+                link = urljoin(url, link)
+                if not local and common.same_domain(url, link):
+                    # local links not included
+                    link = None
+                if not external and not common.same_domain(url, link):
+                    # external links not included
+                    link = None
+        else:
+            link = None # ignore mailto, etc
+        return link
     a_links = search(html, '//a/@href')
     js_links = re.findall('location.href ?= ?[\'"](.*?)[\'"]', html)
-    def normalize_link(link):
-        if '#' in link:
-            link = link[:link.index('#')]
-        if url:
-            link = urljoin(url, link)
-        return link
-    return unique([normalize_link(link) for link in a_links + js_links if normalize_link(link)])
+    links = []
+    for link in a_links + js_links:
+        try:
+            link = normalize_link(link)
+        except UnicodeError:
+            pass
+        else:
+            if link and link not in links:
+                links.append(link)
+    return links
 
 
 def main():

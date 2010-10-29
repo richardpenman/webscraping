@@ -49,7 +49,11 @@ def to_float(s):
 def is_html(html):
     """Returns whether content is HTML
     """
-    return re.search('html|head|body', html) is not None
+    try:
+        result = re.search('html|head|body', html) is not None
+    except TypeError:
+        result = False
+    return result
 
 
 def unique(l):
@@ -78,6 +82,9 @@ def flatten(ls):
     return [e for l in ls for e in l]
 
 
+def nth(l, i, default):
+    return l[i] if len(l) > i else default
+
 def first(l, default=''):
     """Return first element from list or default value if empty
 
@@ -86,12 +93,40 @@ def first(l, default=''):
     >>> first([], None)
     None
     """
-    return l[0] if l else default
+    return nth(l, 0, default)
 
 def last(l, default=''):
     """Return last element from list or default value if empty
     """
     return l[-1] if l else default
+
+
+def any_in(es, l):
+    """Returns True if any element of es are in l
+
+    >>> any_in([1, 2, 3], [3, 4, 5])
+    True
+    >>> any_in([1, 2, 3], [4, 5])
+    False
+    """
+    for e in es:
+        if e in l:
+            return True
+    else:
+        return False
+
+def all_in(es, l):
+    """Returns True if all elements of es are in l
+
+    >>> all_in([1, 2, 3], [2, 3, 1, 1])
+    True
+    >>> all_in([1, 2, 3], [1, 2])
+    False
+    """
+    for e in es:
+        if e not in l:
+            return False
+    return True
 
 
 def remove_tags(html, keep_children=True):
@@ -146,7 +181,7 @@ def safe(s):
 def pretty(s):
     """Return pretty version of string for display
     """
-    return re.sub('[-_]', ' ', s).title()
+    return re.sub('[-_]', ' ', s.title())
 
 
 def get_extension(url):

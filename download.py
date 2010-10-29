@@ -26,7 +26,7 @@ DEBUG = True
 class Download(object):
 
     def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, proxy=None, opener=None, 
-            headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=1, force_html=False, force_ascii=False, max_size=None):
+            headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=0, force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
         user_agent sets the user_agent to download content with
@@ -59,6 +59,7 @@ class Download(object):
         self.force_html = force_html
         self.force_ascii = force_ascii
         self.max_size = max_size
+        self.final_url = None
 
 
     def get(self, url, **kwargs):
@@ -95,7 +96,7 @@ class Download(object):
             return '' # do not try downloading but return empty
 
         self.domain_delay(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
-        html, final_url = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
+        html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if max_size is not None and len(html) > max_size:
             if DEBUG: print 'Too big:', len(html)
             html = '' # too big to store
@@ -105,8 +106,6 @@ class Download(object):
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
         self.cache[key] = html
-        # set where url redirected to
-        self.cache.set(key, dict(meta=dict(initial_url=url, final_url=final_url)))
         return html
 
 
@@ -125,16 +124,16 @@ class Download(object):
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 content = gzip.GzipFile(fileobj=StringIO(content)).read()
-            final_url = response.url # store where redirected to
+            self.final_url = response.url # store where redirected to
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
             if DEBUG: print e
             if num_retries > 0:
                 if DEBUG: print 'Retrying'
-                content, final_url = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
+                content = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
             else:
-                content, final_url = '', url
-        return content, final_url
+                content, self.final_url = '', url
+        return content
 
 
     def domain_delay(self, url, delay, proxy=None, variance=0.5):

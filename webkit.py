@@ -71,8 +71,14 @@ class NetworkAccessManager(QNetworkAccessManager):
         if isinstance(proxy, basestring):
             match = re.match('(http://)?(.*?):(\d+)', proxy)
             if match:
-                scheme, ip, port = match.groups()
-                proxy = QNetworkProxy(QNetworkProxy.HttpProxy, ip, int(port))
+                scheme, host, port = match.groups()
+                match = re.match('(.*?):(.*?)@(.*?)$', host)
+                if match:
+                    username, password, host = match.groups()
+                else:
+                    username = password = ''
+                print scheme, host, port, username, password
+                proxy = QNetworkProxy(QNetworkProxy.HttpProxy, host, int(port), username, password)
             else:
                 print 'Invalid proxy:', proxy
                 proxy = None
@@ -93,8 +99,8 @@ class NetworkAccessManager(QNetworkAccessManager):
         reply.error.connect(self.catch_error)
         reply.data = ''
         #if common.get_extension(str(request.url().toString())) not in ('js', 'css'):
-        if 'Search' in str(request.url().toString()):
-            reply = NetworkReply(reply)
+        #if 'Search' in str(request.url().toString()):
+        #    reply = NetworkReply(reply)
         return reply
 
 
@@ -113,9 +119,33 @@ class NetworkAccessManager(QNetworkAccessManager):
 
     def catch_error(self, eid):
         if DEBUG and eid not in (301, ):
-            # XXX show string type of error
-            print 'Error:', eid, self.sender().url().toString()
-            #errorString()
+            errors = {
+                0 : 'no error condition. Note: When the HTTP protocol returns a redirect no error will be reported. You can check if there is a redirect with the QNetworkRequest::RedirectionTargetAttribute attribute.',
+                1 : 'the remote server refused the connection (the server is not accepting requests)',
+                2 : 'the remote server closed the connection prematurely, before the entire reply was received and processed',
+                3 : 'the remote host name was not found (invalid hostname)',
+                4 : 'the connection to the remote server timed out',
+                5 : 'the operation was canceled via calls to abort() or close() before it was finished.',
+                6 : 'the SSL/TLS handshake failed and the encrypted channel could not be established. The sslErrors() signal should have been emitted.',
+                7 : 'the connection was broken due to disconnection from the network, however the system has initiated roaming to another access point. The request should be resubmitted and will be processed as soon as the connection is re-established.',
+                101 : 'the connection to the proxy server was refused (the proxy server is not accepting requests)',
+                102 : 'the proxy server closed the connection prematurely, before the entire reply was received and processed',
+                103 : 'the proxy host name was not found (invalid proxy hostname)',
+                104 : 'the connection to the proxy timed out or the proxy did not reply in time to the request sent',
+                105 : 'the proxy requires authentication in order to honour the request but did not accept any credentials offered (if any)',
+                201 : 'the access to the remote content was denied (similar to HTTP error 401)',
+                202 : 'the operation requested on the remote content is not permitted',
+                203 : 'the remote content was not found at the server (similar to HTTP error 404)',
+                204 : 'the remote server requires authentication to serve the content but the credentials provided were not accepted (if any)',
+                205 : 'the request needed to be sent again, but this failed for example because the upload data could not be read a second time.',
+                301 : 'the Network Access API cannot honor the request because the protocol is not known',
+                302 : 'the requested operation is invalid for this protocol',
+                99 : 'an unknown network-related error was detected',
+                199 : 'an unknown proxy-related error was detected',
+                299 : 'an unknown error related to the remote content was detected',
+                399 : 'a breakdown in protocol was detected (parsing error, invalid or unexpected responses, etc.)',
+            }
+            print 'Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString())
 
 
 # XXX not working properly for js, css, cache - try pasting all methods back again to see what gets called differently

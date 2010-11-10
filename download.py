@@ -59,7 +59,6 @@ class Download(object):
         self.force_html = force_html
         self.force_ascii = force_ascii
         self.max_size = max_size
-        self.final_url = None
 
 
     def get(self, url, **kwargs):
@@ -81,6 +80,7 @@ class Download(object):
         force_html = kwargs.get('force_html', self.force_html)
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
+        self.final_url = None
 
         key = url + ' ' + str(data) if data else url
         if use_cache:
@@ -163,7 +163,7 @@ class Download(object):
         return proxy
 
 
-    def crawl(self, seed_url, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', obey_robots=False, max_size=1000000, force_html=True, return_html=False, recrawl=True, **kwargs):
+    def crawl(self, seed_url, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', obey_robots=False, max_size=1000000, force_html=True, return_crawled=False, crawl_existing=True, **kwargs):
         """Crawl website html and return list of URLs crawled
 
         seed_url: url to start crawling from
@@ -173,8 +173,11 @@ class Download(object):
         banned_urls: regex for banned urls
         obey_robots: whether to obey robots.txt
         max_size is passed to get() and is limited to 1MB by default
-        force_text is passed to get() and is set to True by default so only crawl HTML content
-        recrawl sets whether to return content already downloaded previously
+        force_html is set to True by default so only crawl HTML content
+        return_crawled sets whether to return the crawled data as a dict {url: html}
+            Usually this is not a good idea because too much memory is required. 
+            When False a list of crawled URLs is returned
+        crawl_existing sets whether to crawl content already downloaded previously
         **kwargs is passed to get()
         """
         user_agent = kwargs.get('user_agent', self.user_agent)
@@ -186,14 +189,13 @@ class Download(object):
         banned_urls = re.compile(banned_urls)
         outstanding = [(seed_url, 0)]#, (server, 0)] # which URLs need to crawl
         found = set() # urls that have already found
-        crawled = {} if return_html else [] # urls that have successfully crawled
-        # XXX recrawl ftonr page
+        crawled = {} if return_crawled else [] # urls that have successfully crawled
 
         while outstanding and len(crawled) != max_urls: 
             # crawl next url in queue
             cur_url, cur_depth = outstanding.pop(0)
             html = self.get(cur_url, max_size=max_size, force_html=force_html, **kwargs)
-            if return_html:
+            if return_crawled:
                 crawled[cur_url] = html
             else:
                 crawled.append(cur_url)
@@ -215,21 +217,21 @@ class Download(object):
                                     # only crawl within website
                                     if common.same_domain(seed_url, url):
                                         # allowed to recrawl
-                                        if recrawl or url not in self.cache: 
+                                        if crawl_existing or url not in self.cache: 
                                             outstanding.append((url, cur_depth+1))
                     found.add(url)
         return crawled
 
 
 
-def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
+def threaded_get(urls, proxies=[None], return_crawled=False, **kwargs):
     """Download these urls in parallel
 
     urls are the webpages to download
     proxies is a list of servers to download content via
         To use the same proxy in parallel provide it multiple times in the proxy list
         None means use no proxy but connect directly
-    if return_html is True then returns list of htmls in same order as urls
+    if return_crawled is True then returns list of htmls in same order as urls
         be careful of the memory this will take up when urls is large
     """
     class Helper(Thread):
@@ -246,7 +248,7 @@ def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
                 while 1:
                     url = self.urls.get(block=False)
                     html = d.get(url, **kwargs)
-                    if return_html:
+                    if return_crawled:
                         self.results[url] = html
             except Queue.Empty:
                 pass # finished
@@ -266,7 +268,7 @@ def threaded_get(urls, proxies=[None], return_html=False, **kwargs):
     for downloader in downloaders:
         downloader.join()
         results = dict(results, **downloader.results)
-    if return_html:
+    if return_crawled:
         return [results[url] for url in urls]
 
 

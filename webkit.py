@@ -36,6 +36,8 @@ problems with networkreply:
     cache only works first time
     proxy doesn't work
 
+exit on close window signal
+
 add progress bar for loading page
 implement watir API
 """
@@ -77,7 +79,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                     username, password, host = match.groups()
                 else:
                     username = password = ''
-                print scheme, host, port, username, password
+                #print scheme, host, port, username, password
                 proxy = QNetworkProxy(QNetworkProxy.HttpProxy, host, int(port), username, password)
             else:
                 print 'Invalid proxy:', proxy
@@ -118,7 +120,7 @@ class NetworkAccessManager(QNetworkAccessManager):
 
 
     def catch_error(self, eid):
-        if DEBUG and eid not in (301, ):
+        if DEBUG and eid not in (5, 301):
             errors = {
                 0 : 'no error condition. Note: When the HTTP protocol returns a redirect no error will be reported. You can check if there is a redirect with the QNetworkRequest::RedirectionTargetAttribute attribute.',
                 1 : 'the remote server refused the connection (the server is not accepting requests)',
@@ -417,10 +419,12 @@ class JQueryBrowser(QWebView):
         self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
         self.base_url = base_url
         self.jquery_lib = None
-        QTimer.singleShot(0, self.crawl) # start crawling when all events processed
+        QTimer.singleShot(0, self.run) # start crawling when all events processed
         if gui: self.show() 
         self.app.exec_() # start GUI thread
-
+    
+    def set_proxy(self, proxy):
+        self.page().networkAccessManager().setProxy(proxy)
 
     def debug(self, message):
         # proper logging XXX
@@ -475,11 +479,9 @@ class JQueryBrowser(QWebView):
             else:
                 # didn't download in time
                 if retries > 0:
-                    print 'timeout - retrying'
                     self.debug('Timeout - retrying')
                     html = self.get(url, script, key, retries-1, inject)
                 else:
-                    print 'timed out'
                     self.debug('Timed out')
                     html = ''
         if html and inject:
@@ -524,9 +526,10 @@ class JQueryBrowser(QWebView):
         self.js(self.jquery_lib)
 
 
-    def crawl(self):
-        """Override this method in subclass to crawl website
+    def run(self):
+        """Override this method in subclass to automate website
         """
+        self.app.processEvents()
         self.get('http://code.google.com/p/webscraping/')
         self.get('http://code.google.com/p/sitescraper/')
         #html = self.get('http://sitescraper.net')

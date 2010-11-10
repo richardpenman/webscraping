@@ -40,7 +40,7 @@ class XPathException(Exception):
     pass
 
 
-def search(html, xpath, debug=False, remove=EMPTY_TAGS):
+def search(html, xpath, debug=False, remove=[]):
     """Query HTML document using XPath
     
     debug sets whether to print debugging data
@@ -253,6 +253,7 @@ def jump_next_tag(html):
     while 1:
         match = re.search('<(\w+)', html)
         if match:
+            # XXX check match
             if match.groups()[0].lower() in EMPTY_TAGS:
                 html = html[1:]
             else:

@@ -168,8 +168,21 @@ def unescape(text, encoding='utf-8'):
             except KeyError:
                 pass
         return text # leave as is
-    return re.sub('&#?\w+;', fixup, urllib.unquote(text).decode(encoding, 'ignore')).encode(encoding, 'ignore')
+    try:
+        text = text.decode(encoding, 'ignore')
+    except UnicodeError:
+        pass
+    text = re.sub('&#?\w+;', fixup, urllib.unquote(text))#.decode(encoding, 'ignore')).encode(encoding, 'ignore')
+    try:
+        text = text.encode(encoding, 'ignore')
+    except UnicodeError:
+        pass
+    return text
     #return urllib.unquote(text).replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+
+
+def clean(s):
+    return unescape(remove_tags(s)).strip()
 
 
 def safe(s):

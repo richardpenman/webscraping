@@ -4,5 +4,5 @@
 # License: LGPL
 #
 
-cache_file = 'cache.db' # file to use for pdict cache
+cache_file = '.cache.db' # file to use for pdict cache
 user_agent = 'Mozilla/5.0' # user agent for HTTP requests

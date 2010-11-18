@@ -49,6 +49,7 @@ class Download(object):
         socket.setdefaulttimeout(timeout)
         self.cache = pdict.PersistentDict(cache_file or settings.cache_file)
         self.delay = delay
+        self.cap = cap
         self.proxy = proxy
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener

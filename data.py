@@ -4,9 +4,11 @@
 # License: LGPL
 #
 
+import os
 import csv
 import math
 import logging
+#from collections import deque
 from webscraping import common, xpath
 
 
@@ -99,6 +101,17 @@ def get_logger(output_file, stdout=True, level=logging.DEBUG):
         logger.addHandler(logging.StreamHandler())
     logger.setLevel(level)
     return logger
+
+
+def read_list(file):
+    """Return file as list if exists
+    """
+    l = []
+    if os.path.exists(file):
+        l.extend(open(file).read().splitlines())
+    else:
+        print '%s not found' % file
+    return l
 
 
 class UnicodeWriter(object):

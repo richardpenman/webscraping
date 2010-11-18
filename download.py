@@ -22,16 +22,18 @@ from webscraping import common, pdict, settings
 
 DEBUG = True
 
+# XXX change pop(0) to deque
 
 class Download(object):
 
-    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, proxy=None, opener=None, 
+    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, opener=None, 
             headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=0, force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
         user_agent sets the user_agent to download content with
         timeout is the maximum amount of time to wait for http response
-        delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
+        delay is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
+        cap is the maximum number of requests that can be made per second
         proxy is a proxy to download content through. If a list is passed then will cycle through list.
         opener sets an optional opener to use instead of using urllib2 directly
         headers are the headers to include in the request
@@ -68,6 +70,7 @@ class Download(object):
         kwargs can override any of the arguments passed to constructor
         """
         delay = kwargs.get('delay', self.delay)
+        cap = kwargs.get('cap', self.cap)
         proxy = self.get_proxy(kwargs.get('proxy', self.proxy))
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
@@ -95,7 +98,7 @@ class Download(object):
         if not use_remote:
             return '' # do not try downloading but return empty
 
-        self.domain_delay(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
+        self.throttle(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if max_size is not None and len(html) > max_size:
             if DEBUG: print 'Too big:', len(html)
@@ -136,7 +139,7 @@ class Download(object):
         return content
 
 
-    def domain_delay(self, url, delay, proxy=None, variance=0.5):
+    def throttle(self, url, delay, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
 
         url is what intend to download

@@ -6,6 +6,7 @@
 
 import csv
 import math
+import logging
 from webscraping import common, xpath
 
 
@@ -85,6 +86,19 @@ def distance(p1, p2):
     # Remember to multiply arc by the radius of the earth 
     # in your favorite set of units to get length.
     return arc
+
+
+def get_logger(output_file, stdout=True, level=logging.DEBUG):
+    """Create a logger instance
+    """
+    logger = logging.getLogger(output_file)
+    file_handler = logging.FileHandler(output_file)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(file_handler)
+    if stdout:
+        logger.addHandler(logging.StreamHandler())
+    logger.setLevel(level)
+    return logger
 
 
 class UnicodeWriter(object):

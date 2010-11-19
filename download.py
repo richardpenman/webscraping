@@ -12,8 +12,9 @@ import random
 import urllib
 import urllib2
 from urlparse import urljoin
-from datetime import datetime
 from StringIO import StringIO
+from datetime import datetime, timedelta
+from collections import deque
 import socket
 from threading import Thread
 import Queue
@@ -22,7 +23,36 @@ from webscraping import common, pdict, settings
 
 DEBUG = True
 
-# XXX change pop(0) to deque
+
+
+class ExpireCounter:
+    """Tracks how many events were added in the preceding time period
+    """
+    def __init__(self, timeout=timedelta(seconds=1)):
+        self.timeout = timeout
+        self.events = deque()
+
+    def add(self):
+        """Add event time
+        """
+        self.events.append(datetime.now())
+
+    def __len__(self):
+        """Return number of active events
+        """
+        self.expire()
+        return len(self.events)
+
+    def expire(self):
+        """Remove any expired events
+        """
+        now = datetime.now()
+        try:
+            while self.events[0] + self.timeout < now:
+                self.events.popleft()
+        except IndexError:
+            pass
+
 
 class Download(object):
 
@@ -99,7 +129,7 @@ class Download(object):
         if not use_remote:
             return '' # do not try downloading but return empty
 
-        self.throttle(url, delay=delay, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
+        self.throttle(url, delay=delay, cap=cap, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if max_size is not None and len(html) > max_size:
             if DEBUG: print 'Too big:', len(html)
@@ -140,26 +170,31 @@ class Download(object):
         return content
 
 
-    def throttle(self, url, delay, proxy=None, variance=0.5):
+    counter = ExpireCounter() # track how many requests are bring made
+    domains = {}
+    def throttle(self, url, delay, cap, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
 
         url is what intend to download
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         variance is the amount of randomness in delay, 0-1
         """
+        while len(Download.counter) > cap:
+            time.sleep(0.1)
+        Download.counter.add()
         key = str(proxy) + ':' + common.get_domain(url)
-        if key in self.cache:
+        if key in Download.domains:
             # time since cache last accessed for this domain+proxy combination
-            dt = datetime.now() - self.cache[key]
+            dt = datetime.now() - Download.domains[key]
             wait_secs = delay - dt.days * 24 * 60 * 60 - dt.seconds
             # randomize the time so less suspicious
             wait_secs += (variance * delay * (random.random() - 0.5))
             time.sleep(max(0, wait_secs)) # make sure isn't negative time
-        self.cache[key] = datetime.now() # update database timestamp to now
+        Download.domains[key] = datetime.now() # update database timestamp to now
 
 
     def get_proxy(self, proxies):
-        if proxies and isinstance(proxies, list):
+        if proxies and hasattr(proxies, 'pop'):
             proxy = proxies.pop(0)
             proxies.append(proxy)
         else:
@@ -191,13 +226,13 @@ class Download(object):
             robots.parse(self.get(robots_url).splitlines()) # load robots.txt
         allowed_urls = re.compile(allowed_urls or seed_url)
         banned_urls = re.compile(banned_urls)
-        outstanding = [(seed_url, 0)]#, (server, 0)] # which URLs need to crawl
+        outstanding = deque([(seed_url, 0)])#
         found = set() # urls that have already found
         crawled = {} if return_crawled else [] # urls that have successfully crawled
 
         while outstanding and len(crawled) != max_urls: 
             # crawl next url in queue
-            cur_url, cur_depth = outstanding.pop(0)
+            cur_url, cur_depth = outstanding.popleft()
             html = self.get(cur_url, max_size=max_size, force_html=force_html, **kwargs)
             if return_crawled:
                 crawled[cur_url] = html
@@ -225,7 +260,6 @@ class Download(object):
                                             outstanding.append((url, cur_depth+1))
                     found.add(url)
         return crawled
-
 
 
 def threaded_get(urls, proxies=[None], return_crawled=False, **kwargs):

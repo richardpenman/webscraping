@@ -57,7 +57,8 @@ class ExpireCounter:
 class Download(object):
 
     def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, opener=None, 
-            headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=0, force_html=False, force_ascii=False, max_size=None):
+            headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=0, num_redirects=1,
+            force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
         user_agent sets the user_agent to download content with
@@ -70,6 +71,7 @@ class Download(object):
         data is what to post at the URL
         retry sets whether to try downloading webpage again if got error last time
         num_retries sets how many times to try downloading a URL after getting an error
+        num_redirects sets how many times the URL is allowed to be redirected
         force_html sets whether to download non-text data
         force_ascii sets whether to only return ascii characters
         use_cache determines whether to load from cache if exists
@@ -89,6 +91,7 @@ class Download(object):
         self.use_remote = use_remote
         self.retry = retry
         self.num_retries = num_retries
+        self.num_redirects = num_redirects
         self.force_html = force_html
         self.force_ascii = force_ascii
         self.max_size = max_size
@@ -111,11 +114,13 @@ class Download(object):
         use_remote = kwargs.get('use_remote', self.use_remote)
         retry = kwargs.get('retry', self.retry)
         num_retries = kwargs.get('num_retries', self.num_retries)
+        num_redirects = kwargs.get('num_redirects', self.num_redirects)
         force_html = kwargs.get('force_html', self.force_html)
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
         self.final_url = None
 
+        # check cache for whether this content is already downloaded
         key = url + ' ' + str(data) if data else url
         if use_cache:
             try:
@@ -131,6 +136,22 @@ class Download(object):
 
         self.throttle(url, delay=delay, cap=cap, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
+        html = self.check_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
+        redirect_url = self.check_redirect(url=url, html=html)
+        if redirect_url:
+            if num_redirects > 0:
+                print 'redirecting to', redirect_url
+                kwargs['num_redirects'] = num_redirects - 1
+                html = self.get(redirect_url, **kwargs)
+            else:
+                print '%s needed to redirect to %s' % (url, redirect_url)
+        self.cache[key] = html
+        return html
+
+
+    def check_content(self, html, max_size, force_html, force_ascii):
+        """Clean up downloaded content
+        """
         if max_size is not None and len(html) > max_size:
             if DEBUG: print 'Too big:', len(html)
             html = '' # too big to store
@@ -139,8 +160,15 @@ class Download(object):
             html = '' # non-html content
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
-        self.cache[key] = html
         return html
+
+
+    redirect_re = re.compile('<meta[^>]*?url=(.*?)["\']', re.IGNORECASE)
+    def check_redirect(self, url, html):
+        """Check for meta redirects
+        """
+        match = Download.redirect_re.search(html)
+        return urljoin(url, match.groups()[0].strip()) if match else None
 
 
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None, num_retries=1):

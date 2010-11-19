@@ -5,10 +5,10 @@
 #
 
 import os
+import re
 import csv
 import math
 import logging
-#from collections import deque
 from webscraping import common, xpath
 
 

@@ -142,15 +142,17 @@ class Download(object):
                 print 'redirecting to', redirect_url
                 kwargs['num_redirects'] = num_redirects - 1
                 html = self.get(redirect_url, **kwargs)
+                # make relative links absolute so will still work after redirect
+                relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
+                html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
             else:
-                print '%s needed to redirect to %s' % (url, redirect_url)
-        html = self.clean_content(url=url, html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
+                print '%s wanted to redirect to %s' % (url, redirect_url)
+        html = self.clean_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
         self.cache[key] = html
         return html
 
 
-    relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
-    def clean_content(self, url, html, max_size, force_html, force_ascii):
+    def clean_content(self, html, max_size, force_html, force_ascii):
         """Clean up downloaded content
         """
         if max_size is not None and len(html) > max_size:
@@ -161,8 +163,6 @@ class Download(object):
             html = '' # non-html content
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
-        # make links absolute so easier to crawl
-        html = Download.relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
         return html
 
 

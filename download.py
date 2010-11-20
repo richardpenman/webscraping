@@ -136,7 +136,6 @@ class Download(object):
 
         self.throttle(url, delay=delay, cap=cap, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
-        html = self.check_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
         redirect_url = self.check_redirect(url=url, html=html)
         if redirect_url:
             if num_redirects > 0:
@@ -145,11 +144,13 @@ class Download(object):
                 html = self.get(redirect_url, **kwargs)
             else:
                 print '%s needed to redirect to %s' % (url, redirect_url)
+        html = self.clean_content(url=url, html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
         self.cache[key] = html
         return html
 
 
-    def check_content(self, html, max_size, force_html, force_ascii):
+    relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
+    def clean_content(self, url, html, max_size, force_html, force_ascii):
         """Clean up downloaded content
         """
         if max_size is not None and len(html) > max_size:
@@ -160,12 +161,14 @@ class Download(object):
             html = '' # non-html content
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
+        # make links absolute so easier to crawl
+        html = Download.relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
         return html
 
 
     redirect_re = re.compile('<meta[^>]*?url=(.*?)["\']', re.IGNORECASE)
     def check_redirect(self, url, html):
-        """Check for meta redirects
+        """Check for meta redirects and return redirect URL if found
         """
         match = Download.redirect_re.search(html)
         return urljoin(url, match.groups()[0].strip()) if match else None

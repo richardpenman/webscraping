@@ -242,7 +242,7 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
 
         def run(self):
             D = Download(**kwargs)
-            while self.running and (urls or htmls or processing):
+            while self.running and (urls or processing):
                 try:
                     processing.append(1)
                     url = urls.popleft()
@@ -251,34 +251,17 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
                     time.sleep(SLEEP_TIME)
                 else:
                     html = D.get(url, **kwargs)
-                    htmls.append((url, html))
-
-    class ProcessThread(Thread):
-        """Process downloaded data
-        """
-        def __init__(self):
-            Thread.__init__(self)
-            self.running = True
-
-        def run(self):
-            while self.running and (urls or htmls or processing):
-                try:
-                    url, html = htmls.popleft()
                     if cb:
                         urls.extend(cb(url, html))
                     processing.pop()
-                except IndexError:
-                    time.sleep(SLEEP_TIME)
 
     # put urls into thread safe queue
     if url: urls.append(url)
     urls = deque(urls)
-    htmls = deque()
     processing = deque()
     threads = []
     for i in range(num_threads):
         threads.append(DownloadThread())
-    threads.append(ProcessThread())
     for thread in threads:
         thread.start()
     

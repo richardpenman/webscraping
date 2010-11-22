@@ -172,13 +172,13 @@ def unescape(text, encoding='utf-8'):
         text = text.decode(encoding, 'ignore')
     except UnicodeError:
         pass
-    text = re.sub('&#?\w+;', fixup, urllib.unquote(text))#.decode(encoding, 'ignore')).encode(encoding, 'ignore')
+    text = urllib.unquote(text).replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+    text = re.sub('&#?\w+;', fixup, urllib.unquote(text))
     try:
         text = text.encode(encoding, 'ignore')
     except UnicodeError:
         pass
     return text
-    #return urllib.unquote(text).replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
 
 
 def clean(s):

@@ -14,12 +14,10 @@ import urllib2
 from urlparse import urljoin
 from StringIO import StringIO
 from datetime import datetime, timedelta
-from collections import deque
+from collections import defaultdict, deque
 import socket
 from threading import Thread
-import Queue
-from robotparser import RobotFileParser
-from webscraping import common, pdict, settings
+from webscraping import common, data, pdict, settings
 
 DEBUG = True
 
@@ -56,7 +54,7 @@ class ExpireCounter:
 
 class Download(object):
 
-    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, opener=None, 
+    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=[], opener=None, 
             headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=0, num_redirects=1,
             force_html=False, force_ascii=False, max_size=None):
         """
@@ -82,7 +80,7 @@ class Download(object):
         self.cache = pdict.PersistentDict(cache_file or settings.cache_file)
         self.delay = delay
         self.cap = cap
-        self.proxy = proxy
+        self.proxies = proxies or [proxy]
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
@@ -105,7 +103,7 @@ class Download(object):
         """
         delay = kwargs.get('delay', self.delay)
         cap = kwargs.get('cap', self.cap)
-        proxy = self.get_proxy(kwargs.get('proxy', self.proxy))
+        proxy = random.choice(kwargs.get('proxies', self.proxies) or kwargs.get('proxy'))
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)
@@ -224,168 +222,137 @@ class Download(object):
         Download.domains[key] = datetime.now() # update database timestamp to now
 
 
-    def get_proxy(self, proxies):
-        if proxies and hasattr(proxies, 'pop'):
-            proxy = proxies.pop(0)
-            proxies.append(proxy)
-        else:
-            proxy = proxies
-        return proxy
+
+def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
+    """Download these urls in parallel
+
+    url[s] are the webpages to download
+    cb is called after each download with the HTML of the download   
+        the arguments are the url and downloaded html
+        whatever URLs are returned are added to the crawl queue
+    """
+    SLEEP_TIME = 0.1
+
+    class DownloadThread(Thread):
+        """Download data
+        """
+        def __init__(self):
+            Thread.__init__(self)
+            self.running = True
+
+        def run(self):
+            D = Download(**kwargs)
+            while self.running and (urls or htmls or processing):
+                try:
+                    processing.append(1)
+                    url = urls.popleft()
+                except IndexError:
+                    processing.pop()
+                    time.sleep(SLEEP_TIME)
+                else:
+                    html = D.get(url, **kwargs)
+                    htmls.append((url, html))
+
+    class ProcessThread(Thread):
+        """Process downloaded data
+        """
+        def __init__(self):
+            Thread.__init__(self)
+            self.running = True
+
+        def run(self):
+            while self.running and (urls or htmls or processing):
+                try:
+                    url, html = htmls.popleft()
+                    if cb:
+                        urls.extend(cb(url, html))
+                    processing.pop()
+                except IndexError:
+                    time.sleep(SLEEP_TIME)
+
+    # put urls into thread safe queue
+    if url: urls.append(url)
+    urls = deque(urls)
+    htmls = deque()
+    processing = deque()
+    threads = []
+    for i in range(num_threads):
+        threads.append(DownloadThread())
+    threads.append(ProcessThread())
+    for thread in threads:
+        thread.start()
+    
+    while len(threads) > 0:
+        try:
+            # join all active threads using a timeout so it doesn't block
+            threads = [t.join(1) for t in threads if t and t.isAlive()]
+        except KeyboardInterrupt:
+            print "Ctrl-c received! Sending kill to threads..."
+            for t in threads:
+                t.running = False
 
 
-    def crawl(self, seed_url, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', obey_robots=False, max_size=1000000, force_html=True, return_crawled=False, crawl_existing=True, **kwargs):
-        """Crawl website html and return list of URLs crawled
-
-        seed_url: url to start crawling from
+class CrawlCallback:
+    """Example callback to crawl the website
+    """
+    def __init__(self, output_file=None, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
+        """
         max_urls: maximum number of URLs to crawl (use None for no limit)
         max_depth: maximum depth to follow links into website (use None for no limit)
         allowed_urls: regex for allowed urls
         banned_urls: regex for banned urls
-        obey_robots: whether to obey robots.txt
+        robots: RobotFileParser object
         max_size is passed to get() and is limited to 1MB by default
         force_html is set to True by default so only crawl HTML content
-        return_crawled sets whether to return the crawled data as a dict {url: html}
-            Usually this is not a good idea because too much memory is required. 
-            When False a list of crawled URLs is returned
         crawl_existing sets whether to crawl content already downloaded previously
-        **kwargs is passed to get()
         """
-        user_agent = kwargs.get('user_agent', self.user_agent)
-        robots = RobotFileParser()
-        if obey_robots:
-            robots_url = 'http://' + common.get_domain(seed_url) + '/robots.txt'
-            robots.parse(self.get(robots_url).splitlines()) # load robots.txt
-        allowed_urls = re.compile(allowed_urls or seed_url)
-        banned_urls = re.compile(banned_urls)
-        outstanding = deque([(seed_url, 0)])#
-        found = set() # urls that have already found
-        crawled = {} if return_crawled else [] # urls that have successfully crawled
-
-        while outstanding and len(crawled) != max_urls: 
-            # crawl next url in queue
-            cur_url, cur_depth = outstanding.popleft()
-            html = self.get(cur_url, max_size=max_size, force_html=force_html, **kwargs)
-            if return_crawled:
-                crawled[cur_url] = html
-            else:
-                crawled.append(cur_url)
-
-            if cur_depth != max_depth:
-                # extract links to continue crawling
-                for url in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
-                    url = url[:url.index('#')] if '#' in url else url  # remove internal links to avoid duplicates
-                    url = urljoin(cur_url, url) # support relative links
-                    #print allowed_urls.match(url), banned_urls.match(url), url
-                    #url not in crawled and not in outstanding # check if have already crawled
-                    if url not in found:
-                        # check if a media file
-                        if common.get_extension(url) not in common.MEDIA_EXTENSIONS:
-                            # not blocked by robots.txt
-                            if robots.can_fetch(user_agent, url):
-                                # passes regex
-                                if allowed_urls.match(url) and not banned_urls.match(url):
-                                    # only crawl within website
-                                    if common.same_domain(seed_url, url):
-                                        # allowed to recrawl
-                                        if crawl_existing or url not in self.cache: 
-                                            outstanding.append((url, cur_depth+1))
-                    found.add(url)
-        return crawled
+        self.writer = data.UnicodeWriter(output_file) if output_file else None
+        self.max_urls = max_urls
+        self.max_depth = max_depth
+        self.allowed_urls = re.compile(allowed_urls)
+        self.banned_urls = re.compile(banned_urls)
+        self.robots = robots
+        self.crawl_existing = crawl_existing
+        self.found = defaultdict(int) # track depth of found URLs
+        self.crawled = [] # track which URLs have been crawled (not all found URLs will be crawled)
 
 
-def threaded_get(urls, proxies=[None], return_crawled=False, **kwargs):
-    """Download these urls in parallel
+    def __call__(self, url, html):
+        """Scrape HTML
+        """
+        if self.writer:
+            self.scrape(url, html)
+        return self.crawl(url, html)
 
-    urls are the webpages to download
-    proxies is a list of servers to download content via
-        To use the same proxy in parallel provide it multiple times in the proxy list
-        None means use no proxy but connect directly
-    if return_crawled is True then returns list of htmls in same order as urls
-        be careful of the memory this will take up when urls is large
-    """
-    class Helper(Thread):
-        def __init__(self, urls, proxy):
-            Thread.__init__(self)
-            self.urls, self.proxy, self.results = urls, proxy, {}
-
-        def run(self):
-            # XXX separate thread for puting in database
-            # XXX combine with threaded_crawl helper
-            # XXX change to process?
-            d = Download(proxy=self.proxy, **kwargs)
-            try:
-                while 1:
-                    url = self.urls.get(block=False)
-                    html = d.get(url, **kwargs)
-                    if return_crawled:
-                        self.results[url] = html
-            except Queue.Empty:
-                pass # finished
-
-    # put urls into thread safe queue
-    queue = Queue.Queue()
-    for url in urls:
-        queue.put(url)
-
-    downloaders = []
-    for proxy in proxies:
-        downloader = Helper(queue, proxy)
-        downloaders.append(downloader)
-        downloader.start()
-
-    results = {}
-    for downloader in downloaders:
-        downloader.join()
-        results = dict(results, **downloader.results)
-    if return_crawled:
-        return [results[url] for url in urls]
+    def scrape(self, url, html):
+        """Reimplement this in subclass to scrape data
+        """
+        pass
 
 
-
-def threaded_crawl(seed_urls, num_threads=10, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', **kwargs):
-    """Crawl websites in parallel
-    Returns a dict of crawled urls for each site
-
-    seed_urls is a list of the urls to crawl from
-    num_threads is the number of crawlers to run in parallel
-    max_urls: maximum number of URLs to crawl
-    max_depth: maximum depth to follow links into website
-    **kwargs is passed to crawl()
-    """
-    class Helper(Thread):
-        count = 0
-
-        def __init__(self, urls):
-            Thread.__init__(self)
-            self.urls, self.results = urls, {}
-            self.id = Helper.count
-            Helper.count += 1
-
-        def run(self):
-            d = Download(**kwargs)
-            try:
-                while 1:
-                    url = self.urls.get(block=False)
-                    if DEBUG: print self.id, 'crawl', url
-                    urls = d.crawl(url, max_urls=max_urls, max_depth=max_depth, allowed_urls=allowed_urls, banned_urls=banned_urls, **kwargs)
-                    self.results[url] = urls
-            except Queue.Empty:
-                pass # finished
-
-    # randomize url order to balance requests across domains
-    #random.shuffle(seed_urls)
-    # put urls into thread safe queue
-    queue = Queue.Queue()
-    for url in seed_urls:
-        queue.put(url)
-    crawlers = []
-    for i in range(num_threads):
-        crawler = Helper(queue)
-        crawlers.append(crawler)
-        crawler.start()
-
-    results = {}
-    for crawler in crawlers:
-        crawler.join()
-        results = dict(results, **crawler.results)
-    return results
+    def crawl(self, url, html): 
+        """Crawl website html and return list of URLs crawled
+        """
+        self.crawled.append(url)
+        depth = self.found[url]
+        outstanding = []
+        if len(self.crawled) != self.max_urls and depth != self.max_depth: 
+            # extract links to continue crawling
+            for link in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
+                link = link[:link.index('#')] if '#' in link else link  # remove internal links to avoid duplicates
+                link = urljoin(url, link) # support relative links
+                #print allowed_urls.match(url), banned_urls.match(url), url
+                if link not in self.found:
+                    self.found[link] = depth + 1
+                    # check if a media file
+                    if common.get_extension(link) not in common.MEDIA_EXTENSIONS:
+                        # not blocked by robots.txt
+                        if not self.robots or self.robots.can_fetch(settings.user_agent, link):
+                            # passes regex
+                            if self.allowed_urls.match(link) and not self.banned_urls.match(link):
+                                # only crawl within website
+                                if common.same_domain(url, link):
+                                    # allowed to recrawl
+                                    #if self.crawl_existing or url not in self.cache: 
+                                    outstanding.append(link)
+        return outstanding

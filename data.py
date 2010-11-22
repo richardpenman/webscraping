@@ -138,7 +138,7 @@ class UnicodeWriter(object):
 
     def writerows(self, rows):
         for row in rows:
-            self.writerow(row)
+            self.writerow([common.unescape(col) for col in row])
 
     def writedicts(self, rows):
         """Write dict to CSV file

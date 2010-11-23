@@ -131,14 +131,14 @@ class UnicodeWriter(object):
                 s = s.encode(self.encoding, 'ignore')
             except UnicodeError:
                 pass
-        return s
+        return common.unescape(s)
 
     def writerow(self, row):
         self.writer.writerow([self.cell(col) for col in row])
 
     def writerows(self, rows):
         for row in rows:
-            self.writerow([common.unescape(col) for col in row])
+            self.writerow(row)
 
     def writedicts(self, rows):
         """Write dict to CSV file

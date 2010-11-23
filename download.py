@@ -283,7 +283,7 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
                     html = D.get(url, **kwargs)
                     try:
                         if cb:
-                            urls.extend(cb(url, html))
+                            urls.extend(cb(D, url, html))
                     finally:
                         processing.pop()
 

@@ -83,6 +83,7 @@ class PersistentDict(object):
         else:
             raise KeyError("Key `%s' does not exist" % key)
     
+    
     @synchronous
     def __setitem__(self, key, value):
         """set the value of the specified key
@@ -110,9 +111,13 @@ class PersistentDict(object):
         return pickle.loads(zlib.decompress(value)) if value else value
 
     def keys(self):
-        """returns a list containing each key in the database
+        """returns a generator of each key in the database
         """
-        return [row[0] for row in self._conn.execute("SELECT key FROM config;").fetchall()]
+        c = self._conn.cursor()
+        c.execute("SELECT key FROM config;")
+        for row in c:
+            yield row[0]
+        #return [row[0] for row in self._conn.execute("SELECT key FROM config;").fetchall()]
 
     def is_fresh(self, t):
         """returns whether this datetime has expired
@@ -144,7 +149,6 @@ class PersistentDict(object):
         current_data.update(new_data)
         value = self.serialize(current_data.get('value'))
         meta = self.serialize(current_data.get('meta'))
-        #url = current_data.get('url')
         created = current_data.get('created')
         updated = current_data.get('updated')
         #keys = new_data.keys() + ['key']
@@ -158,6 +162,12 @@ class PersistentDict(object):
         """remove the specifed value from the database
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
+
+    def merge(self, db):
+        """Merge this databases content
+        """
+        for key in db.keys():
+            self[key] = db[key]
 
 
 

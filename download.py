@@ -251,9 +251,11 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
                     time.sleep(SLEEP_TIME)
                 else:
                     html = D.get(url, **kwargs)
-                    if cb:
-                        urls.extend(cb(url, html))
-                    processing.pop()
+                    try:
+                        if cb:
+                            urls.extend(cb(url, html))
+                    finally:
+                        processing.pop()
 
     # put urls into thread safe queue
     if url: urls.append(url)

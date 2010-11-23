@@ -123,15 +123,8 @@ class UnicodeWriter(object):
 
     def cell(self, s):
         if isinstance(s, basestring):
-            try:
-                s = s.decode(self.encoding, 'ignore')
-            except UnicodeError:
-                pass
-            try:
-                s = s.encode(self.encoding, 'ignore')
-            except UnicodeError:
-                pass
-        return common.unescape(s)
+            s = common.unescape(s)
+        return s
 
     def writerow(self, row):
         self.writer.writerow([self.cell(col) for col in row])

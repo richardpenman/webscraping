@@ -221,6 +221,36 @@ class Download(object):
             time.sleep(max(0, wait_secs)) # make sure isn't negative time
         Download.domains[key] = datetime.now() # update database timestamp to now
 
+    def geocode(self, address):
+        """Geocode address using Google's API and return dictionary of useful fields
+        """
+        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % address.replace(' ', '%20')
+        html = self.get(url)
+        results = defaultdict(str)
+        if html:
+            geo_data = json.loads(html)
+            for result in geo_data.get('results', []):
+                for e in result['address_components']:
+                    types, value = e['types'], e['long_name']
+                    if 'street_number' in types:
+                        results['number'] = value
+                    elif 'route' in types:
+                        results['street'] = value
+                    elif 'postal_code' in types:
+                        results['postcode'] = value
+                    elif 'locality' in types:
+                        results['suburb'] = value
+                    elif 'administrative_area_level_1' in types:
+                        results['state'] = value
+                    elif 'country' in types:
+                        results['country'] = value
+                results['full_address'] = result['formatted_address']
+            results['address'] = (results['number'] + ' ' + results['street']).strip()
+        if not results:
+            # error geocoding - try again later
+            del self.cache[url]
+        return results
+
 
 
 def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
@@ -277,7 +307,7 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
                 t.running = False
 
 
-class CrawlCallback:
+class CrawlerCallback:
     """Example callback to crawl the website
     """
     def __init__(self, output_file=None, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
@@ -302,22 +332,21 @@ class CrawlCallback:
         self.crawled = [] # track which URLs have been crawled (not all found URLs will be crawled)
 
 
-    def __call__(self, url, html):
+    def __call__(self, D, url, html):
         """Scrape HTML
         """
-        if self.writer:
-            self.scrape(url, html)
-        return self.crawl(url, html)
+        self.scrape(D, url, html)
+        return self.crawl(D, url, html)
 
-    def scrape(self, url, html):
+    def scrape(self, D, url, html):
         """Reimplement this in subclass to scrape data
         """
         pass
 
-
-    def crawl(self, url, html): 
+    def crawl(self, D, url, html): 
         """Crawl website html and return list of URLs crawled
         """
+        # XXX add robots back
         self.crawled.append(url)
         depth = self.found[url]
         outstanding = []
@@ -338,6 +367,17 @@ class CrawlCallback:
                                 # only crawl within website
                                 if common.same_domain(url, link):
                                     # allowed to recrawl
-                                    #if self.crawl_existing or url not in self.cache: 
+                                    #if self.crawl_existing or url not in self.cache: XXX
                                     outstanding.append(link)
         return outstanding
+
+
+class EmailCallback(CrawlerCallback):
+    """Crawl websites for emails
+    """
+    def __init__(self, **kwargs):
+        EmailCallback.__init__(**kwargs)
+        self.emails = set()
+
+    def scrape(self, D, url, html):
+        self.emails.update(data.extract_emails(html))

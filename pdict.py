@@ -163,11 +163,13 @@ class PersistentDict(object):
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
 
-    def merge(self, db):
+    def merge(self, db, override=False):
         """Merge this databases content
+        override determines whether to override existing keys
         """
         for key in db.keys():
-            self[key] = db[key]
+            if override or key not in self:
+                self[key] = db[key]
 
 
 
@@ -195,4 +197,3 @@ if __name__ == '__main__':
         assert p.keys() == [key]
         del p[key]
         assert p.keys() == []
-

@@ -11,6 +11,7 @@ import time
 import random
 import urllib
 import urllib2
+import json
 from urlparse import urljoin
 from StringIO import StringIO
 from datetime import datetime, timedelta
@@ -175,7 +176,7 @@ class Download(object):
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None, num_retries=1):
         """Simply download the url and return the content
         """
-        if DEBUG: print url
+        if DEBUG: print 'Downloading', url
         opener = opener or urllib2.build_opener()
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
@@ -190,7 +191,7 @@ class Download(object):
             self.final_url = response.url # store where redirected to
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
-            if DEBUG: print e
+            if DEBUG: print 'Fetch', e
             if num_retries > 0:
                 if DEBUG: print 'Retrying'
                 content = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
@@ -251,6 +252,19 @@ class Download(object):
             del self.cache[url]
         return results
 
+    def get_emails(self, website):
+        """Crawl this website and return all emails found
+        """
+        c = CrawlerCallback()
+        outstanding = deque([website])
+        emails = set()
+        while outstanding:
+            url = outstanding.popleft()
+            html = self.get(url, retry=False)
+            emails.update(data.extract_emails(html))
+            outstanding.extend(c.crawl(self, url, html))
+        return list(emails)
+
 
 
 def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
@@ -266,31 +280,37 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, **kwargs):
     class DownloadThread(Thread):
         """Download data
         """
+        processing = deque()
+
         def __init__(self):
             Thread.__init__(self)
             self.running = True
 
         def run(self):
             D = Download(**kwargs)
-            while self.running and (urls or processing):
+            while self.running and (urls or DownloadThread.processing):
+                DownloadThread.processing.append(1) # keep track that are processing url
                 try:
-                    processing.append(1)
                     url = urls.popleft()
                 except IndexError:
-                    processing.pop()
+                    # currently no urls to process
+                    DownloadThread.processing.popleft()
                     time.sleep(SLEEP_TIME)
                 else:
-                    html = D.get(url, **kwargs)
+                    # download this url
                     try:
+                        html = D.get(url, **kwargs)
                         if cb:
+                            # scrape download
                             urls.extend(cb(D, url, html))
                     finally:
-                        processing.pop()
+                        # have finished processing
+                        DownloadThread.processing.popleft()
+                print len(DownloadThread.processing), len(urls)
 
     # put urls into thread safe queue
     if url: urls.append(url)
     urls = deque(urls)
-    processing = deque()
     threads = []
     for i in range(num_threads):
         threads.append(DownloadThread())
@@ -370,14 +390,3 @@ class CrawlerCallback:
                                     #if self.crawl_existing or url not in self.cache: XXX
                                     outstanding.append(link)
         return outstanding
-
-
-class EmailCallback(CrawlerCallback):
-    """Crawl websites for emails
-    """
-    def __init__(self, **kwargs):
-        EmailCallback.__init__(**kwargs)
-        self.emails = set()
-
-    def scrape(self, D, url, html):
-        self.emails.update(data.extract_emails(html))

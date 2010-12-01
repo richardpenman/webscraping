@@ -43,7 +43,7 @@ def to_float(s):
     """Return float from this string
     """
     valid = string.digits + '.'
-    return float('0' + ''.join(c for c in s if c in valid))
+    return float('0' + ''.join(c for c in str(s) if c in valid))
 
 
 def is_html(html):
@@ -182,7 +182,7 @@ def unescape(text, encoding='utf-8'):
 
 
 def clean(s):
-    return unescape(remove_tags(s)).strip()
+    return '\n'.join(line.strip() for line in unescape(remove_tags(s)).splitlines() if line.strip())
 
 
 def safe(s):

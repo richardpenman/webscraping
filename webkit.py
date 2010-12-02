@@ -19,7 +19,6 @@ from webscraping import common, pdict, settings
  
 
 
-TOR_PROXY = QNetworkProxy(QNetworkProxy.HttpProxy, '127.0.0.1', 8118)
 DEBUG = False
 """
 TODO
@@ -71,15 +70,14 @@ class NetworkAccessManager(QNetworkAccessManager):
         """Allow setting string as proxy
         """
         if isinstance(proxy, basestring):
-            match = re.match('(http://)?(.*?):(\d+)', proxy)
+            match = re.match('((?P<username>\w+):(?P<password>\w+)@)?(?P<host>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})(:(?P<port>\d+))?', proxy)
             if match:
-                scheme, host, port = match.groups()
-                match = re.match('(.*?):(.*?)@(.*?)$', host)
-                if match:
-                    username, password, host = match.groups()
-                else:
-                    username = password = ''
-                #print scheme, host, port, username, password
+                groups = match.groupdict()
+                username = groups.get('username') or ''
+                password = groups.get('password') or ''
+                host = groups.get('host')
+                port = groups.get('port')
+                #print host, port, username, password
                 proxy = QNetworkProxy(QNetworkProxy.HttpProxy, host, int(port), username, password)
             else:
                 print 'Invalid proxy:', proxy
@@ -100,9 +98,9 @@ class NetworkAccessManager(QNetworkAccessManager):
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
         reply.data = ''
-        #if common.get_extension(str(request.url().toString())) not in ('js', 'css'):
         #if 'Search' in str(request.url().toString()):
-        #    reply = NetworkReply(reply)
+        if 0 and common.get_extension(str(request.url().toString())) not in ('js', 'css'):
+            reply = NetworkReply(reply)
         return reply
 
 
@@ -341,7 +339,7 @@ class NetworkReply(QNetworkReply):
     def readInternal(self):
         """New data available to read
         """
-        s = str(self.reply.readAll())
+        s = self.reply.readAll()
         self.data += s
         self.buffer += s
         self.readyRead.emit()
@@ -351,7 +349,7 @@ class NetworkReply(QNetworkReply):
         """
         size = min(size, len(self.buffer))
         data, self.buffer = self.buffer[:size], self.buffer[size:]
-        return data
+        return str(data)
 
 
 class WebPage(QWebPage):
@@ -532,8 +530,6 @@ class JQueryBrowser(QWebView):
         self.app.processEvents()
         self.get('http://code.google.com/p/webscraping/')
         self.get('http://code.google.com/p/sitescraper/')
-        #html = self.get('http://sitescraper.net')
-        #self.load(QUrl('http://www.google.com.au'))
         QTimer.singleShot(10000, self.app.quit)
 
 
@@ -546,4 +542,4 @@ class JQueryBrowser(QWebView):
 
 if __name__ == '__main__':
     DEBUG = True
-    JQueryBrowser(gui=True, proxy=TOR_PROXY)#, allowed_media=[])
+    JQueryBrowser(gui=True, proxy='127.0.0.1:8118')

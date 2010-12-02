@@ -267,14 +267,14 @@ class Download(object):
 
 
 
-def threaded_get(url=None, urls=[], num_threads=10, cb=None, breadth=True, **kwargs):
+def threaded_get(url=None, urls=[], num_threads=10, cb=None, depth=False, **kwargs):
     """Download these urls in parallel
 
     url[s] are the webpages to download
     cb is called after each download with the HTML of the download   
         the arguments are the url and downloaded html
         whatever URLs are returned are added to the crawl queue
-    breadth sets breadth first search, else depth first
+    depth sets to traverse depth first rather than the default breadth first
     """
     SLEEP_TIME = 0.1
 
@@ -292,7 +292,7 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, breadth=True, **kwa
             while self.running and (urls or DownloadThread.processing):
                 DownloadThread.processing.append(1) # keep track that are processing url
                 try:
-                    url = urls.popleft() if breadth else urls.pop()
+                    url = urls.pop() if depth else urls.popleft()
                 except IndexError:
                     # currently no urls to process
                     DownloadThread.processing.popleft()

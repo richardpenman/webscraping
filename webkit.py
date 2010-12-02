@@ -94,13 +94,12 @@ class NetworkAccessManager(QNetworkAccessManager):
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             elif DEBUG:
                 print request.url().toString()
-        #request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
+        request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
-        reply.data = ''
+        #reply.data = ''
         #if 'Search' in str(request.url().toString()):
-        if 0 and common.get_extension(str(request.url().toString())) not in ('js', 'css'):
-            reply = NetworkReply(reply)
+        reply = NetworkReply(reply)
         return reply
 
 
@@ -148,7 +147,6 @@ class NetworkAccessManager(QNetworkAccessManager):
             print 'Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString())
 
 
-# XXX not working properly for js, css, cache - try pasting all methods back again to see what gets called differently
 class NetworkReply(QNetworkReply):
     def __init__(self, reply):
         QNetworkReply.__init__(self)
@@ -171,140 +169,12 @@ class NetworkReply(QNetworkReply):
         """
         # send these attributes through to proxy reply 
         if attr in ('operation', 'request', 'url', 'abort', 'close', 'isSequential'):
-            #print attr
             return self.reply.__getattribute__(attr)
         else:
             return QNetworkReply.__getattribute__(self, attr)
     
     def abort(self):
         pass # qt requires that this be defined
-
-    def bytesToWrite(self):
-        print 'btytes to write'
-        return -1
-
-    def canReadLine(self):
-        print 'can read'
-        return False
-    def waitForReadyRead(self, t):
-        print 'wait ready'
-        return False
-    def waitForBytesWritten(self, t):
-        print 'wait written'
-        return False
-
-    def readAll(self):
-        print 'read all'
-        return self.data
-
-    def read(self, size):
-        print 'read'
-
-    def readLine(self):
-        print 'line'
-
-    def isReadable(self):
-        print 'is read'
-
-    def seek(self, s):
-        print 'seek'
-
-    def isFinished(self):
-        print 'is finished'
-
-    def isRunning(self):
-        print 'is running'
-
-
-    def attribute (self,code):
-        print 'attribute'
-    def errorCode (self):
-        print 'errorcode'
-    def hasRawHeader (self,headerName):
-        print 'has raw header'
-    def header (self,header):
-        print 'header'
-    def ignoreSslErrors (self, errors=None):
-        print 'ignore ssl'
-    def manager (self):
-        print 'manager'
-    def rawHeader (self,headerName):
-        print 'rawheader'
-    def rawHeaderList (self):
-        print 'raw headerlist'
-    def readBufferSize (self):
-        print 'read buffer'
-    def setError (self,errorCode, errorString):
-        print 'set error'
-    def setReadBufferSize (self,size):
-        print 'setreadbuffersize'
-    def setSslConfiguration (self,configuration):
-        print 'setssl'
-    def sslConfiguration (self):
-        print 'sskcibf;'
-
-    def sslErrors (self,errors):
-        print 'sslerrors'
-    def aboutToClose (self):
-        print 'about'
-    def atEnd (self):
-        print 'at end'
-    def bytesToWrite (self):
-        print 'bytes to write'
-    def bytesWritten (self, bytes):
-        print 'bytes written'
-    def canReadLine (self):
-        print 'canread'
-    def close (self):
-        print 'close'
-    def errorString (self):
-        print 'errors tring'
-    def getChar (self):
-        print 'getchar'
-    def isOpen (self):
-        print 'isopen'
-    def isReadable (self):
-        print 'is readable'
-    def isTextModeEnabled (self):
-        print 'istext'
-    def isWritable (self):
-        print 'iswrite'
-    def open (self, mode):
-        print 'open'
-    def openMode (self):
-        print 'openmode'
-        return self.reply.openMode()
-
-    def peek (self, maxlen):
-        print 'peek'
-    def pos (self):
-        print 'pos'
-    def putChar (self,c):
-        print 'putcha'
-    def readChannelFinished (self):
-        print 'read channel'
-    def readData (self, data, maxlen):
-        print 'read daa'
-    def reset (self):
-        print 'reset'
-    def seek (self, pos):
-        print 'seek;'
-    def setErrorString (self,errorString):
-        print 'set error'
-    def setTextModeEnabled (self, enabled):
-        print 'setttextmodeeb'
-    def size (self):
-        print 'size'
-    def ungetChar (self,c):
-        print 'ungetchar'
-    def waitForBytesWritten (self,msecs):
-        print 'wait for btes'
-    def waitForReadyRead (self,msecs):
-        print 'wait for ready read'
-    def write (self,data):
-        print 'write'
-    def writeData (self,data, len):
-        print 'writedata'
 
     def applyMetaData(self):
         for header in self.reply.rawHeaderList():
@@ -334,7 +204,7 @@ class NetworkReply(QNetworkReply):
     def bytesAvailable(self):
         """How many bytes in the buffer are available to be read
         """
-        return len(self.buffer) + self.reply.bytesAvailable()
+        return len(self.buffer) + QNetworkReply.bytesAvailable(self)
 
     def readInternal(self):
         """New data available to read
@@ -361,10 +231,8 @@ class WebPage(QWebPage):
         self.user_agent = user_agent
         self.confirm = confirm
 
-
     def userAgentForUrl(self, url):
         return self.user_agent
-
 
     def javaScriptAlert(self, frame, message):
         """Override default JavaScript alert popup and print results
@@ -529,8 +397,7 @@ class JQueryBrowser(QWebView):
         """
         self.app.processEvents()
         self.get('http://code.google.com/p/webscraping/')
-        self.get('http://code.google.com/p/sitescraper/')
-        QTimer.singleShot(10000, self.app.quit)
+        QTimer.singleShot(5000, self.app.quit)
 
 
     def finished(self, reply):

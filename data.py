@@ -117,9 +117,13 @@ def read_list(file):
 class UnicodeWriter(object):
     """A CSV writer that produces Excel-compatibly CSV files from unicode data.
     """
-    def __init__(self, filename, encoding='utf-8'):
-        self.writer = csv.writer(open(filename, 'w'))
+    def __init__(self, filename, encoding='utf-8', mode='w', unique=False):
         self.encoding = encoding
+        self.unique = unique
+        self.writer = csv.writer(open(filename, mode))
+        self.rows = []
+        if unique:# and os.path.exists(filename):
+            self.rows = list(csv.reader(open(filename)))
 
     def cell(self, s):
         if isinstance(s, basestring):
@@ -127,7 +131,11 @@ class UnicodeWriter(object):
         return s
 
     def writerow(self, row):
-        self.writer.writerow([self.cell(col) for col in row])
+        row = [self.cell(col) for col in row]
+        if row not in self.rows:
+            self.writer.writerow(row)
+            if self.unique:
+                self.rows.append(row)
 
     def writerows(self, rows):
         for row in rows:

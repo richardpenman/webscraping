@@ -209,18 +209,13 @@ class Download(object):
         delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
         variance is the amount of randomness in delay, 0-1
         """
-        while len(Download.counter) > cap:
+        key = str(proxy) + ':' + common.get_domain(url)
+        start = datetime.now()
+        while len(Download.counter) > cap or datetime.now() < Download.domains.get(key, start):
             time.sleep(0.1)
         Download.counter.add()
-        key = str(proxy) + ':' + common.get_domain(url)
-        if key in Download.domains:
-            # time since cache last accessed for this domain+proxy combination
-            dt = datetime.now() - Download.domains[key]
-            wait_secs = delay - dt.days * 24 * 60 * 60 - dt.seconds
-            # randomize the time so less suspicious
-            wait_secs += (variance * delay * (random.random() - 0.5))
-            time.sleep(max(0, wait_secs)) # make sure isn't negative time
-        Download.domains[key] = datetime.now() # update database timestamp to now
+        # update domain timestamp to when can query next
+        Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
     def geocode(self, address):
         """Geocode address using Google's API and return dictionary of useful fields
@@ -368,7 +363,7 @@ class CrawlerCallback:
         """
         # XXX add robots back
         self.crawled.append(url)
-        depth = self.found[url]
+        depth = self.found[hash(url)]
         outstanding = []
         if len(self.crawled) != self.max_urls and depth != self.max_depth: 
             # extract links to continue crawling
@@ -376,8 +371,8 @@ class CrawlerCallback:
                 link = link[:link.index('#')] if '#' in link else link  # remove internal links to avoid duplicates
                 link = urljoin(url, link) # support relative links
                 #print allowed_urls.match(url), banned_urls.match(url), url
-                if link not in self.found:
-                    self.found[link] = depth + 1
+                if hash(link) not in self.found:
+                    self.found[hash(link)] = depth + 1
                     # check if a media file
                     if common.get_extension(link) not in common.MEDIA_EXTENSIONS:
                         # not blocked by robots.txt

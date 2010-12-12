@@ -121,6 +121,7 @@ class UnicodeWriter(object):
         self.encoding = encoding
         self.unique = unique
         self.writer = csv.writer(open(filename, mode))
+        self.header = None
         self.rows = []
         if unique:# and os.path.exists(filename):
             self.rows = list(csv.reader(open(filename)))
@@ -141,12 +142,14 @@ class UnicodeWriter(object):
         for row in rows:
             self.writerow(row)
 
+    def writedict(self, d):
+        if self.header is None:
+            self.header = sorted(d.keys())
+            self.writerow([col.title() for col in self.header])
+        self.writerow([d[col] for col in self.header])
+
     def writedicts(self, rows):
         """Write dict to CSV file
         """
-        header = None
         for d in rows:
-            if header is None:
-                header = sorted(d.keys())
-                self.writerow([col.title() for col in header])
-            self.writerow([d[col] for col in header])
+            self.writedict(row)

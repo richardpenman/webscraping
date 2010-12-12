@@ -21,6 +21,7 @@ from threading import Thread
 from webscraping import common, data, pdict, settings
 
 DEBUG = True
+SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
 
 
@@ -54,9 +55,10 @@ class ExpireCounter:
 
 
 class Download(object):
+    DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
     def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=[], opener=None, 
-            headers=None, data=None, use_cache=True, use_remote=True, retry=False, num_retries=0, num_redirects=1,
+            headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1,
             force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
@@ -73,9 +75,11 @@ class Download(object):
         num_redirects sets how many times the URL is allowed to be redirected
         force_html sets whether to download non-text data
         force_ascii sets whether to only return ascii characters
-        use_cache determines whether to load from cache if exists
-        use_remote determines whether to download from remote website if not in cache
         max_size determines maximum number of bytes that will be downloaded
+        dl: sets how to download content
+            LOCAL means only load content already in cache
+            REMOTE means ignore cache and download all content
+            NEW means download content when not in cache or return empty
         """
         socket.setdefaulttimeout(timeout)
         self.cache = pdict.PersistentDict(cache_file or settings.cache_file)
@@ -86,8 +90,7 @@ class Download(object):
         self.opener = opener
         self.headers = headers
         self.data = data
-        self.use_cache = use_cache
-        self.use_remote = use_remote
+        self.dl = dl
         self.retry = retry
         self.num_retries = num_retries
         self.num_redirects = num_redirects
@@ -109,8 +112,7 @@ class Download(object):
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)
         data = kwargs.get('data', self.data)
-        use_cache = kwargs.get('use_cache', self.use_cache)
-        use_remote = kwargs.get('use_remote', self.use_remote)
+        dl = kwargs.get('dl', self.dl)
         retry = kwargs.get('retry', self.retry)
         num_retries = kwargs.get('num_retries', self.num_retries)
         num_redirects = kwargs.get('num_redirects', self.num_redirects)
@@ -121,17 +123,21 @@ class Download(object):
 
         # check cache for whether this content is already downloaded
         key = url + ' ' + str(data) if data else url
-        if use_cache:
+        print key
+        if dl != Download.REMOTE:
             try:
                 html = self.cache[key]
                 if retry and not html:
                     if DEBUG: print 'Redownloading'
                 else:
-                    return html
+                    if dl == Download.NEW:
+                        return ''
+                    else:
+                        return html
             except KeyError:
                 pass # have not downloaded yet
-        if not use_remote:
-            return '' # do not try downloading but return empty
+        if dl == Download.LOCAL:
+            return '' # only want cached content
 
         self.throttle(url, delay=delay, cap=cap, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
@@ -200,7 +206,7 @@ class Download(object):
         return content
 
 
-    counter = ExpireCounter() # track how many requests are bring made
+    counter = ExpireCounter() # track how often requests are bring made
     domains = {}
     def throttle(self, url, delay, cap, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
@@ -212,10 +218,11 @@ class Download(object):
         key = str(proxy) + ':' + common.get_domain(url)
         start = datetime.now()
         while len(Download.counter) > cap or datetime.now() < Download.domains.get(key, start):
-            time.sleep(0.1)
+            time.sleep(SLEEP_TIME)
         Download.counter.add()
         # update domain timestamp to when can query next
         Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
+
 
     def geocode(self, address):
         """Geocode address using Google's API and return dictionary of useful fields
@@ -247,6 +254,7 @@ class Download(object):
             del self.cache[url]
         return results
 
+
     def get_emails(self, website):
         """Crawl this website and return all emails found
         """
@@ -271,8 +279,6 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, depth=False, **kwar
         whatever URLs are returned are added to the crawl queue
     depth sets to traverse depth first rather than the default breadth first
     """
-    SLEEP_TIME = 0.1
-
     class DownloadThread(Thread):
         """Download data
         """
@@ -343,7 +349,7 @@ class CrawlerCallback:
         self.banned_urls = re.compile(banned_urls)
         self.robots = robots
         self.crawl_existing = crawl_existing
-        self.found = defaultdict(int) # track depth of found URLs
+        self.found = defaultdict(int) # track depth of found URLs xXX change to HashDict
         self.crawled = [] # track which URLs have been crawled (not all found URLs will be crawled)
 
 

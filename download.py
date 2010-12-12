@@ -303,7 +303,7 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, depth=False, **kwar
                         html = D.get(url, **kwargs)
                         if cb:
                             # scrape download
-                            urls.extend(cb(D, url, html))
+                            urls.extend(cb(D, url, html) or [])
                     finally:
                         # have finished processing
                         DownloadThread.processing.popleft()

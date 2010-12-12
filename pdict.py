@@ -19,24 +19,11 @@ except ImportError:
     import pickle
 
 
-
-lock = threading.Lock() # need to lock writes between threads
-def synchronous(f):
-    def call(*args, **kwargs):
-        lock.acquire()
-        try:
-            return f(*args, **kwargs)
-        finally:
-            lock.release()
-    return call
-
-
 class PersistentDict(object):
     """stores and retrieves persistent data through a dict-like interface
     data is stored compressed on disk using sqlite3 
     """
     
-    @synchronous
     def __init__(self, filename=':memory:', compress_level=6, timeout=None):
         """initialize a new PersistentDict with the specified database file.
 
@@ -84,7 +71,6 @@ class PersistentDict(object):
             raise KeyError("Key `%s' does not exist" % key)
     
     
-    @synchronous
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
@@ -94,7 +80,6 @@ class PersistentDict(object):
             # already exists, so update
             self._conn.execute("UPDATE config SET value=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
 
-    @synchronous
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
@@ -139,7 +124,6 @@ class PersistentDict(object):
                 )
         return data
 
-    @synchronous
     def set(self, key, new_data):
         """set the data for the specified key
 
@@ -157,7 +141,6 @@ class PersistentDict(object):
         # already exists, so update
         self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated, key))
 
-    @synchronous
     def __delitem__(self, key):
         """remove the specifed value from the database
         """

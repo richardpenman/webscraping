@@ -123,7 +123,6 @@ class Download(object):
 
         # check cache for whether this content is already downloaded
         key = url + ' ' + str(data) if data else url
-        print key
         if dl != Download.REMOTE:
             try:
                 html = self.cache[key]

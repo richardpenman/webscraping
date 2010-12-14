@@ -31,6 +31,7 @@ class PersistentDict(object):
         compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
         timeout: a timedelta object of how old data can be. By default is set to None to disable.
         """
+        print 'alice'
         self._conn = sqlite3.connect(filename, timeout=1000, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
@@ -75,7 +76,7 @@ class PersistentDict(object):
         """set the value of the specified key
         """
         try:
-            self._conn.execute("INSERT INTO config (key, value) VALUES(?, ?);", (key, self.serialize(value)))
+            self._conn.execute("INSERT INTO config (key, value, meta) VALUES(?, ?, ?);", (key, self.serialize(value), self.serialize({})))
         except sqlite3.IntegrityError:
             # already exists, so update
             self._conn.execute("UPDATE config SET value=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
@@ -140,6 +141,21 @@ class PersistentDict(object):
         #self._conn.execute("INSERT INTO config (%s) VALUES(%s);" % (', '.join(keys), ', '.join(['?'] * len(keys))), values)
         # already exists, so update
         self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated, key))
+
+    def meta(self, key, value=None):
+        """Set of get the meta attribute
+        """
+        if value is None:
+            # want to get meta
+            row = self._conn.execute("SELECT meta FROM config WHERE key=?;", (key,)).fetchone()
+            if row:
+                return self.deserialize(row[0])
+            else:
+                raise KeyError("Key `%s' does not exist" % key)
+        else:
+            # want to set meta
+            self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
+
 
     def __delitem__(self, key):
         """remove the specifed value from the database

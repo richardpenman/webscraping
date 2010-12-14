@@ -153,6 +153,8 @@ class Download(object):
                 print '%s wanted to redirect to %s' % (url, redirect_url)
         html = self.clean_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
         self.cache[key] = html
+        if url != self.final_url:
+            self.cache.meta(key, dict(url=self.final_url))
         return html
 
 

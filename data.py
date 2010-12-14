@@ -143,13 +143,15 @@ class UnicodeWriter(object):
             self.writerow(row)
 
     def writedict(self, d):
-        if self.header is None:
-            self.header = sorted(d.keys())
-            self.writerow([col.title() for col in self.header])
-        self.writerow([d[col] for col in self.header])
-
-    def writedicts(self, rows):
         """Write dict to CSV file
         """
+        if self.header is None:
+            # add header using keys
+            # an optional _header attribute defines the column order
+            self.header = d.get('_header', sorted(d.keys()))
+            self.writerow([col.title() for col in self.header])
+        self.writerow([d.get(col) for col in self.header])
+
+    def writedicts(self, rows):
         for d in rows:
             self.writedict(row)

@@ -23,7 +23,7 @@
 #  - parent
 #  - search by text: text() == '...'
 #  - return xpath for most similar to text
-#
+#  - change to breadth first search for faster finish with single element
 
 import re
 import urllib2
@@ -31,6 +31,7 @@ from urlparse import urljoin, urlsplit
 from optparse import OptionParser
 from webscraping import common
 
+DEBUG = False
 # tags that do not contain content and so can be safely skipped
 EMPTY_TAGS = 'br', 'hr'
 
@@ -40,31 +41,33 @@ class XPathException(Exception):
     pass
 
 
-def search(html, xpath, debug=False, remove=[]):
+def search(html, xpath, remove=[]):
     """Query HTML document using XPath
     
-    debug sets whether to print debugging data
     remove is a list of tags to ignore
 
     >>> search('<span>1</span><div>abc<a>LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a>LINK 3</a>jkl</div>', '/div/a')
     ['LINK 1', 'LINK 3']
     >>> search('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]/a[@class="link"]')
     ['LINK 1']
-    >>> parse('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]//a')
+    >>> search('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a class="link">LINK 3</a>jkl</div>', '/div[1]//a')
     ['LINK 1', 'LINK 2']
-    >>> parse('<div>abc<a class="link">LINK 1</a></div>', '/div/a/@class')
+    >>> search('<div>abc<a class="link">LINK 1</a></div>', '/div/a/@class')
     ['link']
+    
+    # test scraping a large amount of content
+    >>> len(search('<div><span>!</span></div>' * 10000, '//span'))
+    10000
     """
     orig_html = html
     html = clean_html(html, remove)
-    #open('test.html', 'w').write(html)
     contexts = [html] # initial context is entire webpage
     parent_attributes = []
     for tag_i, (separator, tag, index, attribute) in enumerate(xpath_iter(xpath)):
         children = []
         if tag == '..':
             # parent
-            raise Exception('.. not yet supported')
+            raise XPathException('.. not yet supported')
         elif tag == 'text()':
             # extract child text
             for context in contexts:
@@ -93,24 +96,16 @@ def search(html, xpath, debug=False, remove=[]):
         else:
             contexts = children
         if not contexts:
-            if debug:
+            if DEBUG:
                 print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s="%s"]' % attribute if attribute else '', tag_i + 1)
             break
     return contexts
 
-def parse(*args, **kwargs):
-    print 'parse is deprecated'
-    return search(*args, **kwargs)
-
 
 def get(*args, **kwargs):
-    """Return first element from parse
+    """Return first element from search
     """
     return common.first(search(*args, **kwargs))
-
-def parse_first(*args, **kwargs):
-    print 'parse_first is deprecated'
-    return get(*args, **kwargs)
 
 
 def clean_html(html, tags):
@@ -144,7 +139,7 @@ def xpath_iter(xpath):
                     key, value = match.groups()
                     attribute = key.lower(), value.lower()
                 else:
-                    raise Exception('Unknown format: ' + selector)
+                    raise XPathException('Unknown format: ' + selector)
         else:
             tag = token
         yield separator, tag, index, attribute

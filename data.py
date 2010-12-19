@@ -9,6 +9,7 @@ import re
 import csv
 import math
 import logging
+import hashlib
 from webscraping import common, xpath
 
 
@@ -112,6 +113,22 @@ def read_list(file):
     else:
         print '%s not found' % file
     return l
+
+
+class HashSet(set):
+    """For testing duplicates in large amounts of data where don't need need original value.
+    """
+    def __init__(self):
+        set.__init__(self)
+
+    def __contains__(self, value):
+        return set.__contains__(self, self.get_hash(value))
+
+    def add(self, value):
+        set.add(self, self.get_hash(value))
+
+    def get_hash(self, value):
+        return hashlib.md5(str(value)).hexdigest()
 
 
 class UnicodeWriter(object):

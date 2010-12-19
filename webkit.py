@@ -10,12 +10,13 @@ import re
 import urllib2
 import time
 import random
+import json
 from datetime import datetime
 from PyQt4.QtGui import QApplication, QDesktopServices
 from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice, QObject
 from PyQt4.QtWebKit import QWebView, QWebPage
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
-from webscraping import common, pdict, settings
+from webscraping import common, pdict, settings, xpath
  
 
 
@@ -370,6 +371,13 @@ class JQueryBrowser(QWebView):
         #time.sleep(max(0, wait_secs))
 
 
+    def exists(self, pattern):
+        """Returns whether element matching CSS pattern exists
+        """
+        self.app.processEvents()
+        return xpath.get(self.current_html(), pattern)
+
+
     def jsget(self, script, key=None, retries=1, inject=True):
         """Execute JavaScript that will cause page submission, and wait for page to load
         """
@@ -377,26 +385,26 @@ class JQueryBrowser(QWebView):
 
 
     def js(self, script):
-        """Shortcut to execute javascript on current document
+        """Shortcut to execute javascript on current document and return result
         """
-        self.page().mainFrame().evaluateJavaScript(script)
+        return str(self.page().mainFrame().evaluateJavaScript(script).toString())
 
 
     def inject_jquery(self):
         """Inject jquery library into this webpage for easier manipulation
         """
-        # XXX embed header in document, use cache
         if self.jquery_lib is None:
             url = 'http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js'
             self.jquery_lib = urllib2.urlopen(url).read()
         self.js(self.jquery_lib)
 
-
+    
     def run(self):
-        """Override this method in subclass to automate website
+        """Override this method in subclass to automate interaction with website
         """
         self.app.processEvents()
         self.get('http://code.google.com/p/webscraping/')
+        print 'Title:', self.js('$("title").html()');
         QTimer.singleShot(5000, self.app.quit)
 
 

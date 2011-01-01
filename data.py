@@ -122,19 +122,14 @@ class HashDict(defaultdict):
     def __init__(self, default_factory=str):
         defaultdict.__init__(self, default_factory)
 
-    def __contains__(self, value):
-        return defaultdict.__contains__(self, self.get_hash(value))
+    def __contains__(self, name):
+        return defaultdict.__contains__(self, self.get_hash(name))
 
-    def __getattr__(self, name):
-        return defaultdict.__getattr__(self, self.get_hash(name))
+    def __getitem__(self, name):
+        return defaultdict.__getitem__(self, self.get_hash(name))
 
-    def __setattr__(self, name, value):
-        return defaultdict.__setattr__(self, self.get_hash(name), value)
-
-    def __delattr__(self, name):
-        return defaultdict.__delattr__(self, self.get_hash(name))
-    #def add(self, value):
-    #    defaultdict.add(self, self.get_hash(value))
+    def __setitem__(self, name, value):
+        return defaultdict.__setitem__(self, self.get_hash(name), value)
 
     def get_hash(self, value):
         return hashlib.md5(str(value)).hexdigest()

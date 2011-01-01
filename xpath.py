@@ -41,7 +41,7 @@ class XPathException(Exception):
     pass
 
 
-def search(html, xpath, remove=[]):
+def search(html, xpath, remove=None):
     """Query HTML document using XPath
     
     remove is a list of tags to ignore

@@ -101,6 +101,27 @@ def last(l, default=''):
     return l[-1] if l else default
 
 
+def most_common(l, default=None):
+    """Finds the most common value in the list.
+    If equal quantities then return the first value.
+    If empty list return default value.
+
+    >>> most_common([1, 2, 3, 2, 3])
+    2
+    >>> most_common([], False)
+    False
+    >>> most_common([1, 2, 3, 4])
+    1
+    """
+    d = {}
+    count, item = 0, default
+    for e in reversed(l):
+         d[e] = d.get(e, 0) + 1
+         if d[e] >= count :
+             count, item = d[e], e
+    print item 
+
+
 def any_in(es, l):
     """Returns True if any element of es are in l
 

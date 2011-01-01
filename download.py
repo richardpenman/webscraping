@@ -329,7 +329,7 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, depth=False, **kwar
                 t.running = False
 
 
-class CrawlerCallback:
+class CrawlerCallback(object):
     """Example callback to crawl the website
     """
     def __init__(self, output_file=None, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):

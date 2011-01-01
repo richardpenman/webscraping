@@ -303,18 +303,15 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kw
                 else:
                     # download this url
                     try:
-                        if url not in downloaded:
-                            downloaded[url]
-                            html = D.get(url, **kwargs)
-                            if cb:
-                                # scrape download
-                                urls.extend(cb(D, url, html) or [])
+                        html = D.get(url, **kwargs)
+                        if cb:
+                            # scrape download
+                            urls.extend(cb(D, url, html) or [])
                     finally:
                         # have finished processing
                         DownloadThread.processing.popleft()
 
     # put urls into thread safe queue
-    downloaded = data.HashDict()
     urls = urls or []
     if url: urls.append(url)
     urls = deque(urls)

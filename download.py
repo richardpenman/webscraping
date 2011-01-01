@@ -350,7 +350,7 @@ class CrawlerCallback(object):
         self.banned_urls = re.compile(banned_urls)
         self.robots = robots
         self.crawl_existing = crawl_existing
-        self.found = defaultdict(int) # track depth of found URLs xXX change to HashDict
+        self.found = data.HashDict(int) # track depth of found URLs
         self.crawled = [] # track which URLs have been crawled (not all found URLs will be crawled)
 
 
@@ -370,7 +370,7 @@ class CrawlerCallback(object):
         """
         # XXX add robots back
         self.crawled.append(url)
-        depth = self.found[hash(url)]
+        depth = self.found[url]
         outstanding = []
         if len(self.crawled) != self.max_urls and depth != self.max_depth: 
             # extract links to continue crawling
@@ -378,8 +378,8 @@ class CrawlerCallback(object):
                 link = link[:link.index('#')] if '#' in link else link  # remove internal links to avoid duplicates
                 link = urljoin(url, link) # support relative links
                 #print allowed_urls.match(url), banned_urls.match(url), url
-                if hash(link) not in self.found:
-                    self.found[hash(link)] = depth + 1
+                if link not in self.found:
+                    self.found[link] = depth + 1
                     # check if a media file
                     if common.get_extension(link) not in common.MEDIA_EXTENSIONS:
                         # not blocked by robots.txt

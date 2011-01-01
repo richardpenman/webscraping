@@ -10,6 +10,7 @@ import csv
 import math
 import logging
 import hashlib
+from collections import defaultdict
 from webscraping import common, xpath
 
 
@@ -115,17 +116,25 @@ def read_list(file):
     return l
 
 
-class HashSet(set):
-    """For testing duplicates in large amounts of data where don't need need original value.
+class HashDict(defaultdict):
+    """For storing keys with large amounts of data where don't need need original value
     """
-    def __init__(self):
-        set.__init__(self)
+    def __init__(self, default_factory=str):
+        defaultdict.__init__(self, default_factory)
 
     def __contains__(self, value):
-        return set.__contains__(self, self.get_hash(value))
+        return defaultdict.__contains__(self, self.get_hash(value))
 
-    def add(self, value):
-        set.add(self, self.get_hash(value))
+    def __getattr__(self, name):
+        return defaultdict.__getattr__(self, self.get_hash(name))
+
+    def __setattr__(self, name, value):
+        return defaultdict.__setattr__(self, self.get_hash(name), value)
+
+    def __delattr__(self, name):
+        return defaultdict.__delattr__(self, self.get_hash(name))
+    #def add(self, value):
+    #    defaultdict.add(self, self.get_hash(value))
 
     def get_hash(self, value):
         return hashlib.md5(str(value)).hexdigest()

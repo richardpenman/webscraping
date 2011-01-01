@@ -57,7 +57,7 @@ class ExpireCounter:
 class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
-    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=[], opener=None, 
+    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=None, opener=None, 
             headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1,
             force_html=False, force_ascii=False, max_size=None):
         """
@@ -85,7 +85,8 @@ class Download(object):
         self.cache = pdict.PersistentDict(cache_file or settings.cache_file)
         self.delay = delay
         self.cap = cap
-        self.proxies = proxies or [proxy]
+        self.proxies = proxies or []
+        if proxy: self.proxies.append(proxy)
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
@@ -107,7 +108,7 @@ class Download(object):
         """
         delay = kwargs.get('delay', self.delay)
         cap = kwargs.get('cap', self.cap)
-        proxy = random.choice(kwargs.get('proxies', self.proxies) or kwargs.get('proxy'))
+        proxy = random.choice(kwargs.get('proxies', self.proxies) or [kwargs.get('proxy')])
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)
@@ -271,7 +272,7 @@ class Download(object):
 
 
 
-def threaded_get(url=None, urls=[], num_threads=10, cb=None, depth=False, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kwargs):
     """Download these urls in parallel
 
     url[s] are the webpages to download
@@ -311,6 +312,7 @@ def threaded_get(url=None, urls=[], num_threads=10, cb=None, depth=False, **kwar
                         DownloadThread.processing.popleft()
 
     # put urls into thread safe queue
+    urls = urls or []
     if url: urls.append(url)
     urls = deque(urls)
     threads = []
@@ -351,7 +353,7 @@ class CrawlerCallback(object):
         self.robots = robots
         self.crawl_existing = crawl_existing
         self.found = data.HashDict(int) # track depth of found URLs
-        self.crawled = [] # track which URLs have been crawled (not all found URLs will be crawled)
+        self.crawled = data.HashDict() # track which URLs have been crawled (not all found URLs will be crawled)
 
 
     def __call__(self, D, url, html):
@@ -369,7 +371,7 @@ class CrawlerCallback(object):
         """Crawl website html and return list of URLs crawled
         """
         # XXX add robots back
-        self.crawled.append(url)
+        self.crawled[url]
         depth = self.found[url]
         outstanding = []
         if len(self.crawled) != self.max_urls and depth != self.max_depth: 

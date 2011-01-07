@@ -288,11 +288,10 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kw
 
         def __init__(self):
             Thread.__init__(self)
-            self.running = True
 
         def run(self):
             D = Download(**kwargs)
-            while self.running and (urls or DownloadThread.processing):
+            while urls or DownloadThread.processing:
                 DownloadThread.processing.append(1) # keep track that are processing url
                 try:
                     url = urls.pop() if depth else urls.popleft()
@@ -315,20 +314,12 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kw
     urls = urls or []
     if url: urls.append(url)
     urls = deque(urls)
-    threads = []
-    for i in range(num_threads):
-        threads.append(DownloadThread())
+    threads = [DownloadThread() for i in range(num_threads)]
     for thread in threads:
         thread.start()
-    
-    while len(threads) > 0:
-        try:
-            # join all active threads using a timeout so it doesn't block
-            threads = [t.join(1) for t in threads if t and t.isAlive()]
-        except KeyboardInterrupt:
-            print "Ctrl-c received! Sending kill to threads..."
-            for t in threads:
-                t.running = False
+    # wait for threads to finish
+    for thread in threads:
+        thread.join()
 
 
 class CrawlerCallback(object):

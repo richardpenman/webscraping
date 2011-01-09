@@ -101,8 +101,8 @@ def last(l, default=''):
     return l[-1] if l else default
 
 
-def most_common(l, default=None):
-    """Finds the most common value in the list.
+def most_frequent(l, default=None):
+    """Finds the most frequent value in the list.
     If equal quantities then return the first value.
     If empty list return default value.
 

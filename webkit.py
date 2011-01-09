@@ -13,7 +13,7 @@ import random
 import json
 from datetime import datetime
 from PyQt4.QtGui import QApplication, QDesktopServices
-from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice, QObject
+from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
 from PyQt4.QtWebKit import QWebView, QWebPage
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
 from webscraping import common, pdict, settings, xpath
@@ -100,7 +100,7 @@ class NetworkAccessManager(QNetworkAccessManager):
         reply.error.connect(self.catch_error)
         #reply.data = ''
         #if 'Search' in str(request.url().toString()):
-        reply = NetworkReply(reply)
+        reply = NetworkReply(self, reply)
         return reply
 
 
@@ -148,13 +148,15 @@ class NetworkAccessManager(QNetworkAccessManager):
             print 'Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString())
 
 
+
 class NetworkReply(QNetworkReply):
-    def __init__(self, reply):
-        QNetworkReply.__init__(self)
+    def __init__(self, parent, reply):
+        QNetworkReply.__init__(self, parent)
         self.reply = reply # reply to proxy
         self.data = '' # contains downloaded data
         self.buffer = '' # contains buffer of data to read
         self.setOpenMode(QNetworkReply.ReadOnly)
+        #print dir(reply)
         
         # connect signal from proxy reply
         reply.metaDataChanged.connect(self.applyMetaData)
@@ -163,16 +165,18 @@ class NetworkReply(QNetworkReply):
         reply.finished.connect(self.finished)
         reply.uploadProgress.connect(self.uploadProgress)
         reply.downloadProgress.connect(self.downloadProgress)
-
+   
     
     def __getattribute__(self, attr):
         """Send undefined methods straight through to proxied reply
         """
         # send these attributes through to proxy reply 
         if attr in ('operation', 'request', 'url', 'abort', 'close', 'isSequential'):
-            return self.reply.__getattribute__(attr)
+            value = self.reply.__getattribute__(attr)
         else:
-            return QNetworkReply.__getattribute__(self, attr)
+            value = QNetworkReply.__getattribute__(self, attr)
+        #print attr, value
+        return value
     
     def abort(self):
         pass # qt requires that this be defined
@@ -411,10 +415,11 @@ class JQueryBrowser(QWebView):
     def finished(self, reply):
         """Override this method in subclasses to process downloaded urls
         """
-        pass #print reply.url().toString(), ':', len(reply.data)
+        pass 
+        #print reply.url().toString(), ':', len(reply.data)
         
 
 
 if __name__ == '__main__':
     DEBUG = True
-    JQueryBrowser(gui=True, proxy='127.0.0.1:8118')
+    JQueryBrowser(gui=True)

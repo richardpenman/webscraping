@@ -95,11 +95,14 @@ class NetworkAccessManager(QNetworkAccessManager):
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             elif DEBUG:
                 print request.url().toString()
+        
+        #print request.url().toString(), operation
         #request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
-        #reply.data = ''
+        reply.data = ''
         #if 'Search' in str(request.url().toString()):
+        #if 'captchaData' in str(request.url().toString()):
         reply = NetworkReply(self, reply)
         return reply
 
@@ -148,20 +151,18 @@ class NetworkAccessManager(QNetworkAccessManager):
             print 'Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString())
 
 
-
 class NetworkReply(QNetworkReply):
     def __init__(self, parent, reply):
         QNetworkReply.__init__(self, parent)
         self.reply = reply # reply to proxy
         self.data = '' # contains downloaded data
         self.buffer = '' # contains buffer of data to read
-        self.setOpenMode(QNetworkReply.ReadOnly)
+        self.setOpenMode(QNetworkReply.ReadOnly | QNetworkReply.Unbuffered)
         #print dir(reply)
         
         # connect signal from proxy reply
         reply.metaDataChanged.connect(self.applyMetaData)
         reply.readyRead.connect(self.readInternal)
-        #reply.error.connect(self.errorInternal)
         reply.finished.connect(self.finished)
         reply.uploadProgress.connect(self.uploadProgress)
         reply.downloadProgress.connect(self.downloadProgress)
@@ -171,7 +172,7 @@ class NetworkReply(QNetworkReply):
         """Send undefined methods straight through to proxied reply
         """
         # send these attributes through to proxy reply 
-        if attr in ('operation', 'request', 'url', 'abort', 'close', 'isSequential'):
+        if attr in ('operation', 'request', 'url', 'abort', 'close'):#, 'isSequential'):
             value = self.reply.__getattribute__(attr)
         else:
             value = QNetworkReply.__getattribute__(self, attr)
@@ -180,6 +181,9 @@ class NetworkReply(QNetworkReply):
     
     def abort(self):
         pass # qt requires that this be defined
+    
+    def isSequential(self):
+        return True
 
     def applyMetaData(self):
         for header in self.reply.rawHeaderList():
@@ -201,10 +205,6 @@ class NetworkReply(QNetworkReply):
         # attribute is undefined
         #self.setAttribute(QNetworkRequest.DoNotBufferUploadDataAttribute, self.reply.attribute(QNetworkRequest.DoNotBufferUploadDataAttribute))
         self.metaDataChanged.emit()
-
-    #def errorInternal(self, e):
-    #    self.error.emit(e)
-    #    self.setError(e, str(e))
 
     def bytesAvailable(self):
         """How many bytes in the buffer are available to be read
@@ -266,7 +266,7 @@ class JQueryBrowser(QWebView):
     """Render webpages using webkit
     """
 
-    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=['css', 'js'], allowed_regex='.*?', timeout=20, delay=5, cache_file=None):
+    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5, cache_file=None):
         """
         base_url is the domain that will be crawled
         gui is whether to show webkit window or run headless
@@ -280,6 +280,7 @@ class JQueryBrowser(QWebView):
         self.app = QApplication(sys.argv) # must instantiate first
         QWebView.__init__(self)
         webpage = WebPage(user_agent or settings.user_agent)
+        allowed_media = allowed_media or ['css', 'js']
         manager = NetworkAccessManager(proxy, allowed_media, allowed_regex)
         manager.finished.connect(self.finished)
         webpage.setNetworkAccessManager(manager)
@@ -376,7 +377,7 @@ class JQueryBrowser(QWebView):
 
 
     def exists(self, pattern):
-        """Returns whether element matching CSS pattern exists
+        """Returns whether element matching xpath pattern exists
         """
         self.app.processEvents()
         return xpath.get(self.current_html(), pattern)

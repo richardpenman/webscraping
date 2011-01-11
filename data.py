@@ -116,20 +116,26 @@ def read_list(file):
     return l
 
 
-class HashDict(defaultdict):
+class HashDict:
     """For storing keys with large amounts of data where don't need need original value
     """
     def __init__(self, default_factory=str):
-        defaultdict.__init__(self, default_factory)
+        self.d = defaultdict(default_factory)
 
     def __contains__(self, name):
-        return defaultdict.__contains__(self, self.get_hash(name))
+        return self.d.__contains__(self.get_hash(name))
 
     def __getitem__(self, name):
-        return defaultdict.__getitem__(self, self.get_hash(name))
+        return self.d.__getitem__(self.get_hash(name))
 
     def __setitem__(self, name, value):
-        return defaultdict.__setitem__(self, self.get_hash(name), value)
+        return self.d.__setitem__(self.get_hash(name), value)
+
+    def add(self, name):
+        self[name]
+
+    def get(self, name, default=None):
+        return self.d.get(self.get_hash(name), default)
 
     def get_hash(self, value):
         return hashlib.md5(str(value)).hexdigest()

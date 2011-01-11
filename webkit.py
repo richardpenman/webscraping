@@ -8,9 +8,9 @@ import sys
 import os
 import re
 import urllib2
-import time
 import random
 import json
+from time import time, sleep
 from datetime import datetime
 from PyQt4.QtGui import QApplication, QDesktopServices
 from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
@@ -289,7 +289,7 @@ class JQueryBrowser(QWebView):
         self.delay = delay
         #self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
         self.base_url = base_url
-        self.jquery_lib = None
+        self.jquery_lib = self.simulate_lib = None
         QTimer.singleShot(0, self.run) # start crawling when all events processed
         if gui: self.show() 
         self.app.exec_() # start GUI thread
@@ -321,7 +321,7 @@ class JQueryBrowser(QWebView):
         retries is how many times to try downloading this URL or executing this script
         inject is whether to inject JQuery into the document
         """
-        t1 = datetime.now()
+        t1 = time()
         self.base_url = self.base_url or url # set base URL if not set
         #html = self.cache.get(key, {}).get('value')
         #if html:
@@ -347,7 +347,7 @@ class JQueryBrowser(QWebView):
                 html = self.current_html()
                 #if key:
                 #    self.cache[key] = html
-                self.wait(t1)
+                self.wait(self.delay - (time() - t1))
             else:
                 # didn't download in time
                 if retries > 0:
@@ -361,26 +361,18 @@ class JQueryBrowser(QWebView):
         return html
 
 
-    def wait(self, t1):
+    def wait(self, secs=1):
         """Wait for delay time
         """
-        keep_waiting = True
-        while keep_waiting:
+        deadline = time() + secs
+        while time() < deadline:
+            sleep(0.1)
             self.app.processEvents()
-            dt = datetime.now() - t1
-            wait_secs = self.delay - dt.days * 24 * 60 * 60 - dt.seconds
             #print 'wait', wait_secs
-            keep_waiting = wait_secs > 0
         # randomize the delay so less suspicious
         #wait_secs += 0.5 * self.delay * (random.random() - 0.5)
         #time.sleep(max(0, wait_secs))
 
-
-    def exists(self, pattern):
-        """Returns whether element matching xpath pattern exists
-        """
-        self.app.processEvents()
-        return xpath.get(self.current_html(), pattern)
 
 
     def jsget(self, script, key=None, retries=1, inject=True):
@@ -392,6 +384,7 @@ class JQueryBrowser(QWebView):
     def js(self, script):
         """Shortcut to execute javascript on current document and return result
         """
+        self.app.processEvents()
         return str(self.page().mainFrame().evaluateJavaScript(script).toString())
 
 
@@ -402,7 +395,44 @@ class JQueryBrowser(QWebView):
             url = 'http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js'
             self.jquery_lib = urllib2.urlopen(url).read()
         self.js(self.jquery_lib)
+        if self.simulate_lib is None:
+            url = 'https://github.com/eduardolundgren/jquery-simulate/raw/master/jquery.simulate.js'
+            self.simulate_lib = urllib2.urlopen(url).read()
+        self.js(self.simulate_lib)
 
+    def click(self, pattern):
+        """Click all elements that match the pattern
+        """
+        for e in self.page().mainFrame().findAllElements(pattern):
+            e.evaluateJavaScript("var evObj = document.createEvent('MouseEvents'); evObj.initEvent('click', true, true); this.dispatchEvent(evObj);")
+
+    def attr(self, pattern, name, value=None):
+        """Set attribute if value is defined, else get
+        """
+        if value is None:
+            # want to get attribute
+            return str(self.page().mainFrame().findFirstElement(pattern).attribute(name))
+        else:
+            for e in self.page().mainFrame().findAllElements(pattern):
+                e.setAttribute(name, value)
+           
+    def fill(self, pattern, value):
+        """Set text of these elements to value
+        """
+        for e in self.page().mainFrame().findAllElements(pattern):
+            tag = str(e.tagName()).lower()
+            print tag
+            if tag == 'input':
+                e.setAttribute('value', value)
+            else:
+                e.setPlainText(value)
+        
+    def find(self, pattern):
+        """Returns whether element matching xpath pattern exists
+        """
+        #self.app.processEvents()
+        #return xpath.get(self.current_html(), pattern)
+        return self.page().mainFrame().findAllElements(pattern)
 
     def get_data(self, url):
         """Get data for this downloaded resource, if exists
@@ -424,7 +454,6 @@ class JQueryBrowser(QWebView):
         print 'Title:', self.js('$("title").html()')
         print self.get_data('http://www.google-analytics.com/ga.js')
         QTimer.singleShot(5000, self.app.quit)
-
 
     def finished(self, reply):
         """Override this method in subclasses to process downloaded urls

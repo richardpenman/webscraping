@@ -289,7 +289,7 @@ class JQueryBrowser(QWebView):
         self.delay = delay
         #self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
         self.base_url = base_url
-        self.jquery_lib = self.simulate_lib = None
+        self.jquery_lib = None
         QTimer.singleShot(0, self.run) # start crawling when all events processed
         if gui: self.show() 
         self.app.exec_() # start GUI thread
@@ -356,8 +356,6 @@ class JQueryBrowser(QWebView):
                 else:
                     self.debug('Timed out')
                     html = ''
-        if html and inject:
-            self.inject_jquery()
         return html
 
 
@@ -374,19 +372,16 @@ class JQueryBrowser(QWebView):
         #time.sleep(max(0, wait_secs))
 
 
-
     def jsget(self, script, key=None, retries=1, inject=True):
         """Execute JavaScript that will cause page submission, and wait for page to load
         """
         return self.get(script=script, key=key, retries=retries, inject=inject)
-
 
     def js(self, script):
         """Shortcut to execute javascript on current document and return result
         """
         self.app.processEvents()
         return str(self.page().mainFrame().evaluateJavaScript(script).toString())
-
 
     def inject_jquery(self):
         """Inject jquery library into this webpage for easier manipulation
@@ -395,10 +390,7 @@ class JQueryBrowser(QWebView):
             url = 'http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js'
             self.jquery_lib = urllib2.urlopen(url).read()
         self.js(self.jquery_lib)
-        if self.simulate_lib is None:
-            url = 'https://github.com/eduardolundgren/jquery-simulate/raw/master/jquery.simulate.js'
-            self.simulate_lib = urllib2.urlopen(url).read()
-        self.js(self.simulate_lib)
+
 
     def click(self, pattern):
         """Click all elements that match the pattern
@@ -423,18 +415,18 @@ class JQueryBrowser(QWebView):
             tag = str(e.tagName()).lower()
             print tag
             if tag == 'input':
-                e.setAttribute('value', value)
+                #e.setAttribute('value', value)
+                e.evaluateJavaScript('this.value = "%s"' % value)
             else:
                 e.setPlainText(value)
         
     def find(self, pattern):
         """Returns whether element matching xpath pattern exists
         """
-        #self.app.processEvents()
-        #return xpath.get(self.current_html(), pattern)
         return self.page().mainFrame().findAllElements(pattern)
 
-    def get_data(self, url):
+
+    def data(self, url):
         """Get data for this downloaded resource, if exists
         """
         record = self.page().networkAccessManager().cache().data(QUrl(url))

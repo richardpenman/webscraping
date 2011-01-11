@@ -16,7 +16,7 @@ from PyQt4.QtGui import QApplication, QDesktopServices
 from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
 from PyQt4.QtWebKit import QWebView, QWebPage
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
-from webscraping import common, pdict, settings, xpath
+from webscraping import common, settings, xpath
  
 
 
@@ -29,7 +29,6 @@ right click find xpath:
 textbox for jquery input
     http://www.rkblog.rk.edu.pl/w/p/webkit-pyqt-rendering-web-pages/
 threaded multiple URLs
-interface with cache to expand and not use pdict
 
 problems with networkreply:
     js/css errors
@@ -97,13 +96,13 @@ class NetworkAccessManager(QNetworkAccessManager):
                 print request.url().toString()
         
         #print request.url().toString(), operation
-        #request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
+        request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
-        reply.data = ''
+        #reply.data = ''
         #if 'Search' in str(request.url().toString()):
         #if 'captchaData' in str(request.url().toString()):
-        reply = NetworkReply(self, reply)
+        #reply = NetworkReply(self, reply)
         return reply
 
 
@@ -266,7 +265,7 @@ class JQueryBrowser(QWebView):
     """Render webpages using webkit
     """
 
-    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5, cache_file=None):
+    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5):#, cache_file=None):
         """
         base_url is the domain that will be crawled
         gui is whether to show webkit window or run headless
@@ -288,7 +287,7 @@ class JQueryBrowser(QWebView):
         self.setHtml('<html><head></head><body>No content loaded</body></html>', QUrl('http://localhost'))
         self.timeout = timeout
         self.delay = delay
-        self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
+        #self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
         self.base_url = base_url
         self.jquery_lib = None
         QTimer.singleShot(0, self.run) # start crawling when all events processed
@@ -324,11 +323,12 @@ class JQueryBrowser(QWebView):
         """
         t1 = datetime.now()
         self.base_url = self.base_url or url # set base URL if not set
-        html = self.cache.get(key, {}).get('value')
-        if html:
-            self.debug('Load cache ' + key)
-            self.setHtml(html, QUrl(self.base_url))
-        else:
+        #html = self.cache.get(key, {}).get('value')
+        #if html:
+        #    self.debug('Load cache ' + key)
+        #    self.setHtml(html, QUrl(self.base_url))
+        #else:
+        if 1:
             loop = QEventLoop()
             timer = QTimer()
             timer.setSingleShot(True)
@@ -345,8 +345,8 @@ class JQueryBrowser(QWebView):
                 # downloaded successfully
                 timer.stop()
                 html = self.current_html()
-                if key:
-                    self.cache[key] = html
+                #if key:
+                #    self.cache[key] = html
                 self.wait(t1)
             else:
                 # didn't download in time
@@ -403,13 +403,26 @@ class JQueryBrowser(QWebView):
             self.jquery_lib = urllib2.urlopen(url).read()
         self.js(self.jquery_lib)
 
+
+    def get_data(self, url):
+        """Get data for this downloaded resource, if exists
+        """
+        record = self.page().networkAccessManager().cache().data(QUrl(url))
+        if record:
+            data = record.readAll()
+            record.reset()
+        else:
+            data = None
+        return data
+    
     
     def run(self):
         """Override this method in subclass to automate interaction with website
         """
         self.app.processEvents()
         self.get('http://code.google.com/p/webscraping/')
-        print 'Title:', self.js('$("title").html()');
+        print 'Title:', self.js('$("title").html()')
+        print self.get_data('http://www.google-analytics.com/ga.js')
         QTimer.singleShot(5000, self.app.quit)
 
 

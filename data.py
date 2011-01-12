@@ -122,6 +122,9 @@ class HashDict:
     def __init__(self, default_factory=str):
         self.d = defaultdict(default_factory)
 
+    def __len__(self):
+        return self.d.__len__()
+
     def __contains__(self, name):
         return self.d.__contains__(self.get_hash(name))
 

@@ -58,7 +58,7 @@ class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
     def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=None, opener=None, 
-            headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1,
+            headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None):
         """
         cache_file sets where to store cached data
@@ -95,6 +95,7 @@ class Download(object):
         self.retry = retry
         self.num_retries = num_retries
         self.num_redirects = num_redirects
+        self.allow_redirect = allow_redirect
         self.force_html = force_html
         self.force_ascii = force_ascii
         self.max_size = max_size
@@ -117,6 +118,7 @@ class Download(object):
         retry = kwargs.get('retry', self.retry)
         num_retries = kwargs.get('num_retries', self.num_retries)
         num_redirects = kwargs.get('num_redirects', self.num_redirects)
+        allow_redirect = kwargs.get('allow_redirect', self.allow_redirect)
         force_html = kwargs.get('force_html', self.force_html)
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
@@ -141,17 +143,18 @@ class Download(object):
 
         self.throttle(url, delay=delay, cap=cap, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
-        redirect_url = self.check_redirect(url=url, html=html)
-        if redirect_url:
-            if num_redirects > 0:
-                print 'redirecting to', redirect_url
-                kwargs['num_redirects'] = num_redirects - 1
-                html = self.get(redirect_url, **kwargs)
-                # make relative links absolute so will still work after redirect
-                relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
-                html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
-            else:
-                print '%s wanted to redirect to %s' % (url, redirect_url)
+        if allow_redirect:
+            redirect_url = self.check_redirect(url=url, html=html)
+            if redirect_url:
+                if num_redirects > 0:
+                    print 'redirecting to', redirect_url
+                    kwargs['num_redirects'] = num_redirects - 1
+                    html = self.get(redirect_url, **kwargs)
+                    # make relative links absolute so will still work after redirect
+                    relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
+                    html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
+                else:
+                    print '%s wanted to redirect to %s' % (url, redirect_url)
         html = self.clean_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
         self.cache[key] = html
         if url != self.final_url:

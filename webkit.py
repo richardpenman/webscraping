@@ -413,7 +413,6 @@ class JQueryBrowser(QWebView):
         """
         for e in self.page().mainFrame().findAllElements(pattern):
             tag = str(e.tagName()).lower()
-            print tag
             if tag == 'input':
                 #e.setAttribute('value', value)
                 e.evaluateJavaScript('this.value = "%s"' % value)

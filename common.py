@@ -119,7 +119,7 @@ def most_frequent(l, default=None):
          d[e] = d.get(e, 0) + 1
          if d[e] >= count :
              count, item = d[e], e
-    print item 
+    return item 
 
 
 def any_in(es, l):

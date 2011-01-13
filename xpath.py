@@ -97,7 +97,7 @@ def search(html, xpath, remove=None):
             contexts = children
         if not contexts:
             if DEBUG:
-                print 'No matches for <%s%s%s> (tag %d)' % (tag, '[%d]' % index if index else '', '[@%s="%s"]' % attribute if attribute else '', tag_i + 1)
+                print 'No matches for <%s%s%s> (tag %d)' % (tag, index and '[%d]' % index or '', attribute and '[@%s="%s"]' % attribute or '', tag_i + 1)
             break
     return contexts
 
@@ -185,14 +185,18 @@ def match_attributes(attribute, attributes):
         return True
 
 
-def get_content(html):
+def get_content(html, default=''):
     """Extract the child HTML of a the passed HTML tag
 
     >>> get_content('<div id="ID" name="NAME">content <span>SPAN</span></div>')
     'content <span>SPAN</span>'
     """
     match = re.compile('<.*?>(.*)</.*?>$', re.DOTALL).match(html)
-    return match.groups()[0] if match else ''
+    if match:
+        content = match.groups()[0]
+    else:
+        content = default
+    return content
 
 
 
@@ -207,7 +211,6 @@ def find_children(html, tag):
     while found:
         html = jump_next_tag(html)
         if html:
-            #print 'html:', html[:100] if html else None
             tag_html, html = split_tag(html)
             if tag_html:
                 #print 'tag:', get_tag(tag_html)

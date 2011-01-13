@@ -83,7 +83,10 @@ def flatten(ls):
 
 
 def nth(l, i, default):
-    return l[i] if len(l) > i else default
+    if len(l) > i:
+        return l[i] 
+    else:
+        return default
 
 def first(l, default=''):
     """Return first element from list or default value if empty
@@ -98,7 +101,10 @@ def first(l, default=''):
 def last(l, default=''):
     """Return last element from list or default value if empty
     """
-    return l[-1] if l else default
+    if l:
+        return l[-1] 
+    else:
+        return default
 
 
 def most_frequent(l, default=None):

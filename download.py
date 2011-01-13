@@ -11,7 +11,10 @@ import time
 import random
 import urllib
 import urllib2
-import json
+try:
+    import json
+except ImportError:
+    import simplejson as json
 from urlparse import urljoin
 from StringIO import StringIO
 from datetime import datetime, timedelta
@@ -125,27 +128,32 @@ class Download(object):
         self.final_url = None
 
         # check cache for whether this content is already downloaded
-        key = url + ' ' + str(data) if data else url
+        key = url
+        if data:
+            key += ' ' + str(data)
         if dl != Download.REMOTE:
             try:
                 html = self.cache[key]
+            except KeyError:
+                pass # have not downloaded yet
+            else:
                 if retry and not html:
+                    # try downloading again
                     if DEBUG: print 'Redownloading'
                 else:
                     if dl == Download.NEW:
-                        return ''
+                        return '' # only want newly downloaded content
                     else:
-                        return html
-            except KeyError:
-                pass # have not downloaded yet
+                        return html # return previously downloaded content
         if dl == Download.LOCAL:
-            return '' # only want cached content
+            return '' # only want previously cached content
 
         self.throttle(url, delay=delay, cap=cap, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
         html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
         if allow_redirect:
             redirect_url = self.check_redirect(url=url, html=html)
             if redirect_url:
+                # found a redirection
                 if num_redirects > 0:
                     print 'redirecting to', redirect_url
                     kwargs['num_redirects'] = num_redirects - 1
@@ -181,7 +189,8 @@ class Download(object):
         """Check for meta redirects and return redirect URL if found
         """
         match = Download.redirect_re.search(html)
-        return urljoin(url, match.groups()[0].strip()) if match else None
+        if match:
+            return urljoin(url, match.groups()[0].strip()) 
 
 
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None, num_retries=1):
@@ -192,7 +201,8 @@ class Download(object):
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
         headers = headers or {'User-agent': user_agent or Download.DEFAULT_USER_AGENT, 'Accept-encoding': 'gzip', 'Referrer': url}
-        data = urllib.urlencode(data) if isinstance(data, dict) else data
+        if isinstance(data, dict):
+            data = urllib.urlencode(data) 
         try:
             response = opener.open(urllib2.Request(url, data, headers))
             content = response.read()
@@ -297,7 +307,10 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kw
             while urls or DownloadThread.processing:
                 DownloadThread.processing.append(1) # keep track that are processing url
                 try:
-                    url = urls.pop() if depth else urls.popleft()
+                    if depth:
+                        url = urls.popleft()
+                    else:
+                        url = urls.pop()
                 except IndexError:
                     # currently no urls to process
                     DownloadThread.processing.popleft()
@@ -339,7 +352,10 @@ class CrawlerCallback(object):
         force_html is set to True by default so only crawl HTML content
         crawl_existing sets whether to crawl content already downloaded previously
         """
-        self.writer = data.UnicodeWriter(output_file) if output_file else None
+        if output_file:
+            self.writer = data.UnicodeWriter(output_file) 
+        else:
+            self.writer = None
         self.max_urls = max_urls
         self.max_depth = max_depth
         self.allowed_urls = re.compile(allowed_urls)
@@ -371,7 +387,9 @@ class CrawlerCallback(object):
         if len(self.crawled) != self.max_urls and depth != self.max_depth: 
             # extract links to continue crawling
             for link in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
-                link = link[:link.index('#')] if '#' in link else link  # remove internal links to avoid duplicates
+                if '#' in link:
+                    # remove internal links to avoid duplicates
+                    link = link[:link.index('#')] 
                 link = urljoin(url, link) # support relative links
                 #print allowed_urls.match(url), banned_urls.match(url), url
                 if link not in self.found:

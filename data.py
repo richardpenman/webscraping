@@ -9,7 +9,10 @@ import re
 import csv
 import math
 import logging
-import hashlib
+try:
+    import hashlib
+except ImportError:
+    import md5 as hashlib
 from collections import defaultdict
 from webscraping import common, xpath
 
@@ -21,7 +24,9 @@ def get_excerpt(html, try_meta=False, max_chars=255):
     max_chars is the maximum number of characters for the excerpt
     """
     # try extracting meta description tag
-    excerpt = xpath.get(html, '/html/head/meta[@name="description"]') if try_meta else ''
+    excerpt = ''
+    if try_meta:
+        excerpt = xpath.get(html, '/html/head/meta[@name="description"]')
     if not excerpt:
         # remove these tags and then find biggest text block
         bad_tags = 'hr', 'br', 'script', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'

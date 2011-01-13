@@ -9,10 +9,6 @@ import re
 import csv
 import math
 import logging
-try:
-    import hashlib
-except ImportError:
-    import md5 as hashlib
 from collections import defaultdict
 from webscraping import common, xpath
 
@@ -120,33 +116,6 @@ def read_list(file):
         print '%s not found' % file
     return l
 
-
-class HashDict:
-    """For storing keys with large amounts of data where don't need need original value
-    """
-    def __init__(self, default_factory=str):
-        self.d = defaultdict(default_factory)
-
-    def __len__(self):
-        return self.d.__len__()
-
-    def __contains__(self, name):
-        return self.d.__contains__(self.get_hash(name))
-
-    def __getitem__(self, name):
-        return self.d.__getitem__(self.get_hash(name))
-
-    def __setitem__(self, name, value):
-        return self.d.__setitem__(self.get_hash(name), value)
-
-    def add(self, name):
-        self[name]
-
-    def get(self, name, default=None):
-        return self.d.get(self.get_hash(name), default)
-
-    def get_hash(self, value):
-        return hashlib.md5(str(value)).hexdigest()
 
 
 class UnicodeWriter(object):

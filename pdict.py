@@ -93,7 +93,8 @@ class PersistentDict(object):
     def deserialize(self, value):
         """convert compressed pickled string from database back into an object
         """
-        return pickle.loads(zlib.decompress(value)) if value else value
+        if value:
+            return pickle.loads(zlib.decompress(value))
 
     def keys(self):
         """returns a generator of each key in the database

@@ -162,6 +162,13 @@ class PersistentDict(object):
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
 
+
+    def clear(self):
+        """Clear all cached data
+        """
+        self._conn.execute("DELETE FROM config;")
+
+
     def merge(self, db, override=False):
         """Merge this databases content
         override determines whether to override existing keys

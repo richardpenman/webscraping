@@ -21,40 +21,11 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import socket
 from threading import Thread
-from webscraping import common, data, pdict, settings
+from webscraping import adt, common, data, pdict, settings
 
 DEBUG = True
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
-
-
-class ExpireCounter:
-    """Tracks how many events were added in the preceding time period
-    """
-    def __init__(self, timeout=timedelta(seconds=1)):
-        self.timeout = timeout
-        self.events = deque()
-
-    def add(self):
-        """Add event time
-        """
-        self.events.append(datetime.now())
-
-    def __len__(self):
-        """Return number of active events
-        """
-        self.expire()
-        return len(self.events)
-
-    def expire(self):
-        """Remove any expired events
-        """
-        now = datetime.now()
-        try:
-            while self.events[0] + self.timeout < now:
-                self.events.popleft()
-        except IndexError:
-            pass
 
 
 class Download(object):
@@ -221,7 +192,7 @@ class Download(object):
         return content
 
 
-    counter = ExpireCounter() # track how often requests are bring made
+    counter = adt.ExpireCounter() # track how often requests are bring made
     domains = {}
     def throttle(self, url, delay, cap, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
@@ -362,8 +333,8 @@ class CrawlerCallback(object):
         self.banned_urls = re.compile(banned_urls)
         self.robots = robots
         self.crawl_existing = crawl_existing
-        self.found = data.HashDict(int) # track depth of found URLs
-        self.crawled = data.HashDict() # track which URLs have been crawled (not all found URLs will be crawled)
+        self.found = adt.HashDict(int) # track depth of found URLs
+        self.crawled = adt.HashDict() # track which URLs have been crawled (not all found URLs will be crawled)
 
 
     def __call__(self, D, url, html):

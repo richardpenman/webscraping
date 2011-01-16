@@ -309,7 +309,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kw
         thread.join()
 
 
-class CrawlerCallback(object):
+class CrawlerCallback:
     """Example callback to crawl the website
     """
     def __init__(self, output_file=None, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
@@ -348,16 +348,18 @@ class CrawlerCallback(object):
         """
         pass
 
+
+    link_re = re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE)
     def crawl(self, D, url, html): 
         """Crawl website html and return list of URLs crawled
         """
         # XXX add robots back
-        self.crawled[url]
+        self.crawled.add(url)
         depth = self.found[url]
         outstanding = []
         if len(self.crawled) != self.max_urls and depth != self.max_depth: 
             # extract links to continue crawling
-            for link in re.findall(re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE), html):
+            for link in CrawlerCallback.link_re.findall(html):
                 if '#' in link:
                     # remove internal links to avoid duplicates
                     link = link[:link.index('#')] 

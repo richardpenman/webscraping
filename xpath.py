@@ -98,7 +98,8 @@ def search(html, xpath, remove=None):
             contexts = children
         if not contexts:
             if DEBUG:
-                print 'No matches for <%s%s%s> (tag %d)' % (tag, index and '[%d]' % index or '', attribute and '[@%s="%s"]' % attribute or '', tag_i + 1)
+                attributes_s = attributes and ''.join('[@%s="%s"]' % a for a in attributes) or ''
+                print 'No matches for <%s%s%s> (tag %d)' % (tag, index and '[%d]' % index or '', attributes_s, tag_i + 1)
             break
     return contexts
 
@@ -252,13 +253,15 @@ def jump_next_tag(html):
     '<div>abc</div>'
     >>> jump_next_tag('</span> <div>abc</div>')
     '<div>abc</div>'
+    >>> jump_next_tag('<br> <div>abc</div>')
+    '<div>abc</div>'
     """
     while 1:
         match = tag_regex.search(html)
         if match:
             # XXX check match
             if match.groups()[0].lower() in EMPTY_TAGS:
-                html = html[1:]
+                html = html[match.end():]
             else:
                 return html[match.start():]
         else:

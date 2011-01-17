@@ -149,18 +149,14 @@ def xpath_iter(xpath):
 
 
 
+attributes_regex = re.compile('([\w-]+)=(".*?"|\'.*?\'|\w+)', re.DOTALL)
 def get_attributes(html):
     """Extract the attributes of the passed HTML tag
 
     >>> get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span>SPAN</span></div>')
     {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
-    attributes = re.compile('<(.*?)>', re.DOTALL).match(html).groups()[0]
-    return dict((k.lower().strip(), v) for (k, v) in
-        re.compile('([\w-]+)="(.*?)"', re.DOTALL).findall(attributes) + 
-        re.compile("([\w-]+)='(.*?)'", re.DOTALL).findall(attributes) + 
-        re.compile("([\w-]+)=(\w+)", re.DOTALL).findall(attributes) # get (illegal) attributes without quotes
-    )
+    return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in attributes_regex.findall(html))
 
 
 def match_attributes(desired_attributes, available_attributes):

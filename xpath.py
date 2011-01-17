@@ -63,7 +63,7 @@ def search(html, xpath, remove=None):
     html = clean_html(html, remove)
     contexts = [html] # initial context is entire webpage
     parent_attributes = []
-    for tag_i, (separator, tag, index, attribute) in enumerate(xpath_iter(xpath)):
+    for tag_i, (separator, tag, index, attributes) in enumerate(xpath_iter(xpath)):
         children = []
         if tag == '..':
             # parent
@@ -74,8 +74,9 @@ def search(html, xpath, remove=None):
                 children.append(common.remove_tags(context, keep_children=False))
         elif tag.startswith('@'):
             # selecting attribute
-            for attributes in parent_attributes:
-                children.append(attributes.get(tag[1:].lower(), ''))
+            name = tag[1:].lower()
+            for a in parent_attributes:
+                children.append(a.get(name, ''))
         else:
             # have tag
             parent_attributes = []
@@ -86,11 +87,11 @@ def search(html, xpath, remove=None):
                 for child_i, child in enumerate(matches):
                     if index is None or index == child_i + 1 or index == -1 and len(matches) == child_i + 1:
                         # matches index if defined
-                        attributes = get_attributes(child)
-                        if match_attributes(attribute, attributes):
+                        child_attributes = get_attributes(child)
+                        if match_attributes(attributes, child_attributes):
                             # child matches tag and any defined indices or attributes
                             children.append(get_content(child))
-                            parent_attributes.append(attributes)
+                            parent_attributes.append(child_attributes)
         if not children and tag == 'tbody':
             pass # skip tbody, which firefox includes in xpath when does not exist
         else:
@@ -121,28 +122,31 @@ def clean_html(html, tags):
 
 
 def xpath_iter(xpath):
-    """Return an iterator of the xpath parsed into the separator, tag, index, and attribute
+    """Return an iterator of the xpath parsed into the separator, tag, index, and attributes
 
     >>> list(xpath_iter('/div[1]//span[@class="text"]'))
-    [('', 'div', 1, None), ('/', 'span', None, ('class', 'text'))]
+    [('', 'div', 1, []), ('/', 'span', None, [('class', 'text')])]
+    >>> list(xpath_iter('/div[@id="content"]//span[1][@class="text"][@title=""]/a'))
+    [('', 'div', None, [('id', 'content')]), ('/', 'span', 1, [('class', 'text'), ('title', '')]), ('', 'a', None, [])]
     """
-    # XXX need to support multiple tag selectors
     for separator, token in re.compile('(|/|\.\.)/([^/]+)').findall(xpath):
-        index = attribute = None
+        index, attributes = None, []
         if '[' in token:
-            tag, selector = token[:-1].split('[')
-            try:
-                index = int(selector)
-            except ValueError:
-                match = re.compile('@(.*?)=["\']?(.*?)["\']?$').search(selector)    
-                if match:
-                    key, value = match.groups()
-                    attribute = key.lower(), value.lower()
-                else:
-                    raise XPathException('Unknown format: ' + selector)
+            tag = token[:token.find('[')]
+            for attribute in re.compile('\[(.*?)\]').findall(token):
+                try:
+                    index = int(attribute)
+                except ValueError:
+                    match = re.compile('@(.*?)=["\']?(.*?)["\']?$').search(attribute)
+                    if match:
+                        key, value = match.groups()
+                        attributes.append((key.lower(), value.lower()))
+                    else:
+                        raise XPathException('Unknown format: ' + attribute)
         else:
             tag = token
-        yield separator, tag, index, attribute
+        yield separator, tag, index, attributes
+
 
 
 def get_attributes(html):
@@ -159,39 +163,43 @@ def get_attributes(html):
     )
 
 
-def match_attributes(attribute, attributes):
-    """Returns True if desired attribute matches one in the set
+def match_attributes(desired_attributes, available_attributes):
+    """Returns True if all of desired attributes are in available attributes
     Supports regex, which is not part of the XPath standard but is so useful!
 
-    >>> match_attributes(None, {})
+    >>> match_attributes([], {})
     True
-    >>> match_attributes(('class', 'test'), {})
+    >>> match_attributes([('class', 'test')], {})
     False
-    >>> match_attributes(None, {'id':'test', 'class':'test2'})
+    >>> match_attributes([], {'id':'test', 'class':'test2'})
     True
-    >>> match_attributes(('class', 'test'), {'id':'test', 'class':'test2'})
+    >>> match_attributes([('class', 'test')], {'id':'test', 'class':'test2'})
     False
-    >>> match_attributes(('class', 'test'), {'id':'test2', 'class':'test'})
+    >>> match_attributes([('class', 'test')], {'id':'test2', 'class':'test'})
     True
-    >>> match_attributes(('class', 'test\d'), {'id':'test', 'class':'test2'})
+    >>> match_attributes([('class', 'test'), ('id', 'content')], {'id':'test', 'class':'content'})
+    False
+    >>> match_attributes([('class', 'test'), ('id', 'content')], {'id':'content', 'class':'test'})
     True
-    >>> match_attributes(('class', 'test\d'), {'id':'test2', 'class':'test'})
+    >>> match_attributes([('class', 'test\d')], {'id':'test', 'class':'test2'})
+    True
+    >>> match_attributes([('class', 'test\d')], {'id':'test2', 'class':'test'})
     False
     """
-    if attribute:
-        name, value = attribute
-        return re.match(re.compile(value + '$', re.IGNORECASE), attributes.get(name, '')) is not None
-    else:
-        return True
+    for name, value in desired_attributes:
+        if name not in available_attributes or not re.match(re.compile(value + '$', re.IGNORECASE), available_attributes[name]):
+            return False
+    return True
 
 
+content_regex = re.compile('<.*?>(.*)</.*?>$', re.DOTALL)
 def get_content(html, default=''):
     """Extract the child HTML of a the passed HTML tag
 
     >>> get_content('<div id="ID" name="NAME">content <span>SPAN</span></div>')
     'content <span>SPAN</span>'
     """
-    match = re.compile('<.*?>(.*)</.*?>$', re.DOTALL).match(html)
+    match = content_regex.match(html)
     if match:
         content = match.groups()[0]
     else:
@@ -238,6 +246,7 @@ def find_descendants(html, tag):
     return results
 
 
+tag_regex = re.compile('<(\w+)')
 def jump_next_tag(html):
     """Return html at start of next tag
 
@@ -249,7 +258,7 @@ def jump_next_tag(html):
     '<div>abc</div>'
     """
     while 1:
-        match = re.search('<(\w+)', html)
+        match = tag_regex.search(html)
         if match:
             # XXX check match
             if match.groups()[0].lower() in EMPTY_TAGS:
@@ -268,7 +277,7 @@ def get_tag(html):
     >>> get_tag(' <div>')
     >>> get_tag('div')
     """
-    match = re.match('<(\w+)', html)
+    match = tag_regex.match(html)
     if match:
         return match.groups()[0]
     else:

@@ -6,16 +6,21 @@
 
 import os
 import re
-import time
 import csv
+import time
+import glob
 import string
 import urllib
-import urlparse
 import string
-import htmlentitydefs
+import urlparse
 import cookielib
+import htmlentitydefs
 from datetime import datetime, timedelta
 
+
+
+class WebScrapingError(Exception):
+    pass
 
 
 # known media file extensions
@@ -300,15 +305,20 @@ def pretty_duration(dt):
         return ''
 
 
-def firefox_cookie(file, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file='cookies.txt'):
+def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file='cookies.txt'):
     """Create a cookie jar from this FireFox 3 sqlite cookie database
 
-    >>> file = os.path.expanduser('~/.mozilla/firefox/<random chars>.default/cookies.sqlite')
-    >>> cj = firefox_cookie(file=file)
+    >>> cj = firefox_cookie()
     >>> opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
     >>> html = opener.open(url).read()
     """
     # XXX remove temporary files
+    if file is None:
+        try:
+            file = glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default/cookies.sqlite'))[0]
+        except IndexError:
+            raise WebScrapingError('Can not find filefox cookie file')
+
     import sqlite3 
     # copy firefox cookie file locally to avoid locking problems
     open(tmp_sqlite_file, 'w').write(open(file).read())

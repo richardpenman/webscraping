@@ -83,6 +83,7 @@ def search(html, xpath, remove=None):
             for context in contexts:
                 # search direct children if / and all descendants if //
                 search = separator == '' and find_children or find_descendants
+                # XXX change to iterator
                 matches = search(context, tag)
                 for child_i, child in enumerate(matches):
                     if index is None or index == child_i + 1 or index == -1 and len(matches) == child_i + 1:
@@ -154,9 +155,11 @@ attributes_regex = re.compile('([\w-]+)=(".*?"|\'.*?\'|\w+)', re.DOTALL)
 def get_attributes(html):
     """Extract the attributes of the passed HTML tag
 
-    >>> get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span>SPAN</span></div>')
+    >>> get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span class="inner name">SPAN</span></div>')
     {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
+    if '>' in html:
+        html = html[:html.index('>')]
     return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in attributes_regex.findall(html))
 
 
@@ -367,7 +370,7 @@ def main():
         elif options.url:
             html = urllib2.urlopen(options.url).read()
         
-        results = [parse(html, xpath) for xpath in xpaths]
+        results = [search(html, xpath) for xpath in xpaths]
         return results
 
         

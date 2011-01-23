@@ -127,17 +127,23 @@ class UnicodeWriter(object):
         self.writer = csv.writer(open(filename, mode))
         self.header = None
         self.rows = []
-        if unique:# and os.path.exists(filename):
+        if unique:
             self.rows = list(csv.reader(open(filename)))
 
     def cell(self, s):
         if isinstance(s, basestring):
             s = common.unescape(s)
+        elif s is None:
+            s = ''
+        else:
+            s = str(s)
         return s
 
     def writerow(self, row):
         row = [self.cell(col) for col in row]
+        print row
         if row not in self.rows:
+            print self.rows
             self.writer.writerow(row)
             if self.unique:
                 self.rows.append(row)

@@ -141,7 +141,6 @@ class UnicodeWriter(object):
 
     def writerow(self, row):
         row = [self.cell(col) for col in row]
-        print row
         if row not in self.rows:
             print self.rows
             self.writer.writerow(row)

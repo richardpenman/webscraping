@@ -87,10 +87,10 @@ def flatten(ls):
     return [e for l in ls for e in l]
 
 
-def nth(l, i, default):
-    if len(l) > i:
+def nth(l, i, default=''):
+    try:
         return l[i] 
-    else:
+    except IndexError:
         return default
 
 def first(l, default=''):

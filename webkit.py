@@ -313,11 +313,10 @@ class JQueryBrowser(QWebView):
         return unicode(self.page().mainFrame().toHtml())
 
 
-    def get(self, url=None, script=None, key=None, retries=1, inject=True):
+    def get(self, url=None, script=None, retries=1, inject=True):
         """Load given url in webkit and return html when loaded
 
         script is some javasript to exexute that will change the loaded page (eg form submission)
-        key is where to cache downloaded HTML
         retries is how many times to try downloading this URL or executing this script
         inject is whether to inject JQuery into the document
         """
@@ -352,11 +351,12 @@ class JQueryBrowser(QWebView):
                 # didn't download in time
                 if retries > 0:
                     self.debug('Timeout - retrying')
-                    html = self.get(url, script, key, retries-1, inject)
+                    html = self.get(url, script, retries-1, inject)
                 else:
                     self.debug('Timed out')
                     html = ''
         return html
+
 
 
     def wait(self, secs=1):
@@ -372,10 +372,10 @@ class JQueryBrowser(QWebView):
         #time.sleep(max(0, wait_secs))
 
 
-    def jsget(self, script, key=None, retries=1, inject=True):
+    def jsget(self, script, retries=1, inject=True):
         """Execute JavaScript that will cause page submission, and wait for page to load
         """
-        return self.get(script=script, key=key, retries=retries, inject=inject)
+        return self.get(script=script, retries=retries, inject=inject)
 
     def js(self, script):
         """Shortcut to execute javascript on current document and return result

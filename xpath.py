@@ -85,8 +85,12 @@ def search(html, xpath, remove=None):
                 search = separator == '' and find_children or find_descendants
                 # XXX change to iterator
                 matches = search(context, tag)
+                abs_index = index
+                if abs_index is not None and abs_index < 0:
+                    # support negative indices
+                    abs_index += len(matches) + 1
                 for child_i, child in enumerate(matches):
-                    if index is None or index == child_i + 1 or index == -1 and len(matches) == child_i + 1:
+                    if index is None or abs_index == child_i + 1:
                         # matches index if defined
                         child_attributes = get_attributes(child)
                         if match_attributes(attributes, child_attributes):
@@ -128,6 +132,8 @@ def xpath_iter(xpath):
 
     >>> list(xpath_iter('/div[1]//span[@class="text"]'))
     [('', 'div', 1, []), ('/', 'span', None, [('class', 'text')])]
+    >>> list(xpath_iter('//li[-2]'))
+    [('/', 'li', -2, [])]
     >>> list(xpath_iter('/div[@id="content"]//span[1][@class="text"][@title=""]/a'))
     [('', 'div', None, [('id', 'content')]), ('/', 'span', 1, [('class', 'text'), ('title', '')]), ('', 'a', None, [])]
     """

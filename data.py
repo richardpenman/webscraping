@@ -128,6 +128,7 @@ class UnicodeWriter(object):
         self.header = None
         self.rows = []
         if unique:
+            # XXX change to hash dict
             self.rows = list(csv.reader(open(filename)))
 
     def cell(self, s):

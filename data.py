@@ -22,7 +22,7 @@ def get_excerpt(html, try_meta=False, max_chars=255):
     # try extracting meta description tag
     excerpt = ''
     if try_meta:
-        excerpt = xpath.get(html, '/html/head/meta[@name="description"]')
+        excerpt = xpath.get(html, '/html/head/meta[@name="description"]/@content')
     if not excerpt:
         # remove these tags and then find biggest text block
         bad_tags = 'hr', 'br', 'script', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'

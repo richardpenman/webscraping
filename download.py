@@ -11,10 +11,6 @@ import time
 import random
 import urllib
 import urllib2
-try:
-    import json
-except ImportError:
-    import simplejson as json
 from urlparse import urljoin
 from StringIO import StringIO
 from datetime import datetime, timedelta
@@ -213,6 +209,10 @@ class Download(object):
     def geocode(self, address):
         """Geocode address using Google's API and return dictionary of useful fields
         """
+        try:
+            import simplejson as json
+        except ImportError:
+            import json
         url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % address.replace(' ', '%20')
         html = self.get(url)
         results = defaultdict(str)

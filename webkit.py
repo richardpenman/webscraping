@@ -9,7 +9,6 @@ import os
 import re
 import urllib2
 import random
-import json
 from time import time, sleep
 from datetime import datetime
 from PyQt4.QtGui import QApplication, QDesktopServices

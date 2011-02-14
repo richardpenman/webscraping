@@ -1,8 +1,5 @@
-#
-# Description: Common web scraping related functions
-# Author: Richard Penman (richard@sitescraper.net)
-# License: LGPL
-#
+__doc__ = 'Common web scraping related functions'
+
 
 import os
 import re

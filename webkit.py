@@ -1,8 +1,4 @@
-#
-# Description: Framework for crawling and scraping webpages with JQuery
-# Author: Richard Penman (richard@sitescraper.net)
-# License: LGPL
-#
+__doc__ = 'Framework for crawling and scraping webpages with JQuery'
 
 import sys
 import os

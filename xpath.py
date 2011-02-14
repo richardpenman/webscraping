@@ -348,33 +348,3 @@ def get_links(html, url=None, local=True, external=True):
             if link and link not in links:
                 links.append(link)
     return links
-
-
-def main():
-    usage = 'usage: %prog [options] xpath1 [xpath2 ...]'
-    parser = OptionParser(usage)
-    parser.add_option("-f", "--file", dest="filename", help="read html from FILENAME")
-    parser.add_option("-s", "--string", dest="string", help="read html from STRING")
-    parser.add_option("-u", "--url", dest="url", help="read html from URL")
-    (options, xpaths) = parser.parse_args()
-
-    if options.doctest:
-        import doctest
-        return doctest.testmod()
-    else:
-        if len(xpaths) == 0:
-            parser.error('Need atleast 1 xpath')
-
-        if options.filename:
-            html = open(options.filename).read()
-        elif options.string:
-            html = options.string
-        elif options.url:
-            html = urllib2.urlopen(options.url).read()
-        
-        results = [search(html, xpath) for xpath in xpaths]
-        return results
-
-        
-if __name__ == '__main__':
-    print main()

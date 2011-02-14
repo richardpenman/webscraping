@@ -1,3 +1,8 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
+if __name__ == '__main__':
+    import doctest
+    import common, data, download, xpath
+    for module in (common, data, xpath):
+        print doctest.testmod(module)

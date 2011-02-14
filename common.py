@@ -12,8 +12,10 @@ import glob
 import string
 import urllib
 import string
+import urllib2
 import urlparse
 import cookielib
+import itertools
 import htmlentitydefs
 from datetime import datetime, timedelta
 
@@ -81,9 +83,10 @@ def unique(l):
 def flatten(ls):
     """Flatten sub lists into single list
 
-    >>> [[1,2,3], [4,5,6], [7,8,9]]
+    >>> flatten([[1,2,3], [4,5,6], [7,8,9]])
     [1, 2, 3, 4, 5, 6, 7, 8, 9]
     """
+    #return itertools.chain.from_iterable(ls)
     return [e for l in ls for e in l]
 
 
@@ -99,17 +102,42 @@ def first(l, default=''):
     >>> first([1,2,3])
     1
     >>> first([], None)
-    None
+    
     """
-    return nth(l, 0, default)
+    return nth(l, i=0, default=default)
 
 def last(l, default=''):
     """Return last element from list or default value if empty
     """
-    if l:
-        return l[-1] 
-    else:
-        return default
+    return nth(l, i=-1, default=default)
+
+
+def fix(l, size, default=None, end=True):
+    """Return list of given size
+    Insert elments of value default if too small
+    Remove elements if too large
+    Manipulate end of list if end is True, else start
+
+    >>> fix(range(5), 5)
+    [0, 1, 2, 3, 4]
+    >>> fix(range(5), 3)
+    [0, 1, 2]
+    >>> fix(range(5), 7, -1)
+    [0, 1, 2, 3, 4, -1, -1]
+    >>> fix(range(5), 7, end=False)
+    [None, None, 0, 1, 2, 3, 4]
+    """
+    while len(l) < size:
+        if end:
+            l.append(default)
+        else:
+            l.insert(0, default)
+    while len(l) > size:
+        if end:
+            l.pop()
+        else:
+            l.pop(0)
+    return l
 
 
 def most_frequent(l, default=None):
@@ -117,11 +145,11 @@ def most_frequent(l, default=None):
     If equal quantities then return the first value.
     If empty list return default value.
 
-    >>> most_common([1, 2, 3, 2, 3])
+    >>> most_frequent([1, 2, 3, 2, 3])
     2
-    >>> most_common([], False)
+    >>> most_frequent([], False)
     False
-    >>> most_common([1, 2, 3, 4])
+    >>> most_frequent([1, 2, 3, 4])
     1
     """
     d = {}
@@ -310,6 +338,7 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
 
     >>> cj = firefox_cookie()
     >>> opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+    >>> url = 'http://code.google.com/p/webscraping'
     >>> html = opener.open(url).read()
     """
     # XXX remove temporary files

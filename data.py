@@ -121,10 +121,10 @@ def read_list(file):
 class UnicodeWriter(object):
     """A CSV writer that produces Excel-compatibly CSV files from unicode data.
     """
-    def __init__(self, filename, encoding='utf-8', mode='w', unique=False):
+    def __init__(self, filename, encoding='utf-8', mode='w', unique=False, **argv):
         self.encoding = encoding
         self.unique = unique
-        self.writer = csv.writer(open(filename, mode))
+        self.writer = csv.writer(open(filename, mode), **argv)
         self.header = None
         self.rows = []
         if unique:

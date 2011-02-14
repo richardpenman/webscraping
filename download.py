@@ -1,8 +1,8 @@
-#
-# Description: Helper methods to download and crawl web content using threads
-# Author: Richard Penman (richard@sitescraper.net)
-# License: LGPL
-#
+__doc__ = """
+Description: Helper methods to download and crawl web content using threads
+Website: http://code.google.com/p/webscraping/
+License: LGPL
+"""
 
 import os
 import gzip

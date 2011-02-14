@@ -1,8 +1,4 @@
-#
-# Description: High level functions for extracting and storing data
-# Author: Richard Penman (richard@sitescraper.net)
-# License: LGPL
-#
+__doc__ = 'High level functions for extracting and storing data'
 
 import os
 import re

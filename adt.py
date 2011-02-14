@@ -1,8 +1,8 @@
-#
-# Description: High level abstract datatypes
-# Author: Richard Penman (richard@sitescraper.net)
-# License: LGPL
-#
+__doc__ = """
+Description: High level abstract datatypes
+Website: http://code.google.com/p/webscraping/
+License: LGPL
+"""
 
 
 from datetime import datetime, timedelta

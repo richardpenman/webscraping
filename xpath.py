@@ -1,29 +1,26 @@
-#
-# Description:
-# This module implements a subset of the XPath standard:
-#  - tags
-#  - indices
-#  - attributes
-#  - descendants
-# Plus a few extensions useful to my work:
-#  - attributes can contain regular expressions
-#  - indices can be negative
-#
-# Generally XPath solutions will normalize the HTML into XHTML before selecting nodes.
-# However this module tries to navigate the HTML structure directly without normalizing.
-# In some cases I have found this faster/more accurate than using lxml.html and in other cases less so.
-#
-# Author: Richard Penman (richard@sitescraper.net)
-# License: LGPL
-#
-#
-# TODO:
-#  - convert to class to more efficiently handle html
-#  -  and buffer tree selections
-#  - parent
-#  - search by text: text() == '...'
-#  - return xpath for most similar to text
-#  - change to breadth first search for faster finish with single element
+__doc__ = """
+This module implements a subset of the XPath standard:
+ - tags
+ - indices
+ - attributes
+ - descendants
+Plus a few extensions useful to my work:
+ - attributes can contain regular expressions
+ - indices can be negative
+
+Generally XPath solutions will normalize the HTML into XHTML before selecting nodes.
+However this module tries to navigate the HTML structure directly without normalizing.
+In some cases I have found this faster/more accurate than using lxml.html and in other cases less so.
+"""
+
+#TODO:
+# - convert to class to more efficiently handle html
+# -  and buffer tree selections
+# - parent
+# - search by text: text() == '...'
+# - return xpath for most similar to text
+# - change to breadth first search for faster finish with single element
+
 
 import re
 import urllib2

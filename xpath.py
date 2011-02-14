@@ -56,7 +56,7 @@ def search(html, xpath, remove=None):
     ['link']
     
     # test scraping a large amount of content
-    >>> len(search('<div><span>!</span></div>' * 10000, '//span'))
+    len(search('<div><span>!</span></div>' * 10000, '//span'))
     10000
     """
     orig_html = html
@@ -359,7 +359,6 @@ def main():
     parser.add_option("-f", "--file", dest="filename", help="read html from FILENAME")
     parser.add_option("-s", "--string", dest="string", help="read html from STRING")
     parser.add_option("-u", "--url", dest="url", help="read html from URL")
-    parser.add_option("-d", "--doctest", action="store_true", dest="doctest")
     (options, xpaths) = parser.parse_args()
 
     if options.doctest:

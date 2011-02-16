@@ -167,7 +167,8 @@ class Download(object):
         opener = opener or urllib2.build_opener()
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
-        headers = headers or {'User-agent': user_agent or Download.DEFAULT_USER_AGENT, 'Accept-encoding': 'gzip', 'Referrer': url}
+            default_headers =  {'User-agent': user_agent or Download.DEFAULT_USER_AGENT, 'Accept-encoding': 'gzip', 'Referrer': url}
+            headers = headers and default_headers.update(headers) or default_headers
         if isinstance(data, dict):
             data = urllib.urlencode(data) 
         try:

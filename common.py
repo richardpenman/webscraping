@@ -109,19 +109,19 @@ def last(l, default=''):
     return nth(l, i=-1, default=default)
 
 
-def fix(l, size, default=None, end=True):
+def pad(l, size, default=None, end=True):
     """Return list of given size
-    Insert elments of value default if too small
+    Insert elements of default value if too small
     Remove elements if too large
     Manipulate end of list if end is True, else start
 
-    >>> fix(range(5), 5)
+    >>> pad(range(5), 5)
     [0, 1, 2, 3, 4]
-    >>> fix(range(5), 3)
+    >>> pad(range(5), 3)
     [0, 1, 2]
-    >>> fix(range(5), 7, -1)
+    >>> pad(range(5), 7, -1)
     [0, 1, 2, 3, 4, -1, -1]
-    >>> fix(range(5), 7, end=False)
+    >>> pad(range(5), 7, end=False)
     [None, None, 0, 1, 2, 3, 4]
     """
     while len(l) < size:

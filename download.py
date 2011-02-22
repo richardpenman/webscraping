@@ -377,6 +377,6 @@ class CrawlerCallback:
                                 # only crawl within website
                                 if common.same_domain(url, link):
                                     # allowed to recrawl
-                                    #if self.crawl_existing or url not in self.cache: XXX
-                                    outstanding.append(link)
+                                    if self.crawl_existing or url not in self.cache:
+                                        outstanding.append(link)
         return outstanding

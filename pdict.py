@@ -19,14 +19,14 @@ class PersistentDict(object):
     data is stored compressed on disk using sqlite3 
     """
     
-    def __init__(self, filename=':memory:', compress_level=6, timeout=1000):
+    def __init__(self, filename=':memory:', compress_level=6, timeout=None):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.
         compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
         timeout: a timedelta object of how old data can be. By default is set to None to disable.
         """
-        self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self._conn = sqlite3.connect(filename, timeout=1000, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
         CREATE TABLE IF NOT EXISTS config (

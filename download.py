@@ -27,32 +27,33 @@ SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
-    def __init__(self, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=None, opener=None, 
+    def __init__(self, cache=None, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=None, opener=None, 
             headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None):
         """
-        cache_file sets where to store cached data
-        user_agent sets the user_agent to download content with
-        timeout is the maximum amount of time to wait for http response
-        delay is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
-        cap is the maximum number of requests that can be made per second
-        proxy is a proxy to download content through. If a list is passed then will cycle through list.
-        opener sets an optional opener to use instead of using urllib2 directly
-        headers are the headers to include in the request
-        data is what to post at the URL
-        retry sets whether to try downloading webpage again if got error last time
-        num_retries sets how many times to try downloading a URL after getting an error
-        num_redirects sets how many times the URL is allowed to be redirected
-        force_html sets whether to download non-text data
-        force_ascii sets whether to only return ascii characters
-        max_size determines maximum number of bytes that will be downloaded
-        dl: sets how to download content
+        `cache' is a pdict object to use for the cache
+        `cache_file' sets where to store cached data
+        `user_agent' sets the User Agent to download content with
+        `timeout' is the maximum amount of time to wait for http response
+        `delay' is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
+        `cap' is the maximum number of requests that can be made per second
+        `proxy' is a proxy to download content through. If a list is passed then will cycle through list.
+        `opener' sets an optional opener to use instead of using urllib2 directly
+        `headers' are the headers to include in the request
+        `data' is what to post at the URL
+        `retry' sets whether to try downloading webpage again if got error last time
+        `num_retries' sets how many times to try downloading a URL after getting an error
+        `num_redirects' sets how many times the URL is allowed to be redirected, to avoid infinite loop
+        `force_html' sets whether to download non-text data
+        `force_ascii' sets whether to only return ascii characters
+        `max_size' determines maximum number of bytes that will be downloaded
+        `dl' sets how to download content
             LOCAL means only load content already in cache
             REMOTE means ignore cache and download all content
             NEW means download content when not in cache or return empty
         """
         socket.setdefaulttimeout(timeout)
-        self.cache = pdict.PersistentDict(cache_file or settings.cache_file)
+        self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file)
         self.delay = delay
         self.cap = cap
         self.proxies = proxies or []
@@ -74,8 +75,8 @@ class Download(object):
     def get(self, url, **kwargs):
         """Download this URL and return the HTML. Data is cached so only have to download once.
 
-        url is what to download
-        kwargs can override any of the arguments passed to constructor
+        `url' is what to download
+        `kwargs' can override any of the arguments passed to constructor
         """
         delay = kwargs.get('delay', self.delay)
         cap = kwargs.get('cap', self.cap)
@@ -194,9 +195,9 @@ class Download(object):
     def throttle(self, url, delay, cap, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
 
-        url is what intend to download
-        delay is the minimum amount of time (in seconds) to wait after downloading content from this domain
-        variance is the amount of randomness in delay, 0-1
+        `url' is what intend to download
+        `delay' is the minimum amount of time (in seconds) to wait after downloading content from this domain
+        `variance' is the amount of randomness in delay, 0-1
         """
         key = str(proxy) + ':' + common.get_domain(url)
         start = datetime.now()
@@ -260,11 +261,12 @@ class Download(object):
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kwargs):
     """Download these urls in parallel
 
-    url[s] are the webpages to download
-    cb is called after each download with the HTML of the download   
+    `url[s]' are the webpages to download
+    `num_threads' determines the number of threads to download urls with
+    `cb' is called after each download with the HTML of the download   
         the arguments are the url and downloaded html
         whatever URLs are returned are added to the crawl queue
-    depth sets to traverse depth first rather than the default breadth first
+    `depth' sets to traverse depth first rather than the default breadth first
     """
     class DownloadThread(Thread):
         """Download data
@@ -315,14 +317,12 @@ class CrawlerCallback:
     """
     def __init__(self, output_file=None, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
         """
-        max_urls: maximum number of URLs to crawl (use None for no limit)
-        max_depth: maximum depth to follow links into website (use None for no limit)
-        allowed_urls: regex for allowed urls
-        banned_urls: regex for banned urls
-        robots: RobotFileParser object
-        max_size is passed to get() and is limited to 1MB by default
-        force_html is set to True by default so only crawl HTML content
-        crawl_existing sets whether to crawl content already downloaded previously
+        `max_urls' is the maximum number of URLs to crawl (use None for no limit)
+        `max_depth' is the maximum depth to follow links into website (use None for no limit)
+        `allowed_urls' is a regex for allowed urls, defaults to all urls
+        `banned_urls' is a regex for banned urls, defaults to no urls
+        `robots': RobotFileParser object to determine which urls allowed to crawl
+        `crawl_existing' sets whether to crawl content already downloaded previously in the cache
         """
         if output_file:
             self.writer = data.UnicodeWriter(output_file) 
@@ -377,6 +377,6 @@ class CrawlerCallback:
                                 # only crawl within website
                                 if common.same_domain(url, link):
                                     # allowed to recrawl
-                                    if self.crawl_existing or url not in self.cache:
+                                    if self.crawl_existing or url not in D.cache:
                                         outstanding.append(link)
         return outstanding

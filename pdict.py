@@ -24,7 +24,8 @@ class PersistentDict(object):
 
         filename: where to store sqlite database. Uses in memory by default.
         compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
-        timeout: a timedelta object of how old data can be. By default is set to None to disable.
+        cache_timeout: a timedelta object of how old data can be. By default is set to None to disable.
+        sqlite_timeout: how long should a thread wait for sqlite database to be ready
         """
         self._conn = sqlite3.connect(filename, timeout=sqlite_timeout, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')

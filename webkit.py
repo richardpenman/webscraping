@@ -25,15 +25,10 @@ textbox for jquery input
     http://www.rkblog.rk.edu.pl/w/p/webkit-pyqt-rendering-web-pages/
 threaded multiple URLs
 
-problems with networkreply:
-    js/css errors
-    cache only works first time
-    proxy doesn't work
-
 exit on close window signal
 
 add progress bar for loading page
-implement watir API
+implement watir API?
 """
 class NetworkAccessManager(QNetworkAccessManager):
     """Subclass QNetworkAccessManager for finer control network operations

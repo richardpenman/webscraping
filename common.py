@@ -36,6 +36,8 @@ def to_int(s):
 
     >>> to_int('90')
     90
+    >>> to_int('-90.2432')
+    -90
     >>> to_int('a90a')
     90
     >>> to_int('a')
@@ -46,8 +48,8 @@ def to_int(s):
 def to_float(s):
     """Return float from this string
     """
-    valid = string.digits + '.'
-    return float('0' + ''.join(c for c in str(s) if c in valid))
+    valid = string.digits + '.-'
+    return float(''.join(c for c in str(s) if c in valid) or 0)
 
 
 def is_html(html):

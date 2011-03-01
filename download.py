@@ -215,7 +215,7 @@ class Download(object):
             import simplejson as json
         except ImportError:
             import json
-        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % address.replace(' ', '%20')
+        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
         html = self.get(url)
         results = defaultdict(str)
         if html:
@@ -233,12 +233,18 @@ class Download(object):
                         results['suburb'] = value
                     elif 'administrative_area_level_1' in types:
                         results['state'] = value
+                    elif 'administrative_area_level_2' in types:
+                        results['county'] = value
+                    elif 'administrative_area_level_3' in types:
+                        results['district'] = value
                     elif 'country' in types:
                         results['country'] = value
                 results['full_address'] = result['formatted_address']
-            results['address'] = (results['number'] + ' ' + results['street']).strip()
+            if 'street' in results:
+                results['address'] = (results['number'] + ' ' + results['street']).strip()
         if not results:
             # error geocoding - try again later
+            print 'delete geocode'
             del self.cache[url]
         return results
 

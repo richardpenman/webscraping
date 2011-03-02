@@ -45,8 +45,9 @@ class HashDict:
     def __setitem__(self, name, value):
         return self.d.__setitem__(self.get_hash(name), value)
 
-    def add(self, name):
-        self[name]
+    def add(self, *names):
+        for name in names:
+            self[name]
 
     def get(self, name, default=None):
         return self.d.get(self.get_hash(name), default)

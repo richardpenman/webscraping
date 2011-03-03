@@ -263,19 +263,19 @@ class Download(object):
         return list(emails)
 
 
-def get_location(self, url, headers=None, data=None, user_agent=''):
+    def get_location(self, url, headers=None, data=None, user_agent=''):
         """Get http 301/302/303 redirection
         """
         import httplib
         from urlparse import urlparse
-
-        #http headers        
-        default_headers =  {'User-agent': user_agent or settings.user_agent, 'Referrer': url}
-        headers = headers and default_headers.update(headers) or default_headers
         
         url_parsed = urlparse(url)
         host_with_port = url_parsed.netloc
         host = url_parsed.netloc.partition(':')[0]
+
+        #http headers        
+        default_headers =  {'Host': host, 'User-agent': user_agent or settings.user_agent, 'Referrer': url}
+        headers = headers and default_headers.update(headers) or default_headers
   
         conn = httplib.HTTPConnection(host_with_port)
         conn.connect()
@@ -291,8 +291,8 @@ def get_location(self, url, headers=None, data=None, user_agent=''):
             try:
                 conn.request("GET", url_parsed.path + "?" + url_parsed.query, None, headers)
             except Exception, e:
-               if DEBUG: print 'get_location', e
-               return ''
+                if DEBUG: print 'get_location', e
+                return ''
                 
         response = conn.getresponse()
         

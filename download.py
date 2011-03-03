@@ -263,47 +263,6 @@ class Download(object):
         return list(emails)
 
 
-    def get_location(self, url, headers=None, data=None, user_agent=''):
-        """Get http 301/302/303 redirection
-        """
-        import httplib
-        from urlparse import urlparse
-        
-        url_parsed = urlparse(url)
-        host_with_port = url_parsed.netloc
-        host = url_parsed.netloc.partition(':')[0]
-
-        #http headers        
-        default_headers =  {'Host': host, 'User-agent': user_agent or settings.user_agent, 'Referrer': url}
-        headers = headers and default_headers.update(headers) or default_headers
-  
-        conn = httplib.HTTPConnection(host_with_port)
-        conn.connect()
-        
-        if data:
-           if isinstance(data, dict): data = urllib.urlencode(data)
-           try:  
-               conn.request("POST", url_parsed.path + "?" + url_parsed.query, data, headers)
-           except Exception, e:
-               if DEBUG: print 'get_location', e
-               return ''
-        else:
-            try:
-                conn.request("GET", url_parsed.path + "?" + url_parsed.query, None, headers)
-            except Exception, e:
-                if DEBUG: print 'get_location', e
-                return ''
-                
-        response = conn.getresponse()
-        
-        #if exists location field
-        if response.getheader('Location'):
-            return response.getheader('Location')
-        
-        return ''
-
-
-
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kwargs):
     """Download these urls in parallel
 

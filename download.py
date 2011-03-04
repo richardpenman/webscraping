@@ -270,9 +270,6 @@ class Download(object):
         """
         import httplib
         from urlparse import urlparse
-        
-        if DEBUG:
-            print 'get_location', url
                     
         final_url = ''
         
@@ -296,7 +293,10 @@ class Download(object):
                 pass
             if final_url:
                 return final_url
-            
+
+        if DEBUG:
+            print 'get_location', url
+
         
         conn = httplib.HTTPConnection(host_with_port)
         conn.connect()

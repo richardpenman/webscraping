@@ -261,6 +261,71 @@ class Download(object):
             emails.update(data.extract_emails(html))
             outstanding.extend(c.crawl(self, url, html))
         return list(emails)
+        
+        
+    def get_location(self, url, headers=None, data=None, user_agent='', use_cache = True):
+        """Get http 301/302/303 redirection url
+        
+        return redirection final url, if no redirection just return the original url
+        """
+        import httplib
+        from urlparse import urlparse
+        
+        if DEBUG:
+            print 'get_location', url
+                    
+        final_url = ''
+        
+        url_parsed = urlparse(url)
+        host_with_port = url_parsed.netloc
+        host = url_parsed.netloc.partition(':')[0]
+
+        #http headers        
+        default_headers =  {'Host': host, 'User-agent': user_agent or settings.user_agent, 'Referrer': url}
+        headers = headers and default_headers.update(headers) or default_headers
+        
+        key = url + ' get_location'
+        if data:
+            key += ' ' + str(data)
+        
+        if use_cache:
+            #check cache firstly
+            try:
+                final_url = self.cache[key]
+            except KeyError:
+                pass
+            if final_url:
+                return final_url
+            
+        
+        conn = httplib.HTTPConnection(host_with_port)
+        conn.connect()
+        
+        if data:
+            if isinstance(data, dict):
+                data = urllib.urlencode(data)
+            try:
+                conn.request("POST", url_parsed.path + "?" + url_parsed.query, data, headers)
+            except Exception, e:
+                if DEBUG:
+                    print 'get_location error:', e
+                return url
+        else:
+            try:
+                conn.request("GET", url_parsed.path + "?" + url_parsed.query, None, headers)
+            except Exception, e:
+                if DEBUG: print 'get_location error:', e
+                return url
+
+        final_url = conn.getresponse().getheader('Location')
+        if not final_url:
+            final_url = url
+            
+        if use_cache:
+            self.cache[key] = final_url
+
+        return final_url
+
 
 
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kwargs):

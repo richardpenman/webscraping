@@ -168,7 +168,7 @@ class Download(object):
         opener = opener or urllib2.build_opener()
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
-        default_headers =  {'User-agent': user_agent or settings.user_agent, 'Accept-encoding': 'gzip', 'Referrer': url}
+        default_headers =  {'User-agent': user_agent or settings.user_agent, 'Accept-encoding': 'gzip', 'Referer': url}
         headers = headers and default_headers.update(headers) or default_headers
         if isinstance(data, dict):
             data = urllib.urlencode(data) 
@@ -278,7 +278,7 @@ class Download(object):
         host = url_parsed.netloc.partition(':')[0]
 
         #http headers        
-        default_headers =  {'Host': host, 'User-agent': user_agent or settings.user_agent, 'Referrer': url}
+        default_headers =  {'Host': host, 'User-agent': user_agent or settings.user_agent, 'Referer': url}
         headers = headers and default_headers.update(headers) or default_headers
         
         key = url + ' get_location'

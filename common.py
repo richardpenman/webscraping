@@ -57,7 +57,7 @@ def to_unicode(obj, encoding='utf-8'):
     """
     if isinstance(obj, basestring):
         if not isinstance(obj, unicode):
-            obj = unicode(obj, encoding)
+            obj = obj.decode(encoding, 'ignore')
     return obj
 
 
@@ -212,7 +212,7 @@ def remove_tags(html, keep_children=True):
     return re.compile('<[^<]*?>').sub('', html)
 
 
-def unescape(text, encoding='utf-8'):
+def unescape(text, encoding='utf-8', keep_unicode=False):
     """Interpret escape characters
 
     >>> unescape('&lt;hello&nbsp;&amp;&nbsp;world&gt;')
@@ -237,11 +237,13 @@ def unescape(text, encoding='utf-8'):
                 pass
         return text # leave as is
     try:
-        text = text.decode(encoding, 'ignore')
+        text = to_unicode(text, encoding)
     except UnicodeError:
         pass
     text = urllib.unquote(text).replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = re.sub('&#?\w+;', fixup, urllib.unquote(text))
+    if keep_unicode:
+        return text
     try:
         text = text.encode(encoding, 'ignore')
     except UnicodeError:

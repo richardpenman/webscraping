@@ -51,6 +51,15 @@ def to_float(s):
     valid = string.digits + '.-'
     return float(''.join(c for c in str(s) if c in valid) or 0)
 
+    
+def to_unicode(obj, encoding='utf-8'):
+    """Convert obj to unicode
+    """
+    if isinstance(obj, basestring):
+        if not isinstance(obj, unicode):
+            obj = unicode(obj, encoding)
+    return obj
+
 
 def is_html(html):
     """Returns whether content is HTML

@@ -61,6 +61,16 @@ def to_unicode(obj, encoding='utf-8'):
     return obj
 
 
+def html_to_unicode(html, charset='utf-8'):
+    """Convert html to unicode, decoding by charset
+    """
+    m = re.compile(r'''<meta\s+http-equiv=["']Content-Type["']\s+content=["'][^"']*?charset=([a-zA-z\d\-]+)["']''', re.IGNORECASE).search(html)
+    if m:
+        charset = m.groups()[0].strip().lower()
+        
+    return to_unicode(html, charset)
+    
+    
 def is_html(html):
     """Returns whether content is HTML
     """

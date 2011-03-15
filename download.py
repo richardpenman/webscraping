@@ -96,9 +96,7 @@ class Download(object):
         self.final_url = None
 
         # check cache for whether this content is already downloaded
-        key = url
-        if data:
-            key += ' ' + str(data)
+        key = self.get_key(url, data)
         if dl != Download.REMOTE:
             try:
                 html = self.cache[key]
@@ -136,6 +134,15 @@ class Download(object):
         if url != self.final_url:
             self.cache.meta(key, dict(url=self.final_url))
         return html
+
+
+    def get_key(self, url, data=None):
+        """Create key for storing in database
+        """
+        key = url
+        if data:
+            key += ' ' + str(data)
+        return key
 
 
     def clean_content(self, html, max_size, force_html, force_ascii):

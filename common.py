@@ -250,8 +250,8 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         text = to_unicode(text, encoding)
     except UnicodeError:
         pass
-    text = urllib.unquote(text).replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-    text = re.sub('&#?\w+;', fixup, urllib.unquote(text))
+    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+    text = re.sub('&#?\w+;', fixup, text)
     if keep_unicode:
         return text
     try:

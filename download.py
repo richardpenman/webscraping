@@ -442,6 +442,7 @@ class CrawlerCallback:
                     # remove internal links to avoid duplicates
                     link = link[:link.index('#')] 
                 link = urljoin(url, link) # support relative links
+                link = common.unescape(link) # remove &amp; from link
                 #print allowed_urls.match(url), banned_urls.match(url), url
                 if link not in self.found:
                     self.found[link] = depth + 1

@@ -27,12 +27,13 @@ SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
-    def __init__(self, cache=None, cache_file=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=None, opener=None, 
+    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=None, opener=None, 
             headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None):
         """
         `cache' is a pdict object to use for the cache
         `cache_file' sets where to store cached data
+        'cache_timeout' is the maximum time of cache timeout
         `user_agent' sets the User Agent to download content with
         `timeout' is the maximum amount of time to wait for http response
         `delay' is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
@@ -53,7 +54,7 @@ class Download(object):
             NEW means download content when not in cache or return empty
         """
         socket.setdefaulttimeout(timeout)
-        self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file)
+        self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file, cache_timeout=cache_timeout)
         self.delay = delay
         self.cap = cap
         self.proxies = proxies or []

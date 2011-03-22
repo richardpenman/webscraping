@@ -9,7 +9,7 @@ from time import time, sleep
 from datetime import datetime
 from PyQt4.QtGui import QApplication, QDesktopServices
 from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
-from PyQt4.QtWebKit import QWebView, QWebPage
+from PyQt4.QtWebKit import QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
 from webscraping import common, settings, xpath
  
@@ -83,7 +83,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 # XXX abort properly
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             elif DEBUG:
-                print request.url().toString()
+                print common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8')
         
         #print request.url().toString(), operation
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
@@ -101,7 +101,7 @@ class NetworkAccessManager(QNetworkAccessManager):
         XXX head request for mime?
         """
         forbidden = False
-        url = str(request.url().toString())
+        url = common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8')
         if common.get_extension(url) in self.banned_extensions:
             forbidden = True
         elif re.match(self.allowed_regex, url) is None:
@@ -155,7 +155,7 @@ class NetworkReply(QNetworkReply):
         reply.finished.connect(self.finished)
         reply.uploadProgress.connect(self.uploadProgress)
         reply.downloadProgress.connect(self.downloadProgress)
-   
+
     
     def __getattribute__(self, attr):
         """Send undefined methods straight through to proxied reply
@@ -280,6 +280,8 @@ class JQueryBrowser(QWebView):
         #self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
         self.base_url = base_url
         self.jquery_lib = None
+        #enable flash plugin etc.
+        self.settings().setAttribute(QWebSettings.PluginsEnabled, True)
         QTimer.singleShot(0, self.run) # start crawling when all events processed
         if gui: self.show() 
         self.app.exec_() # start GUI thread

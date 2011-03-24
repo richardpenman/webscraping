@@ -153,12 +153,6 @@ class PersistentDict(object):
             self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
 
 
-    def __delitem__(self, key):
-        """remove the specifed value from the database
-        """
-        self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
-
-
     def clear(self):
         """Clear all cached data
         """

@@ -434,8 +434,7 @@ class JQueryBrowser(QWebView):
         """
         self.app.processEvents()
         self.get('http://code.google.com/p/webscraping/')
-        print 'Title:', self.js('$("title").html()')
-        print self.get_data('http://www.google-analytics.com/ga.js')
+        #print self.data('http://www.google-analytics.com/ga.js')
         QTimer.singleShot(5000, self.app.quit)
 
     def finished(self, reply):
@@ -444,6 +443,10 @@ class JQueryBrowser(QWebView):
         pass 
         #print reply.url().toString(), ':', len(reply.data)
         
+
+    def closeEvent(self, event):
+        print 'close'
+        sys.exit(self.app.quit())
 
 
 if __name__ == '__main__':

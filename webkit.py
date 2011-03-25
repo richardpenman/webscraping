@@ -249,6 +249,11 @@ class WebPage(QWebPage):
         """
         if DEBUG: print 'Console:', message, line_number, source_id
 
+    def shouldInterruptJavaScript(self):
+        """Disable javascript interruption dialog box
+        """
+        return True
+
 
 
 class JQueryBrowser(QWebView):
@@ -445,7 +450,8 @@ class JQueryBrowser(QWebView):
         
 
     def closeEvent(self, event):
-        print 'close'
+        """Catch the close window event and stop the script
+        """
         sys.exit(self.app.quit())
 
 

@@ -248,6 +248,8 @@ class Download(object):
                     elif 'country' in types:
                         results['country'] = value
                 results['full_address'] = result['formatted_address']
+                results['lat'] = result['geometry']['location']['lat']
+                results['lng'] = result['geometry']['location']['lng']
             if 'street' in results:
                 results['address'] = (results['number'] + ' ' + results['street']).strip()
         if not results:

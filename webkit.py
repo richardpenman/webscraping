@@ -8,8 +8,8 @@ import random
 from time import time, sleep
 from datetime import datetime
 from PyQt4.QtGui import QApplication, QDesktopServices
-from PyQt4.QtCore import QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
-from PyQt4.QtWebKit import QWebView, QWebPage, QWebSettings
+from PyQt4.QtCore import QByteArray, QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
+from PyQt4.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
 from webscraping import common, settings, xpath
  
@@ -89,6 +89,10 @@ class NetworkAccessManager(QNetworkAccessManager):
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
+        
+        #add Base-Url header, then we can get it from QWebView
+        if isinstance(request.originatingObject(), QWebFrame):
+            reply.setRawHeader(QByteArray('Base-Url'), QByteArray('').append(request.originatingObject().baseUrl().toString()))
         #reply.data = ''
         #if 'Search' in str(request.url().toString()):
         #if 'captchaData' in str(request.url().toString()):

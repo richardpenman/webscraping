@@ -27,7 +27,7 @@ SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
-    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, cap=10, proxy=None, proxies=None, opener=None, 
+    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, proxy=None, proxies=None, opener=None, 
             headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None):
         """
@@ -37,7 +37,6 @@ class Download(object):
         `user_agent' sets the User Agent to download content with
         `timeout' is the maximum amount of time to wait for http response
         `delay' is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
-        `cap' is the maximum number of requests that can be made per second
         `proxy' is a proxy to download content through. If a list is passed then will cycle through list.
         `opener' sets an optional opener to use instead of using urllib2 directly
         `headers' are the headers to include in the request
@@ -56,9 +55,7 @@ class Download(object):
         socket.setdefaulttimeout(timeout)
         self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file, cache_timeout=cache_timeout)
         self.delay = delay
-        self.cap = cap
-        self.proxies = proxies or []
-        if proxy: self.proxies.append(proxy)
+        self.proxies = proxies or [proxy]
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
@@ -80,8 +77,8 @@ class Download(object):
         `kwargs' can override any of the arguments passed to constructor
         """
         delay = kwargs.get('delay', self.delay)
-        cap = kwargs.get('cap', self.cap)
-        proxy = random.choice(kwargs.get('proxies', self.proxies) or [kwargs.get('proxy')])
+        proxies = kwargs.get('proxies') or [kwargs.get('proxy')]
+        if not any(proxies): proxies = self.proxies
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)
@@ -115,26 +112,36 @@ class Download(object):
         if dl == Download.LOCAL:
             return '' # only want previously cached content
 
-        self.throttle(url, delay=delay, cap=cap, proxy=proxy) # crawl slowly for each domain to reduce risk of being blocked
-        html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener, num_retries=num_retries)
-        if allow_redirect:
-            redirect_url = self.check_redirect(url=url, html=html)
-            if redirect_url:
-                # found a redirection
-                if num_redirects > 0:
-                    print 'redirecting to', redirect_url
-                    kwargs['num_redirects'] = num_redirects - 1
-                    html = self.get(redirect_url, **kwargs)
-                    # make relative links absolute so will still work after redirect
-                    relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
-                    html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
-                else:
-                    print '%s wanted to redirect to %s' % (url, redirect_url)
-        html = self.clean_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
+        html = None
+        # attempt downloading URL
+        while html is None and num_retries >= 0:
+            # crawl slowly for each domain to reduce risk of being blocked
+            proxy = random.choice(proxies)
+            self.throttle(url, delay=delay, proxy=proxy) 
+            html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener)
+            num_retries -= 1
+     
+        if html:
+            if allow_redirect:
+                redirect_url = self.check_redirect(url=url, html=html)
+                if redirect_url:
+                    # found a redirection
+                    if num_redirects > 0:
+                        print 'redirecting to', redirect_url
+                        kwargs['num_redirects'] = num_redirects - 1
+                        html = self.get(redirect_url, **kwargs)
+                        # make relative links absolute so will still work after redirect
+                        relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
+                        html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
+                    else:
+                        print '%s wanted to redirect to %s' % (url, redirect_url)
+            html = self.clean_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
+
+        # cache results
         self.cache[key] = html
         if url != self.final_url:
             self.cache.meta(key, dict(url=self.final_url))
-        return html
+        return html or '' # make sure return string
 
 
     def get_key(self, url, data=None):
@@ -169,15 +176,17 @@ class Download(object):
             return urljoin(url, match.groups()[0].strip()) 
 
 
-    def fetch(self, url, headers=None, data=None, proxy=None, user_agent='', opener=None, num_retries=1):
+    def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None):
         """Simply download the url and return the content
         """
         if DEBUG: print 'Downloading', url
+        # create opener with headers
         opener = opener or urllib2.build_opener()
         if proxy:
             opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
         default_headers =  {'User-agent': user_agent or settings.user_agent, 'Accept-encoding': 'gzip', 'Referer': url}
         headers = headers and default_headers.update(headers) or default_headers
+        
         if isinstance(data, dict):
             data = urllib.urlencode(data) 
         try:
@@ -189,29 +198,24 @@ class Download(object):
             self.final_url = response.url # store where redirected to
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
-            if DEBUG: print 'Fetch', e
-            if num_retries > 0:
-                if DEBUG: print 'Retrying'
-                content = self.fetch(url, headers, data, proxy, user_agent, opener, num_retries - 1)
-            else:
-                content, self.final_url = '', url
+            if DEBUG: print 'Error: ', url, e
+            content, self.final_url = None, url
         return content
 
 
-    counter = adt.ExpireCounter() # track how often requests are bring made
     domains = {}
-    def throttle(self, url, delay, cap, proxy=None, variance=0.5):
+    def throttle(self, url, delay, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
 
         `url' is what intend to download
         `delay' is the minimum amount of time (in seconds) to wait after downloading content from this domain
+        `proxy' is the proxy to download through
         `variance' is the amount of randomness in delay, 0-1
         """
         key = str(proxy) + ':' + common.get_domain(url)
         start = datetime.now()
-        while len(Download.counter) > cap or datetime.now() < Download.domains.get(key, start):
+        while datetime.now() < Download.domains.get(key, start):
             time.sleep(SLEEP_TIME)
-        Download.counter.add()
         # update domain timestamp to when can query next
         Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 

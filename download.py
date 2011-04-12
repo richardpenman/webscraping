@@ -28,7 +28,7 @@ class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
     def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, proxy=None, proxies=None, opener=None, 
-            headers=None, data=None, dl=ALL, retry=False, num_retries=0, num_redirects=1, allow_redirect=True,
+            headers=None, data=None, dl=ALL, retry=False, num_retries=2, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None):
         """
         `cache' is a pdict object to use for the cache

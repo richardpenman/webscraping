@@ -30,6 +30,16 @@ exit on close window signal
 add progress bar for loading page
 implement watir API?
 """
+
+def qstring_to_unicode(qstr):
+    """Convert QString to unicode
+    """
+    if isinstance(qstr, unicode):
+        return qstr
+    else:
+        return common.to_unicode(qstr.toUtf8().data(), 'utf-8')
+
+
 class NetworkAccessManager(QNetworkAccessManager):
     """Subclass QNetworkAccessManager for finer control network operations
     """
@@ -382,7 +392,7 @@ class JQueryBrowser(QWebView):
         """Shortcut to execute javascript on current document and return result
         """
         self.app.processEvents()
-        return str(self.page().mainFrame().evaluateJavaScript(script).toString())
+        return qstring_to_unicode(self.page().mainFrame().evaluateJavaScript(script).toString())
 
     def inject_jquery(self):
         """Inject jquery library into this webpage for easier manipulation

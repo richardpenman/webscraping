@@ -102,7 +102,11 @@ class NetworkAccessManager(QNetworkAccessManager):
         
         #add Base-Url header, then we can get it from QWebView
         if isinstance(request.originatingObject(), QWebFrame):
-            reply.setRawHeader(QByteArray('Base-Url'), QByteArray('').append(request.originatingObject().page().mainFrame().baseUrl().toString()))
+            try:
+                reply.setRawHeader(QByteArray('Base-Url'), QByteArray('').append(request.originatingObject().page().mainFrame().baseUrl().toString()))
+            except Exception, e:
+                if DEBUG:
+                    print e
         #reply.data = ''
         #if 'Search' in str(request.url().toString()):
         #if 'captchaData' in str(request.url().toString()):

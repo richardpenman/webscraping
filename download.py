@@ -340,6 +340,12 @@ class Download(object):
 
         return final_url
 
+        
+    def get_gcache(self, url):
+        """Get page from google cache
+        """
+        return self.get('http://www.google.com/search?&q=cache%3A' + urllib.quote(url))
+
 
 
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kwargs):

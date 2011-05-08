@@ -120,7 +120,7 @@ class Download(object):
             self.throttle(url, delay=delay, proxy=proxy) 
             html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener)
             num_retries -= 1
-     
+
         if html:
             if allow_redirect:
                 redirect_url = self.check_redirect(url=url, html=html)
@@ -341,14 +341,14 @@ class Download(object):
         return final_url
 
         
-    def get_gcache(self, url):
+    def gcache_get(self, url, **kwargs):
         """Get page from google cache
         """
-        return self.get('http://www.google.com/search?&q=cache%3A' + urllib.quote(url))
+        return self.get('http://www.google.com/search?&q=cache%3A' + urllib.quote(url), **kwargs)
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, cb=None, df='get', depth=False, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -356,6 +356,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kw
     `cb' is called after each download with the HTML of the download   
         the arguments are the url and downloaded html
         whatever URLs are returned are added to the crawl queue
+    `df' is download method, default is get
     `depth' sets to traverse depth first rather than the default breadth first
     """
     class DownloadThread(Thread):
@@ -382,7 +383,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=False, **kw
                 else:
                     # download this url
                     try:
-                        html = D.get(url, **kwargs)
+                        html = eval('D.%s' % df)(url, **kwargs)
                         if cb:
                             # scrape download
                             urls.extend(cb(D, url, html) or [])

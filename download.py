@@ -173,7 +173,7 @@ class Download(object):
         """
         match = Download.redirect_re.search(html)
         if match:
-            return urljoin(url, match.groups()[0].strip()) 
+            return urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None):
@@ -345,6 +345,26 @@ class Download(object):
         """Get page from google cache
         """
         return self.get('http://www.google.com/search?&q=cache%3A' + urllib.quote(url), **kwargs)
+        
+    def gtrans_get(self, url, **kwargs):
+        """Get page via Google Translation
+        """
+        
+        url = 'http://translate.google.com/translate?sl=nl&anno=2&u=%s' % urllib.quote(url)
+        html = self.get(url, **kwargs)
+        if not html: return
+        
+        m = re.compile(r'<frame src="([^"]+)" name=c>', re.DOTALL|re.IGNORECASE).search(html)
+        if not m: return
+        frame_src = urljoin(url, common.unescape(m.groups()[0].strip()))
+        
+        # force to check redirect here
+        if kwargs.has_key('allow_redirect'): kwargs['allow_redirect'] = True
+        html = self.get(frame_src, **kwargs)
+        if not html: return
+        
+        # remove google translations content
+        return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
 
 
 

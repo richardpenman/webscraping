@@ -225,7 +225,7 @@ def remove_tags(html, keep_children=True):
 def unescape(text, encoding='utf-8', keep_unicode=False):
     """Interpret escape characters
 
-    >>> unescape('&lt;hello&nbsp;&amp;&nbsp;world&gt;')
+    >>> unescape('&lt;hello&nbsp;&amp;%20world&gt;')
     '<hello & world>'
     """
     def fixup(m):
@@ -250,8 +250,9 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         text = to_unicode(text, encoding)
     except UnicodeError:
         pass
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+    #text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = re.sub('&#?\w+;', fixup, text)
+    text = urllib.unquote(text)
     if keep_unicode:
         return text
     try:

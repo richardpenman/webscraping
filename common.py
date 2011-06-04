@@ -220,6 +220,27 @@ def remove_tags(html, keep_children=True):
         # XXX does not work for multiple nested tags
         html = re.compile('<.*?>(.*?)</.*?>', re.DOTALL).sub('', html)
     return re.compile('<[^<]*?>').sub('', html)
+    
+    
+def parse_us_address(address):
+    """Parse usa address
+    >>> parse_us_address('6200 20th Street, Vero Beach, FL 32966')
+    ('6200 20th Street', 'Vero Beach', 'FL', '32966')
+    """
+    addrs = map(lambda x:x.strip(), address.split(','))
+    if addrs:
+        m = re.compile('(\w+)\s*(.*)').search(addrs[-1])
+        if m:
+            state = m.groups()[0].strip()
+            zipcode = m.groups()[1].strip()
+
+        if len(addrs)>=3:
+            city = addrs[-2].strip()
+            address = ','.join(addrs[:-2])
+        else:
+            address = ','.join(addrs[:-1])
+            
+    return address, city, state, zipcode
 
 
 def unescape(text, encoding='utf-8', keep_unicode=False):

@@ -11,10 +11,9 @@ from PyQt4.QtGui import QApplication, QDesktopServices
 from PyQt4.QtCore import QByteArray, QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
 from PyQt4.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
-from webscraping import common, settings, xpath
- 
+from webscraping import common, data, logger, settings, xpath
 
-
+logger = logger.get_logger(output_file=settings.logging_file, level=settings.logging_level)
 DEBUG = False
 """
 TODO
@@ -80,7 +79,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 #print host, port, username, password
                 proxy = QNetworkProxy(QNetworkProxy.HttpProxy, host, int(port), username, password)
             else:
-                print 'Invalid proxy:', proxy
+                logger.info('Invalid proxy:' + proxy)
                 proxy = None
         if proxy:
             QNetworkAccessManager.setProxy(self, proxy)
@@ -93,7 +92,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 # XXX abort properly
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
             elif DEBUG:
-                print common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8')
+                logger.info(common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8'))
         
         #print request.url().toString(), operation
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
@@ -106,7 +105,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 reply.setRawHeader(QByteArray('Base-Url'), QByteArray('').append(request.originatingObject().page().mainFrame().baseUrl().toString()))
             except Exception, e:
                 if DEBUG:
-                    print e
+                    logger.info(e)
         #reply.data = ''
         #if 'Search' in str(request.url().toString()):
         #if 'captchaData' in str(request.url().toString()):
@@ -155,7 +154,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 299 : 'an unknown error related to the remote content was detected',
                 399 : 'a breakdown in protocol was detected (parsing error, invalid or unexpected responses, etc.)',
             }
-            print 'Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString())
+            logger.info('Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString()))
 
 
 class NetworkReply(QNetworkReply):
@@ -249,23 +248,23 @@ class WebPage(QWebPage):
     def javaScriptAlert(self, frame, message):
         """Override default JavaScript alert popup and print results
         """
-        if DEBUG: print 'Alert:', message
+        if DEBUG: logger.info('Alert:' + message)
 
     def javaScriptConfirm(self, frame, message):
         """Override default JavaScript confirm popup and print results
         """
-        if DEBUG: print 'Confirm:', message
+        if DEBUG: logger.info('Confirm:' + message)
         return self.confirm
 
     def javaScriptPrompt(self, frame, message, default):
         """Override default JavaScript prompt popup and print results
         """
-        if DEBUG: print 'Prompt:', message, default
+        if DEBUG: logger.info('Prompt:%s%s' % (message, default))
 
     def javaScriptConsoleMessage(self, message, line_number, source_id):
         """Print JavaScript console messages
         """
-        if DEBUG: print 'Console:', message, line_number, source_id
+        if DEBUG: logger.info('Console:%s%s%s' % (message, line_number, source_id))
 
     def shouldInterruptJavaScript(self):
         """Disable javascript interruption dialog box
@@ -315,7 +314,7 @@ class JQueryBrowser(QWebView):
     def debug(self, message):
         # proper logging XXX
         if DEBUG:
-            print message
+            logger.info(message)
 
     def current_url(self):
         """Return current URL

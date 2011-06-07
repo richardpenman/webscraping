@@ -26,17 +26,14 @@ import re
 import urllib2
 from urlparse import urljoin, urlsplit
 from optparse import OptionParser
-from webscraping import common
+from webscraping import common, logger, settings
 
 DEBUG = False
 # tags that do not contain content and so can be safely skipped
 EMPTY_TAGS = 'br', 'hr'
 
-
-
 class XPathException(Exception):
     pass
-
 
 def search(html, xpath, remove=None):
     """Query HTML document using XPath
@@ -101,7 +98,7 @@ def search(html, xpath, remove=None):
         if not contexts:
             if DEBUG:
                 attributes_s = attributes and ''.join('[@%s="%s"]' % a for a in attributes) or ''
-                print 'No matches for <%s%s%s> (tag %d)' % (tag, index and '[%d]' % index or '', attributes_s, tag_i + 1)
+                logger.get_logger(output_file=settings.logging_file, level=settings.logging_level).info('No matches for <%s%s%s> (tag %d)' % (tag, index and '[%d]' % index or '', attributes_s, tag_i + 1))
             break
     return contexts
 

@@ -1,8 +1,21 @@
 __doc__ = """Webscraping logger"""
 
 import logging
+import threading
 from webscraping import settings
 
+lock = threading.Lock()
+
+def synchronous(f):
+    def call(*args, **kwargs):
+        lock.acquire()
+        try:
+            return f(*args, **kwargs)
+        finally:
+            lock.release()
+    return call
+
+@synchronous
 def get_logger(output_file, stdout=True, level=logging.DEBUG):
     """Create a logger instance
     """

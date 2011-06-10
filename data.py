@@ -6,7 +6,8 @@ import csv
 import math
 import logging
 from collections import defaultdict
-from webscraping import common, logger, settings, xpath
+from webscraping import common, settings, xpath
+
 
 def get_excerpt(html, try_meta=False, max_chars=255):
     """Extract excerpt from this HTML by finding largest text block
@@ -88,12 +89,6 @@ def distance(p1, p2):
     return arc
 
 
-# keeping this to be compatible with previous scripts
-def get_logger(output_file, stdout=True, level=logging.DEBUG):
-    """Create a logger instance
-    """
-    return logger.get_logger(output_file, stdout, level)
-
 
 def read_list(file):
     """Return file as list if exists
@@ -102,7 +97,7 @@ def read_list(file):
     if os.path.exists(file):
         l.extend(open(file).read().splitlines())
     else:
-        logger.get_logger(output_file=settings.logging_file, level=settings.logging_level).info('%s not found' % file)
+        common.logger.info('%s not found' % file)
     return l
 
 

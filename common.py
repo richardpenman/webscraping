@@ -14,8 +14,9 @@ import urlparse
 import cookielib
 import itertools
 import htmlentitydefs
+import logging
 from datetime import datetime, timedelta
-
+from webscraping import settings
 
 
 class WebScrapingError(Exception):
@@ -24,6 +25,9 @@ class WebScrapingError(Exception):
 
 # known media file extensions
 MEDIA_EXTENSIONS = ['ai', 'aif', 'aifc', 'aiff', 'asc', 'au', 'avi', 'bcpio', 'bin', 'c', 'cc', 'ccad', 'cdf', 'class', 'cpio', 'cpt', 'csh', 'css', 'csv', 'dcr', 'dir', 'dms', 'doc', 'drw', 'dvi', 'dwg', 'dxf', 'dxr', 'eps', 'etx', 'exe', 'ez', 'f', 'f90', 'fli', 'flv', 'gif', 'gtar', 'gz', 'h', 'hdf', 'hh', 'hqx', 'ice', 'ico', 'ief', 'iges', 'igs', 'ips', 'ipx', 'jpe', 'jpeg', 'jpg', 'js', 'kar', 'latex', 'lha', 'lsp', 'lzh', 'm', 'man', 'me', 'mesh', 'mid', 'midi', 'mif', 'mime', 'mov', 'movie', 'mp2', 'mp3', 'mpe', 'mpeg', 'mpg', 'mpga', 'ms', 'msh', 'nc', 'oda', 'pbm', 'pdb', 'pdf', 'pgm', 'pgn', 'png', 'pnm', 'pot', 'ppm', 'pps', 'ppt', 'ppz', 'pre', 'prt', 'ps', 'qt', 'ra', 'ram', 'ras', 'rgb', 'rm', 'roff', 'rpm', 'rtf', 'rtx', 'scm', 'set', 'sgm', 'sgml', 'sh', 'shar', 'silo', 'sit', 'skd', 'skm', 'skp', 'skt', 'smi', 'smil', 'snd', 'sol', 'spl', 'src', 'step', 'stl', 'stp', 'sv4cpio', 'sv4crc', 'swf', 't', 'tar', 'tcl', 'tex', 'texi', 'tif', 'tiff', 'tr', 'tsi', 'tsp', 'tsv', 'txt', 'unv', 'ustar', 'vcd', 'vda', 'viv', 'vivo', 'vrml', 'w2p', 'wav', 'wrl', 'xbm', 'xlc', 'xll', 'xlm', 'xls', 'xlw', 'xml', 'xpm', 'xsl', 'xwd', 'xyz', 'zip']
+
+# tags that do not contain content
+EMPTY_TAGS = 'br', 'hr', 'img', 'meta', 'link', 'base', 'img', 'embed', 'param', 'area', 'col', 'input'
 
 
 def to_ascii(html):
@@ -215,7 +219,10 @@ def remove_tags(html, keep_children=True):
     'hello world!'
     >>> remove_tags('hello <b>world</b>!', False)
     'hello !'
+    >>> remove_tags('hello <br>world<br />!', False)
+    'hello world!'
     """
+    html = re.sub('<(%s)[^>]*>' % '|'.join(EMPTY_TAGS), '', html)
     if not keep_children:
         # XXX does not work for multiple nested tags
         html = re.compile('<.*?>(.*?)</.*?>', re.DOTALL).sub('', html)
@@ -280,7 +287,7 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         text = text.encode(encoding, 'ignore')
     except UnicodeError:
         pass
-    return text
+    return text.replace('\xc2\xa0', ' ')
 
 
 def clean(s):
@@ -416,3 +423,20 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     cookie_jar = cookielib.MozillaCookieJar()
     cookie_jar.load(tmp_cookie_file)
     return cookie_jar
+
+
+
+def get_logger(output_file=settings.log_file, stdout=True, level=settings.log_level):
+    """Create a logger instance
+    """
+    logger = logging.getLogger(output_file)
+    # void duplicate handlers
+    if not logger.handlers:
+        file_handler = logging.FileHandler(output_file)
+        file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+        logger.addHandler(file_handler)
+        if stdout:
+            logger.addHandler(logging.StreamHandler())
+        logger.setLevel(level)
+    return logger
+logger = get_logger()

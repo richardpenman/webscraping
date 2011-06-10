@@ -11,10 +11,8 @@ from PyQt4.QtGui import QApplication, QDesktopServices
 from PyQt4.QtCore import QByteArray, QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
 from PyQt4.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
-from webscraping import common, data, logger, settings, xpath
+from webscraping import common, data, settings, xpath
 
-logger = logger.get_logger(output_file=settings.logging_file, level=settings.logging_level)
-DEBUG = False
 """
 TODO
 right click find xpath:
@@ -79,7 +77,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 #print host, port, username, password
                 proxy = QNetworkProxy(QNetworkProxy.HttpProxy, host, int(port), username, password)
             else:
-                logger.info('Invalid proxy:' + proxy)
+                common.logger.info('Invalid proxy:' + proxy)
                 proxy = None
         if proxy:
             QNetworkAccessManager.setProxy(self, proxy)
@@ -91,8 +89,8 @@ class NetworkAccessManager(QNetworkAccessManager):
                 # deny GET request for banned media type by setting dummy URL
                 # XXX abort properly
                 request.setUrl(QUrl(QString('forbidden://localhost/')))
-            elif DEBUG:
-                logger.info(common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8'))
+            else:
+                common.logger.debug(common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8'))
         
         #print request.url().toString(), operation
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
@@ -104,8 +102,7 @@ class NetworkAccessManager(QNetworkAccessManager):
             try:
                 reply.setRawHeader(QByteArray('Base-Url'), QByteArray('').append(request.originatingObject().page().mainFrame().baseUrl().toString()))
             except Exception, e:
-                if DEBUG:
-                    logger.info(e)
+                common.logger.debug(e)
         #reply.data = ''
         #if 'Search' in str(request.url().toString()):
         #if 'captchaData' in str(request.url().toString()):
@@ -127,7 +124,7 @@ class NetworkAccessManager(QNetworkAccessManager):
 
 
     def catch_error(self, eid):
-        if DEBUG and eid not in (5, 301):
+        if eid not in (5, 301):
             errors = {
                 0 : 'no error condition. Note: When the HTTP protocol returns a redirect no error will be reported. You can check if there is a redirect with the QNetworkRequest::RedirectionTargetAttribute attribute.',
                 1 : 'the remote server refused the connection (the server is not accepting requests)',
@@ -154,7 +151,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 299 : 'an unknown error related to the remote content was detected',
                 399 : 'a breakdown in protocol was detected (parsing error, invalid or unexpected responses, etc.)',
             }
-            logger.info('Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString()))
+            common.logger.debug('Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString()))
 
 
 class NetworkReply(QNetworkReply):
@@ -248,23 +245,23 @@ class WebPage(QWebPage):
     def javaScriptAlert(self, frame, message):
         """Override default JavaScript alert popup and print results
         """
-        if DEBUG: logger.info('Alert:' + message)
+        common.logger.debug('Alert:' + message)
 
     def javaScriptConfirm(self, frame, message):
         """Override default JavaScript confirm popup and print results
         """
-        if DEBUG: logger.info('Confirm:' + message)
+        common.logger.debug('Confirm:' + message)
         return self.confirm
 
     def javaScriptPrompt(self, frame, message, default):
         """Override default JavaScript prompt popup and print results
         """
-        if DEBUG: logger.info('Prompt:%s%s' % (message, default))
+        common.logger.debug('Prompt:%s%s' % (message, default))
 
     def javaScriptConsoleMessage(self, message, line_number, source_id):
         """Print JavaScript console messages
         """
-        if DEBUG: logger.info('Console:%s%s%s' % (message, line_number, source_id))
+        common.logger.debug('Console:%s%s%s' % (message, line_number, source_id))
 
     def shouldInterruptJavaScript(self):
         """Disable javascript interruption dialog box
@@ -310,11 +307,6 @@ class JQueryBrowser(QWebView):
     
     def set_proxy(self, proxy):
         self.page().networkAccessManager().setProxy(proxy)
-
-    def debug(self, message):
-        # proper logging XXX
-        if DEBUG:
-            logger.info(message)
 
     def current_url(self):
         """Return current URL
@@ -364,10 +356,10 @@ class JQueryBrowser(QWebView):
             else:
                 # didn't download in time
                 if retries > 0:
-                    self.debug('Timeout - retrying')
+                    common.logger.debug('Timeout - retrying')
                     html = self.get(url, script, retries-1, inject)
                 else:
-                    self.debug('Timed out')
+                    common.logger.debug('Timed out')
                     html = ''
         return html
 
@@ -473,5 +465,4 @@ class JQueryBrowser(QWebView):
 
 
 if __name__ == '__main__':
-    DEBUG = True
     JQueryBrowser(gui=True)

@@ -28,8 +28,6 @@ from urlparse import urljoin, urlsplit
 from optparse import OptionParser
 from webscraping import common, settings
 
-# tags that do not contain content and so can be safely skipped
-EMPTY_TAGS = 'br', 'hr'
 
 class XPathException(Exception):
     pass
@@ -64,7 +62,6 @@ def search(html, xpath, remove=None):
         elif tag == 'text()':
             # extract child text
             for context in contexts:
-                print context
                 children.append(common.remove_tags(context, keep_children=False))
         elif tag.startswith('@'):
             # selecting attribute
@@ -262,7 +259,7 @@ def jump_next_tag(html):
         match = tag_regex.search(html)
         if match:
             # XXX check match
-            if match.groups()[0].lower() in EMPTY_TAGS:
+            if match.groups()[0].lower() in common.EMPTY_TAGS:
                 html = html[match.end():]
             else:
                 return html[match.start():]

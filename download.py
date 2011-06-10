@@ -17,9 +17,8 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import socket
 from threading import Thread
-from webscraping import adt, common, logger, pdict, settings
+from webscraping import adt, common, pdict, settings
 
-DEBUG = True
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
 
@@ -67,7 +66,6 @@ class Download(object):
         self.force_html = force_html
         self.force_ascii = force_ascii
         self.max_size = max_size
-        self.logger = logger.get_logger(output_file=settings.logging_file, level=settings.logging_level)
 
 
     def get(self, url, **kwargs):
@@ -103,7 +101,7 @@ class Download(object):
             else:
                 if retry and not html:
                     # try downloading again
-                    if DEBUG: self.logger.info('Redownloading')
+                    common.logger.debug('Redownloading')
                 else:
                     if dl == Download.NEW:
                         return '' # only want newly downloaded content
@@ -127,14 +125,14 @@ class Download(object):
                 if redirect_url:
                     # found a redirection
                     if num_redirects > 0:
-                        self.logger.info('redirecting to %s' % redirect_url)
+                        common.logger.info('redirecting to %s' % redirect_url)
                         kwargs['num_redirects'] = num_redirects - 1
                         html = self.get(redirect_url, **kwargs)
                         # make relative links absolute so will still work after redirect
                         relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
                         html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
                     else:
-                        self.logger.info('%s wanted to redirect to %s' % (url, redirect_url))
+                        common.logger.info('%s wanted to redirect to %s' % (url, redirect_url))
             html = self.clean_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
 
         # cache results
@@ -157,10 +155,10 @@ class Download(object):
         """Clean up downloaded content
         """
         if max_size is not None and len(html) > max_size:
-            if DEBUG: self.logger.info('Too big: %s' % len(html))
+            common.logger.info('Too big: %s' % len(html))
             html = '' # too big to store
         elif force_html and not common.is_html(html):
-            if DEBUG: self.logger.info('Not html')
+            common.logger.info('Not html')
             html = '' # non-html content
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
@@ -179,7 +177,7 @@ class Download(object):
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None):
         """Simply download the url and return the content
         """
-        if DEBUG: self.logger.info('Downloading %s' % url)
+        common.logger.info('Downloading %s' % url)
         # create opener with headers
         opener = opener or urllib2.build_opener()
         if proxy:
@@ -198,7 +196,7 @@ class Download(object):
             self.final_url = response.url # store where redirected to
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
-            if DEBUG: self.logger.info('Error: %s %s' % (url, e))
+            common.logger.debug('Error: %s %s' % (url, e))
             content, self.final_url = None, url
         return content
 
@@ -258,7 +256,7 @@ class Download(object):
                 results['address'] = (results['number'] + ' ' + results['street']).strip()
         if not results:
             # error geocoding - try again later
-            self.logger.info('delete geocode')
+            common.logger.debug('delete invalid geocode')
             del self.cache[url]
         return results
 
@@ -308,8 +306,7 @@ class Download(object):
             if final_url:
                 return final_url
 
-        if DEBUG:
-            self.logger.info('get_location %s' % url)
+        common.logger.debug('get_location %s' % url)
 
         
         conn = httplib.HTTPConnection(host_with_port)
@@ -321,14 +318,13 @@ class Download(object):
             try:
                 conn.request("POST", url_parsed.path + "?" + url_parsed.query, data, headers)
             except Exception, e:
-                if DEBUG:
-                    self.logger.info('get_location error: %s' % e)
+                common.logger.debug('get_location error: %s' % e)
                 return url
         else:
             try:
                 conn.request("GET", url_parsed.path + "?" + url_parsed.query, None, headers)
             except Exception, e:
-                if DEBUG: self.logger.info('get_location error: %s' % e)
+                common.logger.debug('get_location error: %s' % e)
                 return url
 
         final_url = conn.getresponse().getheader('Location')

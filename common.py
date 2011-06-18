@@ -234,6 +234,7 @@ def parse_us_address(address):
     >>> parse_us_address('6200 20th Street, Vero Beach, FL 32966')
     ('6200 20th Street', 'Vero Beach', 'FL', '32966')
     """
+    city = state = zipcode = ''
     addrs = map(lambda x:x.strip(), address.split(','))
     if addrs:
         m = re.compile('(\w+)\s*(.*)').search(addrs[-1])
@@ -280,7 +281,7 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         pass
     #text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = re.sub('&#?\w+;', fixup, text)
-    text = urllib.unquote(text)
+    #text = urllib.unquote(text)
     if keep_unicode:
         return text
     try:

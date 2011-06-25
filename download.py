@@ -309,24 +309,19 @@ class Download(object):
         common.logger.debug('get_location %s' % url)
         conn = httplib.HTTPConnection(host_with_port)
         
+        method = 'GET'
         if data:
-            if isinstance(data, dict):
-                data = urllib.urlencode(data)
-            try:
-                conn.connect()
-                conn.request("POST", url_parsed.path + "?" + url_parsed.query, data, headers)
-            except Exception, e:
-                common.logger.debug('get_location error: %s' % e)
-                return url
-        else:
-            try:
-                conn.connect()
-                conn.request("GET", url_parsed.path + "?" + url_parsed.query, None, headers)
-            except Exception, e:
-                common.logger.debug('get_location error: %s' % e)
-                return url
+            method = 'POST'
+            if isinstance(data, dict): data = urllib.urlencode(data)
 
-        final_url = conn.getresponse().getheader('Location')
+        try:
+            conn.connect()
+            conn.request(method, url_parsed.path + "?" + url_parsed.query, data, headers)
+            final_url = conn.getresponse().getheader('Location')
+        except Exception, e:
+            common.logger.debug('get_location error: %s' % e)
+            return url
+        
         if not final_url:
             final_url = url
             

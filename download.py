@@ -273,62 +273,6 @@ class Download(object):
             emails.update(data.extract_emails(html))
             outstanding.extend(c.crawl(self, url, html))
         return list(emails)
-        
-        
-    def get_location(self, url, headers=None, data=None, user_agent='', use_cache = True):
-        """Get http 301/302/303 redirection url
-        
-        return redirection final url, if no redirection just return the original url
-        """
-        import httplib
-        from urlparse import urlparse
-                    
-        final_url = ''
-        
-        url_parsed = urlparse(url)
-        host_with_port = url_parsed.netloc
-        host = url_parsed.netloc.partition(':')[0]
-
-        #http headers        
-        default_headers =  {'Host': host, 'User-agent': user_agent or settings.user_agent, 'Referer': url}
-        headers = headers and default_headers.update(headers) or default_headers
-        
-        key = url + ' get_location'
-        if data:
-            key += ' ' + str(data)
-        
-        if use_cache:
-            #check cache firstly
-            try:
-                final_url = self.cache[key]
-            except KeyError:
-                pass
-            if final_url:
-                return final_url
-
-        common.logger.debug('get_location %s' % url)
-        conn = httplib.HTTPConnection(host_with_port)
-        
-        method = 'GET'
-        if data:
-            method = 'POST'
-            if isinstance(data, dict): data = urllib.urlencode(data)
-
-        try:
-            conn.connect()
-            conn.request(method, url_parsed.path + "?" + url_parsed.query, data, headers)
-            final_url = conn.getresponse().getheader('Location')
-        except Exception, e:
-            common.logger.debug('get_location error: %s' % e)
-            return url
-        
-        if not final_url:
-            final_url = url
-            
-        if use_cache:
-            self.cache[key] = final_url
-
-        return final_url
 
         
     def gcache_get(self, url, **kwargs):

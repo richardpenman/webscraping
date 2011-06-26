@@ -18,14 +18,14 @@ from collections import defaultdict, deque
 import socket
 from threading import Thread
 from webscraping import adt, common, pdict, settings
+from webscraping.data import read_list
 
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
-
 
 class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
-    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, proxy=None, proxies=None, opener=None, 
+    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, proxy=None, proxies=None, proxy_file=None, opener=None, 
             headers=None, data=None, dl=ALL, retry=False, num_retries=2, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None):
         """
@@ -53,7 +53,8 @@ class Download(object):
         socket.setdefaulttimeout(timeout)
         self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file, cache_timeout=cache_timeout)
         self.delay = delay
-        self.proxies = proxies or [proxy]
+        self.proxies = deque((read_list(proxy_file) if proxy_file else []) or proxies or [proxy])
+        self.proxy_file = proxy_file
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
@@ -75,6 +76,7 @@ class Download(object):
         `kwargs' can override any of the arguments passed to constructor
         """
         delay = kwargs.get('delay', self.delay)
+        self.reload_proxies()
         proxies = kwargs.get('proxies') or [kwargs.get('proxy')]
         if not any(proxies): proxies = self.proxies
         user_agent = kwargs.get('user_agent', self.user_agent)
@@ -200,7 +202,6 @@ class Download(object):
             content, self.final_url = None, url
         return content
 
-
     domains = {}
     def throttle(self, url, delay, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
@@ -217,6 +218,15 @@ class Download(object):
         # update domain timestamp to when can query next
         Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
+    last_time = time.time()
+    def reload_proxies(self):
+        """Reload proxies
+        """
+        if self.proxy_file and time.time() - Download.last_time > 60 * 60:
+            Download.last_time = time.time()
+            if os.path.exists(self.proxy_file):
+                self.proxies = read_list(self.proxy_file)
+                common.logger.debug('Reloaded proxies.')
 
     def geocode(self, address):
         """Geocode address using Google's API and return dictionary of useful fields
@@ -274,7 +284,6 @@ class Download(object):
             outstanding.extend(c.crawl(self, url, html))
         return list(emails)
 
-        
     def gcache_get(self, url, **kwargs):
         """Get page from google cache
         """
@@ -299,8 +308,6 @@ class Download(object):
         
         # remove google translations content
         return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
-
-
 
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, df='get', depth=False, **kwargs):
     """Download these urls in parallel

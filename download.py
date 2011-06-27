@@ -219,14 +219,18 @@ class Download(object):
         Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
     last_time = time.time()
+    last_mtime = 0
     def reload_proxies(self):
         """Reload proxies
+        Check every 10 minutes, if file changed,  reloading it
         """
-        if self.proxy_file and time.time() - Download.last_time > 60 * 60:
+        if self.proxy_file and time.time() - Download.last_time > 10 * 60:
             Download.last_time = time.time()
             if os.path.exists(self.proxy_file):
-                self.proxies = read_list(self.proxy_file)
-                common.logger.debug('Reloaded proxies.')
+                if os.stat(self.proxy_file).st_mtime != Download.last_mtime:
+                    Download.last_mtime = os.stat(self.proxy_file).st_mtime
+                    self.proxies = deque(read_list(self.proxy_file))
+                    common.logger.debug('Reloaded proxies.')
 
     def geocode(self, address):
         """Geocode address using Google's API and return dictionary of useful fields

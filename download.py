@@ -17,8 +17,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import socket
 from threading import Thread
-from webscraping import adt, common, pdict, settings
-from webscraping.data import read_list
+from webscraping import adt, common, data, pdict, settings
 
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
@@ -53,7 +52,7 @@ class Download(object):
         socket.setdefaulttimeout(timeout)
         self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file, cache_timeout=cache_timeout)
         self.delay = delay
-        self.proxies = deque((read_list(proxy_file) if proxy_file else []) or proxies or [proxy])
+        self.proxies = deque((data.read_list(proxy_file) if proxy_file else []) or proxies or [proxy])
         self.proxy_file = proxy_file
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
@@ -229,7 +228,7 @@ class Download(object):
             if os.path.exists(self.proxy_file):
                 if os.stat(self.proxy_file).st_mtime != Download.last_mtime:
                     Download.last_mtime = os.stat(self.proxy_file).st_mtime
-                    self.proxies = deque(read_list(self.proxy_file))
+                    self.proxies = deque(data.read_list(self.proxy_file))
                     common.logger.debug('Reloaded proxies.')
 
     def geocode(self, address):

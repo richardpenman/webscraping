@@ -53,7 +53,7 @@ def to_float(s):
     """Return float from this string
     """
     valid = string.digits + '.-'
-    return float(''.join(c for c in str(s) if c in valid) or 0)
+    return float(''.join(c for c in s if c in valid) or 0)
 
     
 def to_unicode(obj, encoding='utf-8'):

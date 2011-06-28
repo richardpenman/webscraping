@@ -97,7 +97,7 @@ def read_list(file):
     if os.path.exists(file):
         l.extend(open(file).read().splitlines())
     else:
-        common.logger.info('%s not found' % file)
+        common.logger.debug('%s not found' % file)
     return l
 
 

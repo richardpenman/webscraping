@@ -76,8 +76,9 @@ class Download(object):
         """
         delay = kwargs.get('delay', self.delay)
         self.reload_proxies()
-        proxies = kwargs.get('proxies') or [kwargs.get('proxy')]
+        proxies = kwargs.get('proxies')
         if not any(proxies): proxies = self.proxies
+        if kwargs.has_key('proxy'): proxies = [kwargs.get('proxy')]
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)

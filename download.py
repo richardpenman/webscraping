@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import socket
 from threading import Thread
-from webscraping import adt, common, data, pdict, settings
+from webscraping import adt, common, data as io, pdict, settings
 
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
@@ -52,7 +52,7 @@ class Download(object):
         socket.setdefaulttimeout(timeout)
         self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file, cache_timeout=cache_timeout)
         self.delay = delay
-        self.proxies = deque((data.read_list(proxy_file) if proxy_file else []) or proxies or [proxy])
+        self.proxies = deque((io.read_list(proxy_file) if proxy_file else []) or proxies or [proxy])
         self.proxy_file = proxy_file
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
@@ -228,7 +228,7 @@ class Download(object):
             if os.path.exists(self.proxy_file):
                 if os.stat(self.proxy_file).st_mtime != Download.last_mtime:
                     Download.last_mtime = os.stat(self.proxy_file).st_mtime
-                    self.proxies = deque(data.read_list(self.proxy_file))
+                    self.proxies = deque(io.read_list(self.proxy_file))
                     common.logger.debug('Reloaded proxies.')
 
     def geocode(self, address):
@@ -283,7 +283,7 @@ class Download(object):
         while outstanding:
             url = outstanding.popleft()
             html = self.get(url, retry=False)
-            emails.update(data.extract_emails(html))
+            emails.update(io.extract_emails(html))
             outstanding.extend(c.crawl(self, url, html))
         return list(emails)
 
@@ -295,7 +295,6 @@ class Download(object):
     def gtrans_get(self, url, **kwargs):
         """Get page via Google Translation
         """
-        
         url = 'http://translate.google.com/translate?sl=nl&anno=2&u=%s' % urllib.quote(url)
         html = self.get(url, **kwargs)
         if not html: return
@@ -380,7 +379,7 @@ class CrawlerCallback:
         `crawl_existing' sets whether to crawl content already downloaded previously in the cache
         """
         if output_file:
-            self.writer = data.UnicodeWriter(output_file) 
+            self.writer = io.UnicodeWriter(output_file) 
         else:
             self.writer = None
         self.max_urls = max_urls

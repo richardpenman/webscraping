@@ -103,10 +103,6 @@ class NetworkAccessManager(QNetworkAccessManager):
                 reply.setRawHeader(QByteArray('Base-Url'), QByteArray('').append(request.originatingObject().page().mainFrame().baseUrl().toString()))
             except Exception, e:
                 common.logger.debug(e)
-        #reply.data = ''
-        #if 'Search' in str(request.url().toString()):
-        #if 'captchaData' in str(request.url().toString()):
-        #reply = NetworkReply(self, reply)
         return reply
 
 
@@ -274,7 +270,7 @@ class JQueryBrowser(QWebView):
     """Render webpages using webkit
     """
 
-    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5):#, cache_file=None):
+    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5, enable_plugins=True):#, cache_file=None):
         """
         base_url is the domain that will be crawled
         gui is whether to show webkit window or run headless
@@ -300,7 +296,7 @@ class JQueryBrowser(QWebView):
         self.base_url = base_url
         self.jquery_lib = None
         #enable flash plugin etc.
-        self.settings().setAttribute(QWebSettings.PluginsEnabled, True)
+        self.settings().setAttribute(QWebSettings.PluginsEnabled, enable_plugins)
         QTimer.singleShot(0, self.run) # start crawling when all events processed
         if gui: self.show() 
         self.app.exec_() # start GUI thread
@@ -349,7 +345,7 @@ class JQueryBrowser(QWebView):
             if timer.isActive():
                 # downloaded successfully
                 timer.stop()
-                html = self.current_html()
+                parsed_html = self.current_html()
                 #if key:
                 #    self.cache[key] = html
                 self.wait(self.delay - (time() - t1))
@@ -357,11 +353,11 @@ class JQueryBrowser(QWebView):
                 # didn't download in time
                 if retries > 0:
                     common.logger.debug('Timeout - retrying')
-                    html = self.get(url, script, retries-1, inject)
+                    parsed_html = self.get(url, html=html, script=script, retries=retries-1, inject=inject)
                 else:
                     common.logger.debug('Timed out')
-                    html = ''
-        return html
+                    parsed_html = ''
+        return parsed_html
 
 
 

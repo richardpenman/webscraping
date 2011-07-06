@@ -26,7 +26,7 @@ import re
 import urllib2
 from urlparse import urljoin, urlsplit
 from optparse import OptionParser
-from webscraping import common, settings
+import common, settings
 
 
 class XPathException(Exception):

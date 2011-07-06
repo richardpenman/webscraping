@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import socket
 from threading import Thread
-from webscraping import adt, common, data as io, pdict, settings
+import adt, alg, common, pdict, settings
 
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
@@ -52,8 +52,9 @@ class Download(object):
         socket.setdefaulttimeout(timeout)
         self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file, cache_timeout=cache_timeout)
         self.delay = delay
-        self.proxies = deque((io.read_list(proxy_file) if proxy_file else []) or proxies or [proxy])
+        self.proxies = (common.read_list(proxy_file) if proxy_file else []) or proxies or [proxy]
         self.proxy_file = proxy_file
+        self.last_load_time = self.last_mtime =time.time()
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
@@ -76,8 +77,9 @@ class Download(object):
         """
         delay = kwargs.get('delay', self.delay)
         self.reload_proxies()
-        proxies = kwargs.get('proxies') or [kwargs.get('proxy')]
+        proxies = kwargs.get('proxies') or []
         if not any(proxies): proxies = self.proxies
+        if kwargs.has_key('proxy'): proxies = [kwargs.get('proxy')]
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)
@@ -217,18 +219,16 @@ class Download(object):
         # update domain timestamp to when can query next
         Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
-    last_time = time.time()
-    last_mtime = 0
     def reload_proxies(self):
         """Reload proxies
-        Check every 10 minutes, if file changed,  reloading it
+        Check every 10 minutes, if file changed, reloading it
         """
-        if self.proxy_file and time.time() - Download.last_time > 10 * 60:
-            Download.last_time = time.time()
+        if self.proxy_file and time.time() - self.last_load_time > 10 * 60:
+            self.last_load_time = time.time()
             if os.path.exists(self.proxy_file):
-                if os.stat(self.proxy_file).st_mtime != Download.last_mtime:
-                    Download.last_mtime = os.stat(self.proxy_file).st_mtime
-                    self.proxies = deque(io.read_list(self.proxy_file))
+                if os.stat(self.proxy_file).st_mtime != self.last_mtime:
+                    self.last_mtime = os.stat(self.proxy_file).st_mtime
+                    self.proxies = common.read_list(self.proxy_file)
                     common.logger.debug('Reloaded proxies.')
 
     def geocode(self, address):
@@ -283,7 +283,7 @@ class Download(object):
         while outstanding:
             url = outstanding.popleft()
             html = self.get(url, retry=False)
-            emails.update(io.extract_emails(html))
+            emails.update(alg.extract_emails(html))
             outstanding.extend(c.crawl(self, url, html))
         return list(emails)
 
@@ -379,7 +379,7 @@ class CrawlerCallback:
         `crawl_existing' sets whether to crawl content already downloaded previously in the cache
         """
         if output_file:
-            self.writer = io.UnicodeWriter(output_file) 
+            self.writer = common.UnicodeWriter(output_file) 
         else:
             self.writer = None
         self.max_urls = max_urls

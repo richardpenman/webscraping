@@ -11,7 +11,7 @@ from PyQt4.QtGui import QApplication, QDesktopServices
 from PyQt4.QtCore import QByteArray, QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
 from PyQt4.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
-from webscraping import common, data, settings, xpath
+import common, settings, xpath
 
 """
 TODO

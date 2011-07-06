@@ -6,7 +6,7 @@ import csv
 import math
 import logging
 from collections import defaultdict
-from webscraping import common, settings, xpath
+import common, settings, xpath
 
 
 def get_excerpt(html, try_meta=False, max_chars=255):
@@ -87,65 +87,3 @@ def distance(p1, p2):
     # Remember to multiply arc by the radius of the earth 
     # in your favorite set of units to get length.
     return arc
-
-
-
-def read_list(file):
-    """Return file as list if exists
-    """
-    l = []
-    if os.path.exists(file):
-        l.extend(open(file).read().splitlines())
-    else:
-        common.logger.debug('%s not found' % file)
-    return l
-
-
-class UnicodeWriter(object):
-    """A CSV writer that produces Excel-compatibly CSV files from unicode data.
-    """
-    def __init__(self, filename, encoding='utf-8', mode='wb', unique=False, **argv):
-        self.encoding = encoding
-        self.unique = unique
-        self.writer = csv.writer(open(filename, mode), **argv)
-        self.header = None
-        self.rows = []
-        if unique:
-            # XXX change to hash dict
-            self.rows = list(csv.reader(open(filename)))
-
-    def cell(self, s):
-        if isinstance(s, basestring):
-            if isinstance(s, unicode):
-                s = s.encode(self.encoding)
-            s = common.unescape(s, self.encoding)
-        elif s is None:
-            s = ''
-        else:
-            s = str(s)
-        return s
-
-    def writerow(self, row):
-        row = [self.cell(col) for col in row]
-        if row not in self.rows:
-            self.writer.writerow(row)
-            if self.unique:
-                self.rows.append(row)
-
-    def writerows(self, rows):
-        for row in rows:
-            self.writerow(row)
-
-    def writedict(self, d):
-        """Write dict to CSV file
-        """
-        if self.header is None:
-            # add header using keys
-            # an optional _header attribute defines the column order
-            self.header = d.get('_header', sorted(d.keys()))
-            self.writerow([col.title() for col in self.header])
-        self.writerow([d.get(col) for col in self.header])
-
-    def writedicts(self, rows):
-        for d in rows:
-            self.writedict(row)

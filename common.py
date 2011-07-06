@@ -440,4 +440,4 @@ def get_logger(output_file=settings.log_file, stdout=True, level=settings.log_le
             logger.addHandler(logging.StreamHandler())
         logger.setLevel(level)
     return logger
-logger = get_logger()
+logger = get_logger(level=logging.INFO)

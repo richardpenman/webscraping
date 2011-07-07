@@ -4,7 +4,7 @@ Website: http://code.google.com/p/webscraping/
 License: LGPL
 """
 
-__all__ = ['adt', 'common', 'data', 'download', 'pdict', 'settings', 'webkit', 'xpath']
+__all__ = ['adt', 'common', 'alg', 'download', 'pdict', 'settings', 'webkit', 'xpath']
 
 
 if __name__ == '__main__':

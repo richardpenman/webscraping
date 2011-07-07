@@ -394,7 +394,7 @@ def read_list(file):
     if os.path.exists(file):
         l.extend(open(file).read().splitlines())
     else:
-        common.logger.debug('%s not found' % file)
+        logger.debug('%s not found' % file)
     return l
 
 
@@ -415,7 +415,7 @@ class UnicodeWriter(object):
         if isinstance(s, basestring):
             if isinstance(s, unicode):
                 s = s.encode(self.encoding)
-            s = common.unescape(s, self.encoding)
+            s = unescape(s, self.encoding)
         elif s is None:
             s = ''
         else:

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 __doc__ = 'Common web scraping related functions'
 
 
@@ -254,8 +255,8 @@ def parse_us_address(address):
 def unescape(text, encoding='utf-8', keep_unicode=False):
     """Interpret escape characters
 
-    >>> unescape('&lt;hello&nbsp;&amp;%20world&gt;')
-    '<hello & world>'
+    >>> unescape('&lt;hello&nbsp;&amp;%20world&gt;\xc2\x85')
+    '<hello & world>...'
     """
     def fixup(m):
         text = m.group(0)
@@ -288,7 +289,36 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         text = text.encode(encoding, 'ignore')
     except UnicodeError:
         pass
-    return text.replace('\xc2\xa0', ' ')
+
+    # remove annoying characters
+    chars = {
+        '\xc2\x82' : ',',        # High code comma
+        '\xc2\x84' : ',,',       # High code double comma
+        '\xc2\x85' : '...',      # Tripple dot
+        '\xc2\x88' : '^',        # High carat
+        '\xc2\x91' : '\x27',     # Forward single quote
+        '\xc2\x92' : '\x27',     # Reverse single quote
+        '\xc2\x93' : '\x22',     # Forward double quote
+        '\xc2\x94' : '\x22',     # Reverse double quote
+        '\xc2\x95' : ' ',  
+        '\xc2\x96' : '-',        # High hyphen
+        '\xc2\x97' : '--',       # Double hyphen
+        '\xc2\x99' : ' ',
+        '\xc2\xa0' : ' ',
+        '\xc2\xa6' : '|',        # Split vertical bar
+        '\xc2\xab' : '<<',       # Double less than
+        '\xc2\xbb' : '>>',       # Double greater than
+        '\xc2\xbc' : '1/4',      # one quarter
+        '\xc2\xbd' : '1/2',      # one half
+        '\xc2\xbe' : '3/4',      # three quarters
+        '\xca\xbf' : '\x27',     # c-single quote
+        '\xcc\xa8' : '',         # modifier - under curve
+        '\xcc\xb1' : ''          # modifier - under line
+    }
+    def replace_chars(match):
+        char = match.group(0)
+        return chars[char]
+    return re.sub('(' + '|'.join(chars.keys()) + ')', replace_chars, text)
 
 
 def clean(s):
@@ -400,16 +430,25 @@ def read_list(file):
 
 class UnicodeWriter(object):
     """A CSV writer that produces Excel-compatibly CSV files from unicode data.
+    
+    file can either be a filename or a file object
+
+    >>> from StringIO import StringIO
+    >>> fp = StringIO()
+    >>> writer = UnicodeWriter(fp, quoting=csv.QUOTE_MINIMAL)
+    >>> writer.writerow(['a', '1'])
+    >>> fp.seek(0)
+    >>> fp.read().strip()
+    'a,1'
     """
-    def __init__(self, filename, encoding='utf-8', mode='wb', unique=False, **argv):
+    def __init__(self, file, encoding='utf-8', mode='wb', unique=False, quoting=csv.QUOTE_ALL, **argv):
         self.encoding = encoding
         self.unique = unique
-        self.writer = csv.writer(open(filename, mode), **argv)
+        fp = file if hasattr(file, 'write') else open(file, mode)
         self.header = None
-        self.rows = []
-        if unique:
-            # XXX change to hash dict
-            self.rows = list(csv.reader(open(filename)))
+        # XXX change to hash dict
+        self.rows = list(csv.reader(fp)) if unique else []
+        self.writer = csv.writer(fp, quoting=quoting, **argv)
 
     def cell(self, s):
         if isinstance(s, basestring):

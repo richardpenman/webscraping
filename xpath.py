@@ -73,9 +73,8 @@ def search(html, xpath, remove=None):
             parent_attributes = []
             for context in contexts:
                 # search direct children if / and all descendants if //
-                search = separator == '' and find_children or find_descendants
+                matches = (separator == '' and find_children or find_descendants)(context, tag)
                 # XXX change to iterator
-                matches = search(context, tag)
                 abs_index = index
                 if abs_index is not None and abs_index < 0:
                     # support negative indices
@@ -258,7 +257,6 @@ def jump_next_tag(html):
     while 1:
         match = tag_regex.search(html)
         if match:
-            # XXX check match
             if match.groups()[0].lower() in common.EMPTY_TAGS:
                 html = html[match.end():]
             else:

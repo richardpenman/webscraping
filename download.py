@@ -310,6 +310,25 @@ class Download(object):
         
         # remove google translations content
         return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
+        
+def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
+    """Update proxies periodically
+    proxy_file - Local proxies file
+    interval - Unit: minute
+    mrt -  Max response time
+    """
+    def update_proxies():
+        D = Download(dl=Download.REMOTE)
+        last_time = time.time()
+        while True:
+            if time.time() - last_time >= interval * 60:
+                last_time = time.time()
+                html = D.get('http://django.redicecn.com/proxies/', data='max_rt=%d' % mrt)
+                if html:
+                    open(proxy_file, 'w').write(html)
+    thread = threading.Thread(target=update_proxies)
+    thread.start()
+
 
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, df='get', depth=False, **kwargs):
     """Download these urls in parallel

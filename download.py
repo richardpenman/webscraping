@@ -326,7 +326,7 @@ def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
                 html = D.get('http://django.redicecn.com/proxies/', data='max_rt=%d' % mrt)
                 if html:
                     open(proxy_file, 'w').write(html)
-    thread = threading.Thread(target=update_proxies)
+    thread = Thread(target=update_proxies)
     thread.start()
 
 

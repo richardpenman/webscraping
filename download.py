@@ -321,6 +321,7 @@ def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
         D = Download(dl=Download.REMOTE)
         last_time = time.time()
         while True:
+            time.sleep(10)
             if time.time() - last_time >= interval * 60:
                 last_time = time.time()
                 html = D.get('http://django.redicecn.com/proxies/', data='max_rt=%d' % mrt)

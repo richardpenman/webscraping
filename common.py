@@ -335,6 +335,12 @@ def pretty(s):
     """Return pretty version of string for display
     """
     return re.sub('[-_]', ' ', s.title())
+    
+   
+def normalize(s):
+    """Return normalized string
+    """
+    return re.sub('\s+', ' ', unescape(remove_tags(s))).strip()
 
 
 def get_extension(url):

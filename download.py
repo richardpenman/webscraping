@@ -242,7 +242,11 @@ class Download(object):
         html = self.get(url)
         results = defaultdict(str)
         if html:
-            geo_data = json.loads(html)
+            try:
+                geo_data = json.loads(html)
+            except Exception, e:
+                common.logger.debug(str(e))
+                return {}
             for result in geo_data.get('results', []):
                 for e in result['address_components']:
                     types, value = e['types'], e['long_name']

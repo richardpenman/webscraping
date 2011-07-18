@@ -353,7 +353,7 @@ class JQueryBrowser(QWebView):
                 # didn't download in time
                 if retries > 0:
                     common.logger.debug('Timeout - retrying')
-                    parsed_html = self.get(url, html=html, script=script, retries=retries-1, inject=inject)
+                    parsed_html = self.get(url, script=script, retries=retries-1, inject=inject)
                 else:
                     common.logger.debug('Timed out')
                     parsed_html = ''

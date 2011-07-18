@@ -451,9 +451,15 @@ class UnicodeWriter(object):
         self.encoding = encoding
         self.unique = unique
         fp = file if hasattr(file, 'write') else open(file, mode)
+        if hasattr(file, 'write'):
+            filename = file.name
+            fp = file
+        else:
+            filename = file
+            fp = open(file, mode)
         self.header = None
         # XXX change to hash dict
-        self.rows = list(csv.reader(fp)) if unique else []
+        self.rows = list(csv.reader(open(filename))) if unique else []
         self.writer = csv.writer(fp, quoting=quoting, **argv)
 
     def cell(self, s):

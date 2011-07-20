@@ -307,6 +307,7 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         '\xc2\xa0' : ' ',
         '\xc2\xa6' : '|',        # Split vertical bar
         '\xc2\xab' : '<<',       # Double less than
+        '\xc2\xae' : '®',
         '\xc2\xbb' : '>>',       # Double greater than
         '\xc2\xbc' : '1/4',      # one quarter
         '\xc2\xbd' : '1/2',      # one half

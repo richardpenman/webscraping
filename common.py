@@ -344,6 +344,18 @@ def normalize(s):
     return re.sub('\s+', ' ', unescape(remove_tags(s))).strip()
 
 
+def pretty_paragraph(s):
+    """Return pretty version of paragraph for display
+    """
+    s = re.sub('<(br|hr|/li)[^>]*>', '\n', s, re.IGNORECASE)
+    s = unescape(remove_tags(s))
+    def fixup(m):
+        text = m.group(0)
+        if '\r' in text or '\n' in text: return '\n'
+        return ' '
+    return re.sub('\s+', fixup, s).strip()
+    
+
 def get_extension(url):
     """Return extension from given URL
 

@@ -278,10 +278,10 @@ class Download(object):
         return results
 
 
-    def get_emails(self, website):
+    def get_emails(self, website, max_depth=1):
         """Crawl this website and return all emails found
         """
-        c = CrawlerCallback()
+        c = CrawlerCallback(max_depth=max_depth)
         outstanding = deque([website])
         emails = set()
         while outstanding:

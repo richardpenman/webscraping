@@ -471,7 +471,7 @@ class UnicodeWriter(object):
             fp = open(file, mode)
         self.header = None
         # XXX change to hash dict
-        self.rows = list(csv.reader(fp)) if unique else []
+        self.rows = list(csv.reader(open(filename))) if unique else []
         self.writer = csv.writer(fp, quoting=quoting, **argv)
 
     def cell(self, s):

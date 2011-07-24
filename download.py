@@ -287,8 +287,9 @@ class Download(object):
         while outstanding:
             url = outstanding.popleft()
             html = self.get(url, retry=False)
-            emails.update(alg.extract_emails(html))
-            outstanding.extend(c.crawl(self, url, html))
+            if html:
+                emails.update(alg.extract_emails(html))
+                outstanding.extend(c.crawl(self, url, html))
         return list(emails)
 
     def gcache_get(self, url, **kwargs):
@@ -448,7 +449,7 @@ class CrawlerCallback:
                 link = urljoin(url, link) # support relative links
                 link = common.unescape(link) # remove &amp; from link
                 #print allowed_urls.match(url), banned_urls.match(url), url
-                if link not in self.found:
+                if not link.lower().startswith('mailto:')  and link not in self.found:
                     self.found[link] = depth + 1
                     # check if a media file
                     if common.get_extension(link) not in common.MEDIA_EXTENSIONS:

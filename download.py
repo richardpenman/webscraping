@@ -278,21 +278,23 @@ class Download(object):
         return results
 
 
-    def get_emails(self, website, max_depth=1, max_urls=30):
+    def get_emails(self, website, max_depth=1, max_urls=30, foundone=False):
         """Crawl this website and return all emails found
         """
         scraped = adt.HashDict()
         c = CrawlerCallback(max_depth=max_depth)
         outstanding = deque([website])
         emails = set()
-        while outstanding:
+        while outstanding and (not max_urls or len(scraped) <= max_urls):
             url = outstanding.popleft()
             if not max_urls or len(scraped) <= max_urls:
                 scraped.add(url)
                 html = self.get(url, retry=False)
                 if html:
                     emails.update(alg.extract_emails(html))
+                    if foundone and len(emails)>0: break
                     outstanding.extend(c.crawl(self, url, html))
+
         return list(emails)
 
     def gcache_get(self, url, **kwargs):

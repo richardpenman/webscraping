@@ -338,10 +338,10 @@ def pretty(s):
     return re.sub('[-_]', ' ', s.title())
     
    
-def normalize(s):
+def normalize(s, encoding='utf-8'):
     """Return normalized string
     """
-    return re.sub('\s+', ' ', unescape(remove_tags(s))).strip()
+    return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding)).strip()
 
 
 def pretty_paragraph(s):

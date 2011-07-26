@@ -330,17 +330,18 @@ class Download(object):
         On windows please download whois.exe from http://technet.microsoft.com/en-us/sysinternals/bb897435.aspx, then place it in Python directory e.g. C:\Python27
         """
         domain = common.get_domain(url)
-        key = 'whos_%s' % domain
-        try:
-            text = self.cache[key]
-            if text:
-                return text
-        except KeyError:
-            pass
-
-        r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
-        self.cache[key] = text = r.stdout.read()
-        return text
+        if domain:
+            key = 'whos_%s' % domain
+            try:
+                text = self.cache[key]
+                if text:
+                    return text
+            except KeyError:
+                pass
+    
+            r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
+            self.cache[key] = text = r.stdout.read()
+            return text
         
 def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
     """Update proxies periodically

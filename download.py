@@ -338,10 +338,27 @@ class Download(object):
                     return text
             except KeyError:
                 pass
-    
-            r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
-            self.cache[key] = text = r.stdout.read()
-            return text
+            
+            # try http://whois.chinaz.com/ first
+            query_url = 'http://whois.chinaz.com/%s' % domain
+            html = self.get(query_url)
+            if html:
+                m = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
+                if m:
+                    script_url = urljoin(query_url, m.groups()[0])
+                    text = self.get(script_url)
+                    if not text or not '@' in text:
+                        del self.cache[query_url]
+                        del self.cache[script_url]
+                        
+                        # try whois command
+                        r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
+                        text = r.stdout.read()
+       
+                    if text and '@' in text:
+                        self.cache[key] = text
+                        return text
+
         
 def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
     """Update proxies periodically

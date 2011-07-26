@@ -13,6 +13,7 @@ import urllib
 import urllib2
 from urlparse import urljoin
 from StringIO import StringIO
+import subprocess
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import socket
@@ -321,17 +322,25 @@ class Download(object):
         # remove google translations content
         return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
     
-    def whois(self, domain):
+    def whois(self, url):
         """Query whois info
+        Compatible with windows
+        Note:
+        On unix please install whois first.
+        On windows please download whois.exe from http://technet.microsoft.com/en-us/sysinternals/bb897435.aspx, then place it in Python directory e.g. C:\Python27
         """
-        url = 'http://whois.chinaz.com/%s' % domain
-        html = self.get(url)
-        if html:
-            m = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
-            if m:
-                url = urljoin(url, m.groups()[0])
-                html = self.get(url) or ''
-                return html
+        domain = common.get_domain(url)
+        key = 'whos_%s' % domain
+        try:
+            text = self.cache[key]
+            if text:
+                return text
+        except KeyError:
+            pass
+
+        r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
+        self.cache[key] = text = r.stdout.read()
+        return text
         
 def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
     """Update proxies periodically

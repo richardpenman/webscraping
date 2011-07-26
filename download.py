@@ -322,7 +322,7 @@ class Download(object):
         # remove google translations content
         return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
     
-    def whois(self, url):
+    def whois(self, url, timeout=10):
         """Query whois info
         Compatible with windows
         Note:
@@ -353,7 +353,14 @@ class Download(object):
                         
                         # try whois command
                         r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
-                        text = r.stdout.read()
+                        start = time.time()
+                        while r.poll() == None:
+                            time.sleep(0.5)
+                            if time.time() - start > timeout:
+                                r.kill()
+                                break
+                        if r.poll() !=1:
+                            text = r.communicate()[0]
        
                     if text and '@' in text:
                         self.cache[key] = text

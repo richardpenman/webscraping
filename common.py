@@ -178,9 +178,9 @@ def most_frequent(l, default=None):
     d = {}
     count, item = 0, default
     for e in reversed(l):
-         d[e] = d.get(e, 0) + 1
-         if d[e] >= count :
-             count, item = d[e], e
+        d[e] = d.get(e, 0) + 1
+        if d[e] >= count :
+            count, item = d[e], e
     return item 
 
 
@@ -289,6 +289,9 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         text = text.encode(encoding, 'ignore')
     except UnicodeError:
         pass
+    
+    if encoding != 'utf-8':
+        return text
 
     # remove annoying characters
     chars = {
@@ -319,6 +322,7 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
     def replace_chars(match):
         char = match.group(0)
         return chars[char]
+
     return re.sub('(' + '|'.join(chars.keys()) + ')', replace_chars, text)
 
 

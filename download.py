@@ -131,7 +131,7 @@ class Download(object):
                     if num_redirects > 0:
                         common.logger.info('redirecting to %s' % redirect_url)
                         kwargs['num_redirects'] = num_redirects - 1
-                        html = self.get(redirect_url, **kwargs)
+                        html = self.get(redirect_url, **kwargs) or ''
                         # make relative links absolute so will still work after redirect
                         relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
                         html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
@@ -357,7 +357,10 @@ class Download(object):
                         while r.poll() == None:
                             time.sleep(0.5)
                             if time.time() - start > timeout:
-                                r.kill()
+                                try:
+                                    r.kill()
+                                except Exception, e:
+                                    pass
                                 break
                         if r.poll() !=1:
                             text = r.communicate()[0]

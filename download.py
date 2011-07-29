@@ -19,6 +19,10 @@ from collections import defaultdict, deque
 import socket
 from threading import Thread, Event
 import adt, alg, common, pdict, settings
+try:
+    import hashlib
+except ImportError:
+    import md5 as hashlib
 
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
@@ -369,6 +373,18 @@ class Download(object):
                         self.cache[key] = text
                         return text
 
+        
+    def save_as(self, url, filename=None, save_dir='images'):
+        """Download url and save into disk.
+        """
+        if url:
+            _bytes = self.get(url, allow_redirect=False)
+            if _bytes:
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
+                open(save_path, 'wb').write(_bytes)
+                return save_path
         
 def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
     """Update proxies periodically

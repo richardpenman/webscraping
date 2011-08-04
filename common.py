@@ -345,7 +345,7 @@ def pretty(s):
 def normalize(s, encoding='utf-8'):
     """Return normalized string
     """
-    return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding)).strip()
+    return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
 
 
 def pretty_paragraph(s):

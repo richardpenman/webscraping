@@ -16,6 +16,7 @@ import cookielib
 import itertools
 import htmlentitydefs
 import logging
+import threading
 from datetime import datetime, timedelta
 import settings
 
@@ -554,6 +555,17 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     cookie_jar.load(tmp_cookie_file)
     return cookie_jar
 
+
+def start_threads(fun, num_threads=20):
+    """Start threads and wait for all threads to finish
+    """
+    threads = [threading.Thread(target=fun) for i in range(num_threads)]
+    # Start threads one by one         
+    for thread in threads: 
+        thread.start()
+    # Wait for all threads to finish
+    for thread in threads: 
+        thread.join()
 
 
 def get_logger(output_file=settings.log_file, stdout=True, level=settings.log_level):

@@ -294,7 +294,7 @@ class Download(object):
             url = outstanding.popleft()
             if not max_urls or len(scraped) <= max_urls:
                 scraped.add(url)
-                html = self.get(url, retry=False)
+                html = self.get(url, retry=False, delay=1)
                 if html:
                     emails.update(alg.extract_emails(html))
                     if foundone and len(emails)>0: break

@@ -470,14 +470,14 @@ class UnicodeWriter(object):
         self.unique = unique
         if hasattr(file, 'write'):
             filename = file.name
-            fp = file
+            self.fp = file
         else:
             filename = file
-            fp = open(file, mode)
+            self.fp = open(file, mode)
         self.header = None
         # XXX change to hash dict
         self.rows = list(csv.reader(open(filename))) if unique else []
-        self.writer = csv.writer(fp, quoting=quoting, **argv)
+        self.writer = csv.writer(self.fp, quoting=quoting, **argv)
 
     def cell(self, s):
         if isinstance(s, basestring):
@@ -514,7 +514,12 @@ class UnicodeWriter(object):
     def writedicts(self, rows):
         for d in rows:
             self.writedict(row)
-
+            
+    def flush(self):
+        self.fp.flush()
+        
+    def close(self):
+        self.fp.close()
 
 
 def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file='cookies.txt'):

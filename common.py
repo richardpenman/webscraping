@@ -482,7 +482,7 @@ class UnicodeWriter(object):
     def cell(self, s):
         if isinstance(s, basestring):
             if isinstance(s, unicode):
-                s = s.encode(self.encoding)
+                s = s.encode(self.encoding, 'ignore')
             s = unescape(s, self.encoding)
         elif s is None:
             s = ''

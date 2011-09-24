@@ -283,7 +283,7 @@ class Download(object):
         return results
 
 
-    def get_emails(self, website, max_depth=1, max_urls=30, foundone=False):
+    def get_emails(self, website, max_depth=1, max_urls=30, max_emails=5):
         """Crawl this website and return all emails found
         """
         scraped = adt.HashDict()
@@ -297,7 +297,7 @@ class Download(object):
                 html = self.get(url, retry=False, delay=1)
                 if html:
                     emails.update(alg.extract_emails(html))
-                    if foundone and len(emails)>0: break
+                    if max_emails and len(emails) >= max_emails: break
                     outstanding.extend(c.crawl(self, url, html))
 
         return list(emails)

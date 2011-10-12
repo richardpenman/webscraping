@@ -283,7 +283,7 @@ class Download(object):
         return results
 
 
-    def get_emails(self, website, max_depth=1, max_urls=30, max_emails=5):
+    def get_emails(self, website, max_depth=1, max_urls=None, max_emails=None):
         """Crawl this website and return all emails found
         """
         scraped = adt.HashDict()

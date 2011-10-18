@@ -189,7 +189,10 @@ class Download(object):
         # create opener with headers
         opener = opener or urllib2.build_opener()
         if proxy:
-            opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
+            if url.lower().startswith('https://'):
+                opener.add_handler(urllib2.ProxyHandler({'https' : proxy}))
+            else:
+                opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
         default_headers =  {'User-agent': user_agent or settings.user_agent, 'Accept-encoding': 'gzip', 'Referer': url}
         headers = headers and default_headers.update(headers) or default_headers
         

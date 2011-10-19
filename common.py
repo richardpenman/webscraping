@@ -219,10 +219,6 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
 
     return re.sub('(' + '|'.join(chars.keys()) + ')', replace_chars, text)
 
-
-def clean(s):
-    return '\n'.join(line.strip() for line in unescape(remove_tags(s)).splitlines() if line.strip())
-
    
 def normalize(s, encoding='utf-8'):
     """Return normalized string
@@ -234,7 +230,7 @@ def safe(s):
     """Return safe version of string for URLs
     
     >>> safe('U@#$_#^&*2')
-    U2
+    'U2'
     """
     safe_chars = string.letters + string.digits + ' '
     return ''.join(c for c in s if c in safe_chars).replace(' ', '-')
@@ -244,7 +240,7 @@ def pretty(s):
     """Return pretty version of string for display
     
     >>> pretty('hello_world')
-    Hello World
+    'Hello World'
     """
     return re.sub('[-_]', ' ', s.title())
 
@@ -361,6 +357,7 @@ class UnicodeWriter(object):
     >>> fp = StringIO()
     >>> writer = UnicodeWriter(fp, quoting=csv.QUOTE_MINIMAL)
     >>> writer.writerow(['a', '1'])
+    >>> writer.flush()
     >>> fp.seek(0)
     >>> fp.read().strip()
     'a,1'
@@ -369,14 +366,12 @@ class UnicodeWriter(object):
         self.encoding = encoding
         self.unique = unique
         if hasattr(file, 'write'):
-            filename = file.name
             self.fp = file
         else:
-            filename = file
             self.fp = open(file, mode)
         self.header = None
         # XXX change to hash dict
-        self.rows = list(csv.reader(open(filename))) if unique else []
+        self.rows = list(csv.reader(self.fp)) if unique else []
         self.writer = csv.writer(self.fp, quoting=quoting, **argv)
 
     def cell(self, s):

@@ -393,28 +393,6 @@ class Download(object):
                 return save_path
 
 
-def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
-    """Update proxies periodically
-    proxy_file - Local proxies file
-    interval - Unit: minute
-    mrt -  Max response time
-    """
-    event = Event()
-    event.set()
-    def update_proxies():
-        D = Download(dl=Download.REMOTE)
-        last_time = time.time()
-        while event.isSet():
-            time.sleep(1)
-            if time.time() - last_time >= interval * 60:
-                last_time = time.time()
-                html = D.get('http://django.redicecn.com/proxies/', data='max_rt=%d' % mrt)
-                if html:
-                    open(proxy_file, 'w').write(html)
-    thread = Thread(target=update_proxies)
-    thread.start()
-    return event
-
 
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
     """Download these urls in parallel

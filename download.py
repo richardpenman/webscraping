@@ -31,7 +31,7 @@ class Download(object):
 
     def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, proxy=None, proxies=None, proxy_file=None, opener=None, 
             headers=None, data=None, dl=ALL, retry=False, num_retries=2, num_redirects=1, allow_redirect=True,
-            force_html=False, force_ascii=False, max_size=None):
+            force_html=False, force_ascii=False, max_size=None, default=''):
         """
         `cache' is a pdict object to use for the cache
         `cache_file' sets where to store cached data
@@ -49,6 +49,7 @@ class Download(object):
         `force_html' sets whether to download non-text data
         `force_ascii' sets whether to only return ascii characters
         `max_size' determines maximum number of bytes that will be downloaded
+        `default' is what to return when no content can be downloaded
         `dl' sets how to download content
             LOCAL means only load content already in cache
             REMOTE means ignore cache and download all content
@@ -59,7 +60,7 @@ class Download(object):
         self.delay = delay
         self.proxies = (common.read_list(proxy_file) if proxy_file else []) or proxies or [proxy]
         self.proxy_file = proxy_file
-        self.last_load_time = self.last_mtime =time.time()
+        self.last_load_time = self.last_mtime = time.time()
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
@@ -72,6 +73,7 @@ class Download(object):
         self.force_html = force_html
         self.force_ascii = force_ascii
         self.max_size = max_size
+        self.default = default
 
 
     def get(self, url, **kwargs):
@@ -97,6 +99,7 @@ class Download(object):
         force_html = kwargs.get('force_html', self.force_html)
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
+        default = kwargs.get('default', self.default)
         self.final_url = None
 
         # check cache for whether this content is already downloaded
@@ -112,11 +115,11 @@ class Download(object):
                     common.logger.debug('Redownloading')
                 else:
                     if dl == Download.NEW:
-                        return '' # only want newly downloaded content
+                        return default # only want newly downloaded content
                     else:
-                        return html # return previously downloaded content
+                        return html or default # return previously downloaded content
         if dl == Download.LOCAL:
-            return '' # only want previously cached content
+            return default # only want previously cached content
 
         html = None
         # attempt downloading URL
@@ -147,7 +150,7 @@ class Download(object):
         self.cache[key] = html
         if url != self.final_url:
             self.cache.meta(key, dict(url=self.final_url))
-        return html or '' # make sure return string
+        return html or default # make sure return string
 
 
     def get_key(self, url, data=None):

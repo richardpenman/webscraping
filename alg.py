@@ -6,7 +6,9 @@ import csv
 import math
 import logging
 from collections import defaultdict
-import common, settings, xpath
+import common
+import settings
+import xpath
 
 
 def get_excerpt(html, try_meta=False, max_chars=255):

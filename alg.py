@@ -55,6 +55,28 @@ def extract_emails(html):
     return emails
 
 
+def parse_us_address(address):
+    """Parse usa address
+    >>> parse_us_address('6200 20th Street, Vero Beach, FL 32966')
+    ('6200 20th Street', 'Vero Beach', 'FL', '32966')
+    """
+    city = state = zipcode = ''
+    addrs = map(lambda x:x.strip(), address.split(','))
+    if addrs:
+        m = re.compile('(\w+)\s*(.*)').search(addrs[-1])
+        if m:
+            state = m.groups()[0].strip()
+            zipcode = m.groups()[1].strip()
+
+        if len(addrs)>=3:
+            city = addrs[-2].strip()
+            address = ','.join(addrs[:-2])
+        else:
+            address = ','.join(addrs[:-1])
+            
+    return address, city, state, zipcode
+
+
 def distance(p1, p2):
     """Calculate distance between 2 (latitude, longitude) points
     Multiply result by radius of earth (6373 km, 3960 miles)

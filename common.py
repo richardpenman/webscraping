@@ -115,13 +115,15 @@ def flatten(ls):
 
 
 def nth(l, i, default=''):
+    """Return nth item from list or default value if out of range
+    """
     try:
         return l[i] 
     except IndexError:
         return default
 
 def first(l, default=''):
-    """Return first element from list or default value if empty
+    """Return first element from list or default value if out of range
 
     >>> first([1,2,3])
     1
@@ -131,86 +133,9 @@ def first(l, default=''):
     return nth(l, i=0, default=default)
 
 def last(l, default=''):
-    """Return last element from list or default value if empty
+    """Return last element from list or default value if out of range
     """
     return nth(l, i=-1, default=default)
-
-
-def pad(l, size, default=None, end=True):
-    """Return list of given size
-    Insert elements of default value if too small
-    Remove elements if too large
-    Manipulate end of list if end is True, else start
-
-    >>> pad(range(5), 5)
-    [0, 1, 2, 3, 4]
-    >>> pad(range(5), 3)
-    [0, 1, 2]
-    >>> pad(range(5), 7, -1)
-    [0, 1, 2, 3, 4, -1, -1]
-    >>> pad(range(5), 7, end=False)
-    [None, None, 0, 1, 2, 3, 4]
-    """
-    while len(l) < size:
-        if end:
-            l.append(default)
-        else:
-            l.insert(0, default)
-    while len(l) > size:
-        if end:
-            l.pop()
-        else:
-            l.pop(0)
-    return l
-
-
-def most_frequent(l, default=None):
-    """Finds the most frequent value in the list.
-    If equal quantities then return the first value.
-    If empty list return default value.
-
-    >>> most_frequent([1, 2, 3, 2, 3])
-    2
-    >>> most_frequent([], False)
-    False
-    >>> most_frequent([1, 2, 3, 4])
-    1
-    """
-    d = {}
-    count, item = 0, default
-    for e in reversed(l):
-        d[e] = d.get(e, 0) + 1
-        if d[e] >= count :
-            count, item = d[e], e
-    return item 
-
-
-def any_in(es, l):
-    """Returns True if any element of es are in l
-
-    >>> any_in([1, 2, 3], [3, 4, 5])
-    True
-    >>> any_in([1, 2, 3], [4, 5])
-    False
-    """
-    for e in es:
-        if e in l:
-            return True
-    else:
-        return False
-
-def all_in(es, l):
-    """Returns True if all elements of es are in l
-
-    >>> all_in([1, 2, 3], [2, 3, 1, 1])
-    True
-    >>> all_in([1, 2, 3], [1, 2])
-    False
-    """
-    for e in es:
-        if e not in l:
-            return False
-    return True
 
 
 def remove_tags(html, keep_children=True):
@@ -231,28 +156,6 @@ def remove_tags(html, keep_children=True):
     return re.compile('<[^<]*?>').sub('', html)
     
     
-def parse_us_address(address):
-    """Parse usa address
-    >>> parse_us_address('6200 20th Street, Vero Beach, FL 32966')
-    ('6200 20th Street', 'Vero Beach', 'FL', '32966')
-    """
-    city = state = zipcode = ''
-    addrs = map(lambda x:x.strip(), address.split(','))
-    if addrs:
-        m = re.compile('(\w+)\s*(.*)').search(addrs[-1])
-        if m:
-            state = m.groups()[0].strip()
-            zipcode = m.groups()[1].strip()
-
-        if len(addrs)>=3:
-            city = addrs[-2].strip()
-            address = ','.join(addrs[:-2])
-        else:
-            address = ','.join(addrs[:-1])
-            
-    return address, city, state, zipcode
-
-
 def unescape(text, encoding='utf-8', keep_unicode=False):
     """Interpret escape characters
 
@@ -330,23 +233,30 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
 def clean(s):
     return '\n'.join(line.strip() for line in unescape(remove_tags(s)).splitlines() if line.strip())
 
-
-def safe(s):
-    """Return safe version of string for URLs
-    """
-    safe_chars = string.letters + string.digits + ' '
-    return ''.join(c for c in s if c in safe_chars).replace(' ', '-')
-
-def pretty(s):
-    """Return pretty version of string for display
-    """
-    return re.sub('[-_]', ' ', s.title())
-    
    
 def normalize(s, encoding='utf-8'):
     """Return normalized string
     """
     return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
+
+
+def safe(s):
+    """Return safe version of string for URLs
+    
+    >>> safe('U@#$_#^&*2')
+    U2
+    """
+    safe_chars = string.letters + string.digits + ' '
+    return ''.join(c for c in s if c in safe_chars).replace(' ', '-')
+
+
+def pretty(s):
+    """Return pretty version of string for display
+    
+    >>> pretty('hello_world')
+    Hello World
+    """
+    return re.sub('[-_]', ' ', s.title())
 
 
 def pretty_paragraph(s):

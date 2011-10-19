@@ -40,10 +40,6 @@ class PersistentDict(object):
         """
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
-        #try:
-        #    self._conn.execute("ALTER TABLE config ADD COLUMN url TEXT;")
-        #except sqlite3.OperationalError:
-        #    pass # already have column
         self.compress_level = compress_level
         self.timeout = cache_timeout
 
@@ -99,7 +95,6 @@ class PersistentDict(object):
         c.execute("SELECT key FROM config;")
         for row in c:
             yield row[0]
-        #return [row[0] for row in self._conn.execute("SELECT key FROM config;").fetchall()]
 
     def is_fresh(self, t):
         """returns whether this datetime has expired
@@ -132,9 +127,6 @@ class PersistentDict(object):
         meta = self.serialize(current_data.get('meta'))
         created = current_data.get('created')
         updated = current_data.get('updated')
-        #keys = new_data.keys() + ['key']
-        #values = [new_data[key] for key in keys] + [key]
-        #self._conn.execute("INSERT INTO config (%s) VALUES(%s);" % (', '.join(keys), ', '.join(['?'] * len(keys))), values)
         # already exists, so update
         self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated, key))
 

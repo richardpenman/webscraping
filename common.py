@@ -222,6 +222,9 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
    
 def normalize(s, encoding='utf-8'):
     """Return normalized string
+    
+    >>> normalize('''<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>''')
+    'Tel.: 029 - 12345678'
     """
     return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
 

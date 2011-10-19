@@ -342,50 +342,40 @@ class Download(object):
 
     def whois(self, url, timeout=10):
         """Query whois info
-        Compatible with windows
-        Note:
-        On unix please install whois first.
-        On windows please download whois.exe from http://technet.microsoft.com/en-us/sysinternals/bb897435.aspx, then place it in Python directory e.g. C:\Python27
         """
         domain = common.get_domain(url)
         if domain:
-            key = 'whos_%s' % domain
+            text = ''
+            key = 'whois_%s' % domain
             try:
                 text = self.cache[key]
-                if text:
-                    return text
             except KeyError:
-                pass
-            
-            # try http://whois.chinaz.com/ first
-            query_url = 'http://whois.chinaz.com/%s' % domain
-            html = self.get(query_url)
-            if html:
-                m = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
-                if m:
-                    script_url = urljoin(query_url, m.groups()[0])
-                    text = self.get(script_url)
-                    if not text or not '@' in text:
-                        del self.cache[query_url]
-                        del self.cache[script_url]
-                        
-                        # try whois command
-                        r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
-                        start = time.time()
-                        while r.poll() == None:
-                            time.sleep(0.5)
-                            if time.time() - start > timeout:
-                                try:
-                                    r.kill()
-                                except Exception, e:
-                                    pass
-                                break
-                        if r.poll() !=1:
-                            text = r.communicate()[0]
-       
-                    if text and '@' in text:
-                        self.cache[key] = text
-                        return text
+                # try online whois app
+                query_url = 'http://whois.chinaz.com/%s' % domain
+                html = self.get(query_url, dl=Download.REMOTE)
+                match = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
+                if match:
+                    script_url = urljoin(query_url, match.groups()[0])
+                    text = self.get(script_url, dl=Download.REMOTE)
+
+                if '@' not in text:
+                    # failed, so try local whois command
+                    r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
+                    start = time.time()
+                    while r.poll() is None:
+                        time.sleep(0.5)
+                        if time.time() - start > timeout:
+                            try:
+                                r.kill()
+                            except Exception, e:
+                                pass
+                            break
+                    if r.poll() != 1:
+                        text = r.communicate()[0]
+                
+                if '@' in text:
+                    self.cache[key] = text
+            return text
 
         
     def save_as(self, url, filename=None, save_dir='images'):

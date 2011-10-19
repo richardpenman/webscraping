@@ -18,18 +18,23 @@ from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import socket
 from threading import Thread, Event
-import adt, alg, common, pdict, settings
 try:
     import hashlib
 except ImportError:
     import md5 as hashlib
+import adt
+import alg
+import common
+import pdict
+import settings
 
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
 class Download(object):
     DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
-    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, timeout=30, delay=5, proxy=None, proxies=None, proxy_file=None, opener=None, 
+    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, 
+            timeout=30, delay=5, proxy=None, proxies=None, proxy_file=None, opener=None, 
             headers=None, data=None, dl=ALL, retry=False, num_retries=2, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None, default=''):
         """
@@ -150,7 +155,7 @@ class Download(object):
         self.cache[key] = html
         if url != self.final_url:
             self.cache.meta(key, dict(url=self.final_url))
-        return html or default # make sure return string
+        return html or default # return default if no content
 
 
     def get_key(self, url, data=None):

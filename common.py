@@ -104,16 +104,6 @@ def unique(l):
     return checked
 
 
-def flatten(ls):
-    """Flatten sub lists into single list
-
-    >>> flatten([[1,2,3], [4,5,6], [7,8,9]])
-    [1, 2, 3, 4, 5, 6, 7, 8, 9]
-    """
-    #return itertools.chain.from_iterable(ls)
-    return [e for l in ls for e in l]
-
-
 def nth(l, i, default=''):
     """Return nth item from list or default value if out of range
     """

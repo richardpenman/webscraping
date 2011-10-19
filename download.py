@@ -211,6 +211,7 @@ class Download(object):
             content, self.final_url = None, url
         return content
 
+
     domains = {}
     def throttle(self, url, delay, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access times in a pdict
@@ -227,6 +228,7 @@ class Download(object):
         # update domain timestamp to when can query next
         Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
+
     def reload_proxies(self):
         """Reload proxies
         Check every 10 minutes, if file changed, reloading it
@@ -238,6 +240,7 @@ class Download(object):
                     self.last_mtime = os.stat(self.proxy_file).st_mtime
                     self.proxies = common.read_list(self.proxy_file)
                     common.logger.debug('Reloaded proxies.')
+
 
     def geocode(self, address, delay=5):
         """Geocode address using Google's API and return dictionary of useful fields
@@ -305,30 +308,30 @@ class Download(object):
 
         return list(emails)
 
+
     def gcache_get(self, url, **kwargs):
         """Get page from google cache
         """
         return self.get('http://www.google.com/search?&q=cache%3A' + urllib.quote(url), **kwargs)
-        
+
+
     def gtrans_get(self, url, **kwargs):
         """Get page via Google Translation
         """
         url = 'http://translate.google.com/translate?sl=nl&anno=2&u=%s' % urllib.quote(url)
         html = self.get(url, **kwargs)
-        if not html: return
-        
-        m = re.compile(r'<frame src="([^"]+)" name=c>', re.DOTALL|re.IGNORECASE).search(html)
-        if not m: return
-        frame_src = urljoin(url, common.unescape(m.groups()[0].strip()))
-        
-        # force to check redirect here
-        if kwargs.has_key('allow_redirect'): kwargs['allow_redirect'] = True
-        html = self.get(frame_src, **kwargs)
-        if not html: return
-        
-        # remove google translations content
-        return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
+        if html:
+            m = re.compile(r'<frame src="([^"]+)" name=c>', re.DOTALL|re.IGNORECASE).search(html)
+            if m:
+                frame_src = urljoin(url, common.unescape(m.groups()[0].strip()))
+                # force to check redirect here
+                if kwargs.has_key('allow_redirect'): kwargs['allow_redirect'] = True
+                html = self.get(frame_src, **kwargs)
+                if html:
+                    # remove google translations content
+                    return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
     
+
     def whois(self, url, timeout=10):
         """Query whois info
         Compatible with windows
@@ -388,7 +391,8 @@ class Download(object):
                 save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
                 open(save_path, 'wb').write(_bytes)
                 return save_path
-        
+
+
 def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
     """Update proxies periodically
     proxy_file - Local proxies file
@@ -412,7 +416,7 @@ def update_proxy_file(proxy_file='proxies.txt', interval=20, mrt=1):
     return event
 
 
-def threaded_get(url=None, urls=None, num_threads=10, cb=None, df='get', depth=False, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -420,7 +424,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, df='get', depth=F
     `cb' is called after each download with the HTML of the download   
         the arguments are the url and downloaded html
         whatever URLs are returned are added to the crawl queue
-    `df' is download method, default is get
+    `post' is whether to use POST instead of default GET
     `depth' sets to traverse depth first rather than the default breadth first
     """
     class DownloadThread(Thread):
@@ -447,7 +451,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, df='get', depth=F
                 else:
                     # download this url
                     try:
-                        html = eval('D.%s' % df)(url, **kwargs)
+                        html = (D.post if post else D.get)(url, **kwargs)
                         if cb:
                             # scrape download
                             urls.extend(cb(D, url, html) or [])

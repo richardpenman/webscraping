@@ -54,34 +54,3 @@ class HashDict:
 
     def get_hash(self, value):
         return hashlib.md5(str(value)).hexdigest()
-
-
-
-class ExpireCounter:
-    """Tracks how many events were added in the preceding time period
-    """
-    def __init__(self, timeout=timedelta(seconds=1)):
-        self.timeout = timeout
-        self.events = deque()
-
-    def add(self):
-        """Add event time
-        """
-        self.events.append(datetime.now())
-
-    def __len__(self):
-        """Return number of active events
-        """
-        self.expire()
-        return len(self.events)
-
-    def expire(self):
-        """Remove any expired events
-        """
-        now = datetime.now()
-        try:
-            while self.events[0] + self.timeout < now:
-                self.events.popleft()
-        except IndexError:
-            pass
-

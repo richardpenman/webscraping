@@ -229,10 +229,10 @@ def normalize(s, encoding='utf-8'):
 def safe(s):
     """Return safe version of string for URLs
     
-    >>> safe('U@#$_#^&*2')
-    'U2'
+    >>> safe('U@#$_#^&*-2')
+    'U_-2'
     """
-    safe_chars = string.letters + string.digits + ' '
+    safe_chars = string.letters + string.digits + '-_ '
     return ''.join(c for c in s if c in safe_chars).replace(' ', '-')
 
 
@@ -273,6 +273,8 @@ def get_domain(url):
 
     >>> get_domain('http://www.google.com.au/tos.html')
     'google.com.au'
+    >>> get_domain('www.google.com')
+    'google.com'
     """
     m = re.compile(r"^.*://(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})").search(url)
     if m:
@@ -291,6 +293,11 @@ def get_domain(url):
 
 def same_domain(url1, url2):
     """Return whether URLs belong to same domain
+    
+    >>> same_domain('http://www.google.com.au', 'code.google.com')
+    True
+    >>> same_domain('http://www.facebook.com', 'http://www.myspace.com')
+    False
     """
     server1 = get_domain(url1)
     server2 = get_domain(url2)

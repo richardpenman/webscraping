@@ -26,11 +26,10 @@ import re
 import urllib2
 from urlparse import urljoin, urlsplit
 from optparse import OptionParser
-import common, settings
+import common
+import settings
 
 
-class XPathException(Exception):
-    pass
 
 def search(html, xpath, remove=None):
     """Query HTML document using XPath
@@ -58,7 +57,7 @@ def search(html, xpath, remove=None):
         children = []
         if tag == '..':
             # parent
-            raise XPathException('.. not yet supported')
+            raise common.WebScrapingError('.. not yet supported')
         elif tag == 'text()':
             # extract child text
             for context in contexts:
@@ -139,7 +138,7 @@ def xpath_iter(xpath):
                         key, value = match.groups()
                         attributes.append((key.lower(), value.lower()))
                     else:
-                        raise XPathException('Unknown format: ' + attribute)
+                        raise common.WebScrapingError('Unknown format: ' + attribute)
         else:
             tag = token
         yield separator, tag, index, attributes
@@ -233,7 +232,7 @@ def find_descendants(html, tag):
     ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
     """
     if tag == '*':
-        raise XPathException("`*' not currently supported for // because too inefficient")
+        raise common.WebScrapingError("`*' not currently supported for // because too inefficient")
     results = []
     for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
         tag_html, _ = split_tag(html[match.start():])

@@ -176,7 +176,7 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
         pass
     #text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = re.sub('&#?\w+;', fixup, text)
-    #text = urllib.unquote(text)
+    text = urllib.unquote(text)
     if keep_unicode:
         return text
     try:
@@ -222,6 +222,9 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
    
 def normalize(s, encoding='utf-8'):
     """Return normalized string
+    
+    >>> normalize('''<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>''')
+    'Tel.: 029 - 12345678'
     """
     return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
 
@@ -306,6 +309,14 @@ def same_domain(url1, url2):
 
 def pretty_duration(dt):
     """Return english description of this time difference
+    
+    >>> from datetime import timedelta
+    >>> pretty_duration(timedelta(seconds=1))
+    '1 second'
+    >>> pretty_duration(timedelta(hours=1))
+    '1 hour'
+    >>> pretty_duration(timedelta(days=2))
+    '2 days'
     """
     if isinstance(dt, datetime):
         # convert datetime to timedelta

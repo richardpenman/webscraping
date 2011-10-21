@@ -18,6 +18,7 @@ import htmlentitydefs
 import logging
 import threading
 from datetime import datetime, timedelta
+import adt
 import settings
 
 
@@ -387,9 +388,10 @@ class UnicodeWriter(object):
             self.fp = file
         else:
             self.fp = open(file, mode)
-        self.header = None
-        # XXX change to hash dict
-        self.rows = list(csv.reader(self.fp)) if unique else []
+        if self.unique:
+            self.rows = adt.HashDict() # cache the rows that have already been written
+            for row in csv.reader(open(self.fp.name)):
+                self.rows.add(row)
         self.writer = csv.writer(self.fp, quoting=quoting, **argv)
 
     def cell(self, s):
@@ -408,26 +410,12 @@ class UnicodeWriter(object):
         if row not in self.rows:
             self.writer.writerow(row)
             if self.unique:
-                self.rows.append(row)
-
+                self.rows.add(row)
+            
     def writerows(self, rows):
         for row in rows:
             self.writerow(row)
 
-    def writedict(self, d):
-        """Write dict to CSV file
-        """
-        if self.header is None:
-            # add header using keys
-            # an optional _header attribute defines the column order
-            self.header = d.get('_header', sorted(d.keys()))
-            self.writerow([col.title() for col in self.header])
-        self.writerow([d.get(col) for col in self.header])
-
-    def writedicts(self, rows):
-        for d in rows:
-            self.writedict(row)
-            
     def flush(self):
         self.fp.flush()
         

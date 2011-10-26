@@ -407,10 +407,12 @@ class UnicodeWriter(object):
 
     def writerow(self, row):
         row = [self.cell(col) for col in row]
-        if row not in self.rows:
-            self.writer.writerow(row)
-            if self.unique:
+        if self.unique:
+            if row not in self.rows:
+                self.writer.writerow(row)
                 self.rows.add(row)
+        else:
+            self.writer.writerow(row)
             
     def writerows(self, rows):
         for row in rows:

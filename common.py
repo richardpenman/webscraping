@@ -129,6 +129,34 @@ def last(l, default=''):
     return nth(l, i=-1, default=default)
 
 
+def pad(l, size, default=None, end=True):
+    """Return list of given size
+    Insert elements of default value if too small
+    Remove elements if too large
+    Manipulate end of list if end is True, else start
+
+    >>> pad(range(5), 5)
+    [0, 1, 2, 3, 4]
+    >>> pad(range(5), 3)
+    [0, 1, 2]
+    >>> pad(range(5), 7, -1)
+    [0, 1, 2, 3, 4, -1, -1]
+    >>> pad(range(5), 7, end=False)
+    [None, None, 0, 1, 2, 3, 4]
+    """
+    while len(l) < size:
+        if end:
+            l.append(default)
+        else:
+            l.insert(0, default)
+    while len(l) > size:
+        if end:
+            l.pop()
+        else:
+            l.pop(0)
+    return l
+
+
 def remove_tags(html, keep_children=True):
     """Remove HTML tags leaving just text
     If keep children is True then keep text within child tags

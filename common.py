@@ -492,10 +492,10 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     return cookie_jar
 
 
-def start_threads(fun, num_threads=20, wait=True):
-    """Start threads and wait for all threads to finish
+def start_threads(fun, num_threads=20, args=(), wait=True):
+    """Start up threads
     """
-    threads = [threading.Thread(target=fun) for i in range(num_threads)]
+    threads = [threading.Thread(target=fun, args=args) for i in range(num_threads)]
     # Start threads one by one         
     for thread in threads: 
         thread.start()

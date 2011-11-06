@@ -4,12 +4,9 @@ Website: http://code.google.com/p/webscraping/
 License: LGPL
 """
 
-__all__ = ['adt', 'alg', 'common', 'download', 'pdict', 'settings', 'webkit', 'xpath']
-
-
 if __name__ == '__main__':
     import doctest
-    for name in __all__:
+    for name in ['adt', 'alg', 'common', 'download', 'pdict', 'settings', 'webkit', 'xpath']:
         module = __import__(name)
         print name
         print doctest.testmod(module)

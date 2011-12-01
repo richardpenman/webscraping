@@ -42,18 +42,22 @@ def extract_emails(html):
     >>> extract_emails('hello richard AT sitescraper DOT net world')
     ['richard@sitescraper.net']
     """
-    email_re = re.compile('[\w\.\+-]{1,64}@\w[\w\.\+-]{1,255}\.\w+')
+    email_re = re.compile('([\w\.-]{1,64})@(\w[\w\.-]{1,255})\.(\w+)')
     # remove comments, which can obfuscate emails
-    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html)
+    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html).replace('mailto:', '')
     emails = []
-    for email in email_re.findall(html):
-        if email not in emails:
-            emails.append(email)
+    for user, domain, ext in email_re.findall(html):
+        if ext.lower() not in common.MEDIA_EXTENSIONS:
+            email = '%s@%s.%s' % (user, domain, ext)
+            if email not in emails:
+                emails.append(email)
+
     # look for obfuscated email
-    for user, domain, ext in re.compile('([\w\.\+-]{1,64})\s?.?AT.?\s?([\w\.\+-]{1,255})\s?.?DOT.?\s?(\w+)', re.IGNORECASE).findall(html.replace('mailto:', '')):
-        email = '%s@%s.%s' % (user, domain, ext)
-        if email not in emails:
-            emails.append(email)
+    for user, domain, ext in re.compile('([\w\.-]{1,64})\s?.?AT.?\s?([\w\.-]{1,255})\s?.?DOT.?\s?(\w+)', re.IGNORECASE).findall(html):
+        if ext.lower() not in common.MEDIA_EXTENSIONS:
+            email = '%s@%s.%s' % (user, domain, ext)
+            if email not in emails:
+                emails.append(email)
     return emails
 
 

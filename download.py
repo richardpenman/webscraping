@@ -315,15 +315,18 @@ class Download(object):
         scraped = adt.HashDict()
         c = CrawlerCallback(max_depth=max_depth)
         outstanding = deque([website])
-        emails = set()
-        while outstanding and \
-                (max_urls is None or len(scraped) < max_urls) and \
-                (max_emails is None or len(emails) < max_emails):
+        emails = []
+        while outstanding and (max_urls is None or len(scraped) < max_urls) \
+                          and (max_emails is None or len(emails) < max_emails):
             url = outstanding.popleft()
             scraped.add(url)
             html = self.get(url, retry=False, delay=1)
             if html:
-                emails.update(alg.extract_emails(html))
+                for email in alg.extract_emails(html):
+                    if email not in emails:
+                        emails.append(email)
+                        if len(emails) == max_emails:
+                            break
                 outstanding.extend(c.crawl(self, url, html))
         return list(emails)
 
@@ -466,10 +469,11 @@ class CrawlerCallback:
     """Example callback to crawl the website
     """
     found = adt.HashDict(int) # track depth of found URLs
-    crawled = adt.HashDict(int) # track which URL's have been crawled (not all found URLs will be crawled)
 
-    def __init__(self, output_file=None, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
+    def __init__(self, output_file=None, max_links=100, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
         """
+        `output_file' is where to save scraped data
+        `max_links' is the maximum number of links to follow per page
         `max_depth' is the maximum depth to follow links into website (use None for no limit)
         `allowed_urls' is a regex for allowed urls, defaults to all urls
         `banned_urls' is a regex for banned urls, defaults to no urls
@@ -480,6 +484,7 @@ class CrawlerCallback:
             self.writer = common.UnicodeWriter(output_file) 
         else:
             self.writer = None
+        self.max_links = max_links
         self.max_depth = max_depth
         self.allowed_urls = re.compile(allowed_urls)
         self.banned_urls = re.compile(banned_urls)
@@ -511,14 +516,16 @@ class CrawlerCallback:
             for link in CrawlerCallback.link_re.findall(html):
                 link = self.normalize(link)
                 link = urljoin(url, link) # support relative links
-                # is a new link
                 if link not in CrawlerCallback.found:
                     CrawlerCallback.found[link] = depth + 1
                     # only crawl within website
                     #if common.same_domain(domain, link):
                     if domain == common.get_domain(link):
                         if self.valid(link):
+                            # is a new link
                             outstanding.append(link)
+                            if len(outstanding) == self.max_links:
+                                break
         return outstanding
 
 
@@ -531,11 +538,11 @@ class CrawlerCallback:
             if link.lower().startswith('http'):
                 # passes regex
                 if self.allowed_urls.match(link) and not self.banned_urls.match(link):
-                        # not blocked by robots.txt
-                        if not self.robots or self.robots.can_fetch(settings.user_agent, link):
-                            # allowed to recrawl
-                            if self.crawl_existing or (D.cache and link not in D.cache):
-                                return True
+                    # not blocked by robots.txt
+                    if not self.robots or self.robots.can_fetch(settings.user_agent, link):
+                        # allowed to recrawl
+                        if self.crawl_existing or (D.cache and link not in D.cache):
+                            return True
         return False
 
 

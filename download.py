@@ -316,16 +316,15 @@ class Download(object):
         c = CrawlerCallback(max_depth=max_depth)
         outstanding = deque([website])
         emails = set()
-        while outstanding and (not max_urls or len(scraped) <= max_urls):
+        while outstanding and \
+                (max_urls is None or len(scraped) < max_urls) and \
+                (max_emails is None or len(emails) < max_emails):
             url = outstanding.popleft()
-            if not max_urls or len(scraped) <= max_urls:
-                scraped.add(url)
-                html = self.get(url, retry=False, delay=1)
-                if html:
-                    emails.update(alg.extract_emails(html))
-                    if max_emails and len(emails) >= max_emails: break
-                    outstanding.extend(c.crawl(self, url, html))
-
+            scraped.add(url)
+            html = self.get(url, retry=False, delay=1)
+            if html:
+                emails.update(alg.extract_emails(html))
+                outstanding.extend(c.crawl(self, url, html))
         return list(emails)
 
 
@@ -367,11 +366,11 @@ class Download(object):
             except KeyError:
                 # try online whois app
                 query_url = 'http://whois.chinaz.com/%s' % domain
-                html = self.get(query_url, use_cache=False)
+                html = self.get(query_url, read_cache=False)
                 match = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
                 if match:
                     script_url = urljoin(query_url, match.groups()[0])
-                    text = self.get(script_url, use_cache=False)
+                    text = self.get(script_url, read_cache=False)
 
                 if '@' not in text:
                     # failed, so try local whois command
@@ -466,9 +465,11 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
 class CrawlerCallback:
     """Example callback to crawl the website
     """
-    def __init__(self, output_file=None, max_urls=30, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
+    found = adt.HashDict(int) # track depth of found URLs
+    crawled = adt.HashDict(int) # track which URL's have been crawled (not all found URLs will be crawled)
+
+    def __init__(self, output_file=None, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
         """
-        `max_urls' is the maximum number of URLs to crawl (use None for no limit)
         `max_depth' is the maximum depth to follow links into website (use None for no limit)
         `allowed_urls' is a regex for allowed urls, defaults to all urls
         `banned_urls' is a regex for banned urls, defaults to no urls
@@ -479,14 +480,11 @@ class CrawlerCallback:
             self.writer = common.UnicodeWriter(output_file) 
         else:
             self.writer = None
-        self.max_urls = max_urls
         self.max_depth = max_depth
         self.allowed_urls = re.compile(allowed_urls)
         self.banned_urls = re.compile(banned_urls)
         self.robots = robots
         self.crawl_existing = crawl_existing
-        self.found = adt.HashDict(int) # track depth of found URLs
-        self.crawled = adt.HashDict() # track which URLs have been crawled (not all found URLs will be crawled)
 
 
     def __call__(self, D, url, html):
@@ -505,29 +503,46 @@ class CrawlerCallback:
     def crawl(self, D, url, html): 
         """Crawl website html and return list of URLs crawled
         """
-        self.crawled.add(url)
-        depth = self.found[url]
+        domain = common.get_domain(url)
+        depth = CrawlerCallback.found[url]
         outstanding = []
-        if len(self.crawled) != self.max_urls and depth != self.max_depth: 
+        if self.max_depth is None or depth < self.max_depth: 
             # extract links to continue crawling
             for link in CrawlerCallback.link_re.findall(html):
-                if '#' in link:
-                    # remove internal links to avoid duplicates
-                    link = link[:link.index('#')] 
-                link = common.unescape(link) # remove &amp; from link
+                link = self.normalize(link)
                 link = urljoin(url, link) # support relative links
-                if link.lower().startswith('http'):
-                    if link not in self.found:
-                        self.found[link] = depth + 1
-                        # check if a media file
-                        if common.get_extension(link) not in common.MEDIA_EXTENSIONS:
-                            # not blocked by robots.txt
-                            if not self.robots or self.robots.can_fetch(settings.user_agent, link):
-                                # passes regex
-                                if self.allowed_urls.match(link) and not self.banned_urls.match(link):
-                                    # only crawl within website
-                                    if common.same_domain(url, link):
-                                        # allowed to recrawl
-                                        if self.crawl_existing or (D.cache and url not in D.cache):
-                                            outstanding.append(link)
+                # is a new link
+                if link not in CrawlerCallback.found:
+                    CrawlerCallback.found[link] = depth + 1
+                    # only crawl within website
+                    #if common.same_domain(domain, link):
+                    if domain == common.get_domain(link):
+                        if self.valid(link):
+                            outstanding.append(link)
         return outstanding
+
+
+    def valid(self, link):
+        """Check if should crawl this link
+        """
+        # check if a media file
+        if common.get_extension(link) not in common.MEDIA_EXTENSIONS:
+            # check if a proper HTTP link
+            if link.lower().startswith('http'):
+                # passes regex
+                if self.allowed_urls.match(link) and not self.banned_urls.match(link):
+                        # not blocked by robots.txt
+                        if not self.robots or self.robots.can_fetch(settings.user_agent, link):
+                            # allowed to recrawl
+                            if self.crawl_existing or (D.cache and link not in D.cache):
+                                return True
+        return False
+
+
+    def normalize(self, link):
+        """Normalize the link to avoid duplicates
+        """
+        if '#' in link:
+            # remove internal links to avoid duplicates
+            link = link[:link.index('#')] 
+        return common.unescape(link) # remove &amp; from link

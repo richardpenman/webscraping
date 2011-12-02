@@ -66,7 +66,8 @@ class Download(object):
             self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file)
         else:
             self.cache = None
-            common.log('Could not import pdict so cache disabled')
+            if read_cache or write_cache:
+                common.logger.info('Could not import pdict so cache disabled')
         self.read_cache = read_cache
         self.write_cache = write_cache
         self.use_network = use_network

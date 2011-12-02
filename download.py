@@ -25,26 +25,31 @@ except ImportError:
 import adt
 import alg
 import common
-import pdict
 import settings
+try:
+    import pdict
+except ImportError:
+    # sqlite not installed
+    pdict = None
 
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
 class Download(object):
-    DL_TYPES = ALL, LOCAL, REMOTE, NEW = range(4)
 
-    def __init__(self, cache=None, cache_file=None, cache_timeout=None, user_agent=None, 
-            timeout=30, delay=5, proxy=None, proxies=None, proxy_file=None, opener=None, 
-            headers=None, data=None, dl=ALL, retry=False, num_retries=2, num_redirects=1, allow_redirect=True,
+    def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
+            user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, opener=None, 
+            headers=None, data=None, retry=False, num_retries=2, num_redirects=1, allow_redirect=True,
             force_html=False, force_ascii=False, max_size=None, default=''):
         """
         `cache' is a pdict object to use for the cache
-        `cache_file' sets where to store cached data
-        'cache_timeout' is the maximum time of cache timeout
+        `cache_file' sets filename to store cached data
+        `read_cache' sets whether to read from the cache
+        `write_cache' sets whether to write to the cache
+        `use_network' sets whether to download content not in the cache
         `user_agent' sets the User Agent to download content with
         `timeout' is the maximum amount of time to wait for http response
         `delay' is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
-        `proxy' is a proxy to download content through. If a list is passed then will cycle through list.
+        `proxies' is a list of proxies to cycle through when downloading content
         `opener' sets an optional opener to use instead of using urllib2 directly
         `headers' are the headers to include in the request
         `data' is what to post at the URL
@@ -53,24 +58,26 @@ class Download(object):
         `num_redirects' sets how many times the URL is allowed to be redirected, to avoid infinite loop
         `force_html' sets whether to download non-text data
         `force_ascii' sets whether to only return ascii characters
-        `max_size' determines maximum number of bytes that will be downloaded
+        `max_size' determines maximum number of bytes that will be downloaded, or None to disable
         `default' is what to return when no content can be downloaded
-        `dl' sets how to download content
-            LOCAL means only load content already in cache
-            REMOTE means ignore cache and download all content
-            NEW means download content when not in cache or return empty
         """
         socket.setdefaulttimeout(timeout)
-        self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file, cache_timeout=cache_timeout)
+        if pdict:
+            self.cache = cache or pdict.PersistentDict(cache_file or settings.cache_file)
+        else:
+            self.cache = None
+            common.log('Could not import pdict so cache disabled')
+        self.read_cache = read_cache
+        self.write_cache = write_cache
+        self.use_network = use_network
         self.delay = delay
-        self.proxies = (common.read_list(proxy_file) if proxy_file else []) or proxies or [proxy]
+        self.proxies = (common.read_list(proxy_file) if proxy_file else []) or proxies or []
         self.proxy_file = proxy_file
         self.last_load_time = self.last_mtime = time.time()
         self.user_agent = user_agent or settings.user_agent
         self.opener = opener
         self.headers = headers
         self.data = data
-        self.dl = dl
         self.retry = retry
         self.num_retries = num_retries
         self.num_redirects = num_redirects
@@ -87,16 +94,16 @@ class Download(object):
         `url' is what to download
         `kwargs' can override any of the arguments passed to constructor
         """
+        read_cache = kwargs.get('read_cache', self.read_cache)
+        write_cache = kwargs.get('write_cache', self.write_cache)
+        use_network = kwargs.get('use_network', self.use_network)
         delay = kwargs.get('delay', self.delay)
         self.reload_proxies()
-        proxies = kwargs.get('proxies') or []
-        if not any(proxies): proxies = self.proxies
-        if kwargs.has_key('proxy'): proxies = [kwargs.get('proxy')]
+        proxies = kwargs.get('proxies', self.proxies)
         user_agent = kwargs.get('user_agent', self.user_agent)
         opener = kwargs.get('opener', self.opener)
         headers = kwargs.get('headers', self.headers)
         data = kwargs.get('data', self.data)
-        dl = kwargs.get('dl', self.dl)
         retry = kwargs.get('retry', self.retry)
         num_retries = kwargs.get('num_retries', self.num_retries)
         num_redirects = kwargs.get('num_redirects', self.num_redirects)
@@ -105,11 +112,11 @@ class Download(object):
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
         default = kwargs.get('default', self.default)
-        self.final_url = None
+        self.final_url = None # for tracking redirects
 
         # check cache for whether this content is already downloaded
         key = self.get_key(url, data)
-        if dl != Download.REMOTE:
+        if self.cache and read_cache:
             try:
                 html = self.cache[key]
             except KeyError:
@@ -119,21 +126,21 @@ class Download(object):
                     # try downloading again
                     common.logger.debug('Redownloading')
                 else:
-                    if dl == Download.NEW:
-                        return default # only want newly downloaded content
-                    else:
-                        return html or default # return previously downloaded content
-        if dl == Download.LOCAL:
-            return default # only want previously cached content
+                    # return previously downloaded content
+                    return html or default 
+        if not use_network:
+            # only want previously cached content
+            return default 
 
         html = None
-        # attempt downloading URL
-        while html is None and num_retries >= 0:
+        # attempt downloading content at URL
+        for i in range(num_retries):
             # crawl slowly for each domain to reduce risk of being blocked
-            proxy = random.choice(proxies)
+            proxy = random.choice(proxies) if proxies else None
             self.throttle(url, delay=delay, proxy=proxy) 
             html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener)
-            num_retries -= 1
+            if html is not None:
+                break # download successful
 
         if html:
             if allow_redirect:
@@ -151,11 +158,15 @@ class Download(object):
                         common.logger.info('%s wanted to redirect to %s' % (url, redirect_url))
             html = self.clean_content(html=html, max_size=max_size, force_html=force_html, force_ascii=force_ascii)
 
-        # cache results
-        self.cache[key] = html
-        if url != self.final_url:
-            self.cache.meta(key, dict(url=self.final_url))
-        return html or default # return default if no content
+        if self.cache and write_cache:
+            # cache results
+            self.cache[key] = html
+            if url != self.final_url:
+                # cache what URL was redirected to
+                self.cache.meta(key, dict(url=self.final_url))
+        
+        # return default if no content
+        return html or default 
 
 
     def get_key(self, url, data=None):
@@ -220,9 +231,9 @@ class Download(object):
         return content
 
 
-    domains = {}
+    domains = adt.HashDict()
     def throttle(self, url, delay, proxy=None, variance=0.5):
-        """Delay a minimum time for each domain per proxy by storing last access times in a pdict
+        """Delay a minimum time for each domain per proxy by storing last access time
 
         `url' is what intend to download
         `delay' is the minimum amount of time (in seconds) to wait after downloading content from this domain
@@ -293,7 +304,8 @@ class Download(object):
         if not results:
             # error geocoding - try again later
             common.logger.debug('delete invalid geocode')
-            del self.cache[url]
+            if self.cache:
+                del self.cache[url]
         return results
 
 
@@ -348,15 +360,18 @@ class Download(object):
             text = ''
             key = 'whois_%s' % domain
             try:
-                text = self.cache[key]
+                if self.cache:
+                    text = self.cache[key]
+                else:
+                    raise KeyError()
             except KeyError:
                 # try online whois app
                 query_url = 'http://whois.chinaz.com/%s' % domain
-                html = self.get(query_url, dl=Download.REMOTE)
+                html = self.get(query_url, use_cache=False)
                 match = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
                 if match:
                     script_url = urljoin(query_url, match.groups()[0])
-                    text = self.get(script_url, dl=Download.REMOTE)
+                    text = self.get(script_url, use_cache=False)
 
                 if '@' not in text:
                     # failed, so try local whois command
@@ -374,7 +389,8 @@ class Download(object):
                         text = r.communicate()[0]
                 
                 if '@' in text:
-                    self.cache[key] = text
+                    if self.cache:
+                        self.cache[key] = text
             return text
 
         
@@ -489,7 +505,6 @@ class CrawlerCallback:
     def crawl(self, D, url, html): 
         """Crawl website html and return list of URLs crawled
         """
-        # XXX add robots back
         self.crawled.add(url)
         depth = self.found[url]
         outstanding = []
@@ -499,20 +514,20 @@ class CrawlerCallback:
                 if '#' in link:
                     # remove internal links to avoid duplicates
                     link = link[:link.index('#')] 
-                link = urljoin(url, link) # support relative links
                 link = common.unescape(link) # remove &amp; from link
-                #print allowed_urls.match(url), banned_urls.match(url), url
-                if not link.lower().startswith('mailto:')  and link not in self.found:
-                    self.found[link] = depth + 1
-                    # check if a media file
-                    if common.get_extension(link) not in common.MEDIA_EXTENSIONS:
-                        # not blocked by robots.txt
-                        if not self.robots or self.robots.can_fetch(settings.user_agent, link):
-                            # passes regex
-                            if self.allowed_urls.match(link) and not self.banned_urls.match(link):
-                                # only crawl within website
-                                if common.same_domain(url, link):
-                                    # allowed to recrawl
-                                    if self.crawl_existing or url not in D.cache:
-                                        outstanding.append(link)
+                link = urljoin(url, link) # support relative links
+                if link.lower().startswith('http'):
+                    if link not in self.found:
+                        self.found[link] = depth + 1
+                        # check if a media file
+                        if common.get_extension(link) not in common.MEDIA_EXTENSIONS:
+                            # not blocked by robots.txt
+                            if not self.robots or self.robots.can_fetch(settings.user_agent, link):
+                                # passes regex
+                                if self.allowed_urls.match(link) and not self.banned_urls.match(link):
+                                    # only crawl within website
+                                    if common.same_domain(url, link):
+                                        # allowed to recrawl
+                                        if self.crawl_existing or (D.cache and url not in D.cache):
+                                            outstanding.append(link)
         return outstanding

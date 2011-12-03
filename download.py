@@ -113,6 +113,7 @@ class Download(object):
         force_ascii = kwargs.get('force_ascii', self.force_ascii)
         max_size = kwargs.get('max_size', self.max_size)
         default = kwargs.get('default', self.default)
+        required = kwargs.get('required')
         self.final_url = None # for tracking redirects
 
         # check cache for whether this content is already downloaded
@@ -141,7 +142,8 @@ class Download(object):
             self.throttle(url, delay=delay, proxy=proxy) 
             html = self.fetch(url, headers=headers, data=data, proxy=proxy, user_agent=user_agent, opener=opener)
             if html is not None:
-                break # download successful
+                if not required or re.compile(required, re.DOTALL|re.IGNORECASE).search(html):
+                    break # download successful
 
         if html:
             if allow_redirect:

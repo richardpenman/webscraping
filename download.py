@@ -379,13 +379,15 @@ class Download(object):
             except KeyError:
                 # try online whois app
                 query_url = 'http://whois.chinaz.com/%s' % domain
-                html = self.get(query_url, read_cache=False)
+                html = self.get(query_url)
                 match = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
                 if match:
                     script_url = urljoin(query_url, match.groups()[0])
                     text = self.get(script_url, read_cache=False)
 
                 if '@' not in text:
+                    if self.cache:
+                        del self.cache[query_url]
                     # failed, so try local whois command
                     r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
                     start = time.time()

@@ -21,11 +21,11 @@ In some cases I have found this faster/more accurate than using lxml.html and in
 # - return xpath for most similar to text
 # - change to breadth first search for faster finish with single element
 
-
 import re
 import urllib2
 from urlparse import urljoin, urlsplit
 from optparse import OptionParser
+import adt
 import common
 import settings
 
@@ -108,6 +108,7 @@ def clean_html(html, tags):
     """
     html = re.compile('<!--.*?-->', re.DOTALL).sub('', html) # remove comments
     if tags:
+        # XXX combine tag list into single regex, if can match same at start and end
         for tag in tags:
             html = re.compile('<' + tag + '[^>]*?/>', re.DOTALL | re.IGNORECASE).sub('', html)
             html = re.compile('<' + tag + '[^>]*?>.*?</' + tag + '>', re.DOTALL | re.IGNORECASE).sub('', html)
@@ -152,8 +153,11 @@ def get_attributes(html):
     >>> get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span class="inner name">SPAN</span></div>')
     {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
     """
-    if '>' in html:
-        html = html[:html.index('>')]
+
+    for i, c in enumerate(html):
+        if c == '>':
+            html = buffer(html, 0, i)
+            break
     return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in attributes_regex.findall(html))
 
 
@@ -205,7 +209,7 @@ def get_content(html, default=''):
 def find_children(html, tag):
     """Find children with this tag type
 
-    >>> find_children('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div')
+    >>> [str(b) for b in find_children('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div')]
     ['<div>abc<div>def</div>abc</div>', '<div>jkl</div>']
     """
     results = []
@@ -228,14 +232,14 @@ def find_children(html, tag):
 def find_descendants(html, tag):
     """Find descendants with this tag type
 
-    >>> find_descendants('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div')
+    >>> [str(b) for b in find_descendants('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div')]
     ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
     """
     if tag == '*':
         raise common.WebScrapingError("`*' not currently supported for // because too inefficient")
     results = []
     for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
-        tag_html, _ = split_tag(html[match.start():])
+        tag_html, _ = split_tag(buffer(html, match.start()))
         results.append(tag_html)
     return results
 
@@ -244,22 +248,22 @@ tag_regex = re.compile('<(\w+)')
 def jump_next_tag(html):
     """Return html at start of next tag
 
-    >>> jump_next_tag('<div>abc</div>')
+    >>> str(jump_next_tag('<div>abc</div>'))
     '<div>abc</div>'
-    >>> jump_next_tag(' <div>abc</div>')
+    >>> str(jump_next_tag(' <div>abc</div>'))
     '<div>abc</div>'
-    >>> jump_next_tag('</span> <div>abc</div>')
+    >>> str(jump_next_tag('</span> <div>abc</div>'))
     '<div>abc</div>'
-    >>> jump_next_tag('<br> <div>abc</div>')
+    >>> str(jump_next_tag('<br> <div>abc</div>'))
     '<div>abc</div>'
     """
     while 1:
         match = tag_regex.search(html)
         if match:
             if match.groups()[0].lower() in common.EMPTY_TAGS:
-                html = html[match.end():]
+                html = buffer(html, match.end())
             else:
-                return html[match.start():]
+                return buffer(html, match.start())
         else:
             return None
 
@@ -279,32 +283,43 @@ def get_tag(html):
         return None
 
 
+splits = adt.HashDict()
 def split_tag(html):
-    """Extract starting tag from HTML
+    """Extract starting tag and contents from HTML
 
-    >>> split_tag('<div>abc<div>def</div>abc</div>ghi<div>jkl</div>')
-    ('<div>abc<div>def</div>abc</div>', 'ghi<div>jkl</div>')
-    >>> split_tag('<br /><div>abc</div>')
-    ('<br />', '<div>abc</div>')
-    >>> split_tag('<div>abc<div>def</div>abc</span>')
-    ('<div>abc<div>def</div>abc</span></div>', '')
+    >>> [str(s) for s in split_tag('<div>abc<div>def</div>abc</div>ghi<div>jkl</div>')]
+    ['<div>abc<div>def</div>abc</div>', 'ghi<div>jkl</div>']
+    >>> [str(s) for s in split_tag('<br /><div>abc</div>')]
+    ['<br />', '<div>abc</div>']
+    >>> [str(s) for s in split_tag('<div>abc<div>def</div>abc</span>')]
+    ['<div>abc<div>def</div>abc</span></div>', '']
     """
-    tag = get_tag(html)
-    depth = 0 # how far nested
-    for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
-        if html[match.start() + 1] == '/':
-            depth -= 1
-        elif html[match.end() - 2] == '/':
-            pass # tag starts and ends (eg <br />)
-        else:
-            depth += 1
-        if depth == 0:
-            # found top level match
-            i = match.end()
-            return html[:i], html[i:]
-    return html + '</%s>' % tag, ''
+    if html in splits:
+        i = splits[html]
+    else:
+        i = None
+        tag = get_tag(html)
+        depth = 0 # how far nested
+        for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
+            if html[match.start() + 1] == '/':
+                depth -= 1
+            elif html[match.end() - 2] == '/':
+                pass # tag starts and ends (eg <br />)
+            else:
+                depth += 1
+            if depth == 0:
+                # found top level match
+                i = match.end()
+                break
+        splits[html] = i
+    if i is None:
+        return html + '</%s>' % tag, ''
+    else:
+        return html[:i], buffer(html, i)
 
 
+a_re = re.compile('//a/@href')
+js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')
 def get_links(html, url=None, local=True, external=True):
     """Return all links from html and convert relative to absolute if source url is provided
 
@@ -326,8 +341,8 @@ def get_links(html, url=None, local=True, external=True):
         else:
             link = None # ignore mailto, etc
         return link
-    a_links = search(html, '//a/@href')
-    js_links = re.findall('location.href ?= ?[\'"](.*?)[\'"]', html)
+    a_links = a_re.search(html)
+    js_links = js_re.findall(html)
     links = []
     for link in a_links + js_links:
         try:

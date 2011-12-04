@@ -53,4 +53,5 @@ class HashDict:
         return self.d.get(self.get_hash(name), default)
 
     def get_hash(self, value):
-        return hashlib.md5(str(value)).hexdigest()
+        return hash(value)
+        #return hashlib.md5(value).hexdigest()

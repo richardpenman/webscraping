@@ -248,10 +248,10 @@ class Download(object):
         """
         if self.settings.proxy_file and time.time() - self.last_load_time > 10 * 60:
             self.last_load_time = time.time()
-            if os.path.exists(self.proxy_file):
-                if os.stat(self.proxy_file).st_mtime != self.last_mtime:
-                    self.last_mtime = os.stat(self.proxy_file).st_mtime
-                    self.settings.proxies = common.read_list(self.proxy_file)
+            if os.path.exists(self.settings.proxy_file):
+                if os.stat(self.settings.proxy_file).st_mtime != self.last_mtime:
+                    self.last_mtime = os.stat(self.settings.proxy_file).st_mtime
+                    self.settings.proxies = common.read_list(self.settings.proxy_file)
                     common.logger.debug('Reloaded proxies.')
 
 

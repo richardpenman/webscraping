@@ -313,7 +313,7 @@ class Download(object):
         while outstanding and (max_urls is None or len(scraped) < max_urls) \
                           and (max_emails is None or len(emails) < max_emails):
             url = outstanding.popleft()
-            scraped.add(url)
+            scraped[url] = True
             html = self.get(url, delay=1)
             if html:
                 for email in alg.extract_emails(html):

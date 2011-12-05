@@ -295,7 +295,7 @@ def split_tag(html):
     ['<div>abc<div>def</div>abc</span></div>', '']
     """
     if html in splits:
-        i = splits[html]
+        i, tag = splits[html]
     else:
         i = None
         tag = get_tag(html)
@@ -311,7 +311,7 @@ def split_tag(html):
                 # found top level match
                 i = match.end()
                 break
-        splits[html] = i
+        splits[html] = i, tag
     if i is None:
         return html + '</%s>' % tag, ''
     else:

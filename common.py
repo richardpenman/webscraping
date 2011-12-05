@@ -420,7 +420,7 @@ class UnicodeWriter(object):
         if self.unique:
             self.rows = adt.HashDict() # cache the rows that have already been written
             for row in csv.reader(open(self.fp.name)):
-                self.rows.add(row)
+                self.rows[row] = True
         self.writer = csv.writer(self.fp, quoting=quoting, **argv)
 
     def cell(self, s):
@@ -439,7 +439,7 @@ class UnicodeWriter(object):
         if self.unique:
             if row not in self.rows:
                 self.writer.writerow(row)
-                self.rows.add(row)
+                self.rows[row] = True
         else:
             self.writer.writerow(row)
             

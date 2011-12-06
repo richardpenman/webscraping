@@ -30,6 +30,8 @@ import common
 import settings
 
 
+USE_BUFFER = False
+
 
 def search(html, xpath, remove=None):
     """Query HTML document using XPath
@@ -44,7 +46,11 @@ def search(html, xpath, remove=None):
     ['LINK 1', 'LINK 2']
     >>> search('<div>abc<a class="link">LINK 1</a></div>', '/div/a/@class')
     ['link']
-    
+
+    # test searching unicode
+    >>> search(u'<a href="http://www.google.com" class="flink">google</a>', '//a[@class="flink"]')
+    [u'google']
+
     # test scraping a large amount of content
     len(search('<div><span>!</span></div>' * 10000, '//span'))
     10000
@@ -156,7 +162,10 @@ def get_attributes(html):
 
     for i, c in enumerate(html):
         if c == '>':
-            html = buffer(html, 0, i)
+            if USE_BUFFER:
+                html = buffer(html, 0, i)
+            else:
+                html = html[:i]
             break
     return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in attributes_regex.findall(html))
 
@@ -219,7 +228,6 @@ def find_children(html, tag):
         if html:
             tag_html, html = split_tag(html)
             if tag_html:
-                #print 'tag:', get_tag(tag_html)
                 if tag.lower() in ('*', get_tag(tag_html).lower()):
                     results.append(tag_html)
             else:
@@ -239,7 +247,11 @@ def find_descendants(html, tag):
         raise common.WebScrapingError("`*' not currently supported for // because too inefficient")
     results = []
     for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
-        tag_html, _ = split_tag(buffer(html, match.start()))
+        if USE_BUFFER:
+            tag_html = buffer(html, match.start())
+        else:
+            tag_html = html[match.start():]
+        tag_html, _ = split_tag(tag_html)
         results.append(tag_html)
     return results
 
@@ -261,9 +273,15 @@ def jump_next_tag(html):
         match = tag_regex.search(html)
         if match:
             if match.groups()[0].lower() in common.EMPTY_TAGS:
-                html = buffer(html, match.end())
+                if USE_BUFFER:
+                    html = buffer(html, match.end())
+                else:
+                    html = html[match.end():]
             else:
-                return buffer(html, match.start())
+                if USE_BUFFER:
+                    return buffer(html, match.start())
+                else:
+                    return html[match.start():]
         else:
             return None
 
@@ -315,8 +333,10 @@ def split_tag(html):
     if i is None:
         return html + '</%s>' % tag, ''
     else:
-        return html[:i], buffer(html, i)
-
+        if USE_BUFFER:
+            return html[:i], buffer(html, i)
+        else:
+            return html[:i], html[i:]
 
 a_re = re.compile('//a/@href')
 js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')

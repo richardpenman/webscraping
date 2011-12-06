@@ -143,7 +143,7 @@ class Download(object):
                 if redirect_url:
                     # found a redirection
                     common.logger.info('%s redirecting to %s' % (url, redirect_url))
-                    settings.num_redirects = num_redirects - 1
+                    settings.num_redirects -= 1
                     html = self.get(redirect_url, **settings) or ''
                     # make relative links absolute so will still work after redirect
                     relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)

@@ -128,7 +128,7 @@ class Download(object):
         # attempt downloading content at URL
         while html is None:
             # crawl slowly for each domain to reduce risk of being blocked
-            proxy = random.choice(settings.proxies) if settings.proxies else None
+            settings.proxy = random.choice(settings.proxies) if settings.proxies else None
             self.throttle(url, delay=settings.delay, proxy=settings.proxy) 
             html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=settings.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
             if settings.num_retries == 0:

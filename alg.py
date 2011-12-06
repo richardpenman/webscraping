@@ -47,14 +47,14 @@ def extract_emails(html):
     html = re.compile('<!--.*?-->', re.DOTALL).sub('', html).replace('mailto:', '')
     emails = []
     for user, domain, ext in email_re.findall(html):
-        if ext.lower() not in common.MEDIA_EXTENSIONS and domain.count('.')<=3:
+        if ext.lower() not in common.MEDIA_EXTENSIONS and len(ext)>=2 and not re.compile('\d').search(ext) and domain.count('.')<=3:
             email = '%s@%s.%s' % (user, domain, ext)
             if email not in emails:
                 emails.append(email)
 
     # look for obfuscated email
     for user, domain, ext in re.compile('([\w\.-]{1,64})\s?.?AT.?\s?([\w\.-]{1,255})\s?.?DOT.?\s?(\w+)', re.IGNORECASE).findall(html):
-        if ext.lower() not in common.MEDIA_EXTENSIONS and domain.count('.')<=3:
+        if ext.lower() not in common.MEDIA_EXTENSIONS and len(ext)>=2 and not re.compile('\d').search(ext) and domain.count('.')<=3:
             email = '%s@%s.%s' % (user, domain, ext)
             if email not in emails:
                 emails.append(email)

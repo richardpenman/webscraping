@@ -128,7 +128,7 @@ class Download(object):
         # attempt downloading content at URL
         while html is None:
             # crawl slowly for each domain to reduce risk of being blocked
-            proxy = random.choice(settings.proxies) if settings.proxies else None
+            settings.proxy = random.choice(settings.proxies) if settings.proxies else None
             self.throttle(url, delay=settings.delay, proxy=settings.proxy) 
             html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=settings.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
             if settings.num_retries == 0:
@@ -143,7 +143,7 @@ class Download(object):
                 if redirect_url:
                     # found a redirection
                     common.logger.info('%s redirecting to %s' % (url, redirect_url))
-                    settings.num_redirects = num_redirects - 1
+                    settings.num_redirects -= 1
                     html = self.get(redirect_url, **settings) or ''
                     # make relative links absolute so will still work after redirect
                     relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
@@ -248,10 +248,10 @@ class Download(object):
         """
         if self.settings.proxy_file and time.time() - self.last_load_time > 10 * 60:
             self.last_load_time = time.time()
-            if os.path.exists(self.proxy_file):
-                if os.stat(self.proxy_file).st_mtime != self.last_mtime:
-                    self.last_mtime = os.stat(self.proxy_file).st_mtime
-                    self.settings.proxies = common.read_list(self.proxy_file)
+            if os.path.exists(self.settings.proxy_file):
+                if os.stat(self.settings.proxy_file).st_mtime != self.last_mtime:
+                    self.last_mtime = os.stat(self.settings.proxy_file).st_mtime
+                    self.settings.proxies = common.read_list(self.settings.proxy_file)
                     common.logger.debug('Reloaded proxies.')
 
 

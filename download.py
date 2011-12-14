@@ -111,6 +111,9 @@ class Download(object):
         if self.cache and settings.read_cache:
             try:
                 html = self.cache[key]
+                if html and settings.pattern and not re.compile(settings.pattern, re.DOTALL | re.IGNORECASE).search(html):
+                    # invalid result from download
+                    html = None
             except KeyError:
                 pass # have not downloaded yet
             else:
@@ -221,7 +224,7 @@ class Download(object):
                 common.logger.info('Content did not match expected pattern - %s' % url)
         except Exception, e:
             # so many kinds of errors are possible here so just catch them all
-            common.logger.debug('Error: %s %s' % (url, e))
+            common.logger.info('Error: %s %s' % (url, e))
             content, self.final_url = None, url
         return content
 
@@ -341,7 +344,7 @@ class Download(object):
             if m:
                 frame_src = urljoin(url, common.unescape(m.groups()[0].strip()))
                 # force to check redirect here
-                if kwargs.has_key('allow_redirect'): kwargs['allow_redirect'] = True
+                if kwargs.has_key('num_redirects'): kwargs['num_redirects'] = 1
                 html = self.get(frame_src, **kwargs)
                 if html:
                     # remove google translations content
@@ -396,7 +399,7 @@ class Download(object):
         """Download url and save into disk.
         """
         if url:
-            _bytes = self.get(url, allow_redirect=False)
+            _bytes = self.get(url, num_redirects=1)
             if _bytes:
                 if not os.path.exists(save_dir):
                     os.makedirs(save_dir)

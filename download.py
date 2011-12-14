@@ -399,7 +399,7 @@ class Download(object):
         """Download url and save into disk.
         """
         if url:
-            _bytes = self.get(url, num_redirects=1)
+            _bytes = self.get(url, num_redirects=0)
             if _bytes:
                 if not os.path.exists(save_dir):
                     os.makedirs(save_dir)

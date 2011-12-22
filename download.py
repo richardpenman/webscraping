@@ -206,7 +206,7 @@ class Download(object):
                 opener.add_handler(urllib2.ProxyHandler({'https' : proxy}))
             else:
                 opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
-        default_headers =  {'User-agent': user_agent or settings.user_agent, 'Accept-encoding': 'gzip', 'Referer': url}
+        default_headers =  {'User-agent': user_agent or settings.user_agent, 'Accept-encoding': 'gzip', 'Referer': url, 'Accept-Language': 'en-us,en;q=0.5'}
         headers = headers and default_headers.update(headers) or default_headers
         
         if isinstance(data, dict):

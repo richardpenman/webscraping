@@ -59,7 +59,7 @@ def to_float(s):
     return float(''.join(c for c in s if c in valid) or 0)
 
     
-def to_unicode(obj, encoding='utf-8'):
+def to_unicode(obj, encoding=settings.default_encoding):
     """Convert obj to unicode
     """
     if isinstance(obj, basestring):
@@ -68,7 +68,7 @@ def to_unicode(obj, encoding='utf-8'):
     return obj
 
 
-def html_to_unicode(html, charset='utf-8'):
+def html_to_unicode(html, charset=settings.default_encoding):
     """Convert html to unicode, decoding by charset
     """
     m = re.compile(r'''<meta\s+http-equiv=["']Content-Type["']\s+content=["'][^"']*?charset=([a-zA-z\d\-]+)["']''', re.IGNORECASE).search(html)
@@ -175,7 +175,7 @@ def remove_tags(html, keep_children=True):
     return re.compile('<[^<]*?>').sub('', html)
     
     
-def unescape(text, encoding='utf-8', keep_unicode=False):
+def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
     """Interpret escape characters
 
     >>> unescape('&lt;hello&nbsp;&amp;%20world&gt;\xc2\x85')
@@ -249,7 +249,7 @@ def unescape(text, encoding='utf-8', keep_unicode=False):
     return re.sub('(' + '|'.join(chars.keys()) + ')', replace_chars, text)
 
    
-def normalize(s, encoding='utf-8'):
+def normalize(s, encoding=settings.default_encoding):
     """Return normalized string
     
     >>> normalize('''<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>''')
@@ -410,7 +410,7 @@ class UnicodeWriter(object):
     >>> fp.read().strip()
     'a,1'
     """
-    def __init__(self, file, encoding='utf-8', mode='wb', unique=False, quoting=csv.QUOTE_ALL, **argv):
+    def __init__(self, file, encoding=settings.default_encoding, mode='wb', unique=False, quoting=csv.QUOTE_ALL, **argv):
         self.encoding = encoding
         self.unique = unique
         if hasattr(file, 'write'):

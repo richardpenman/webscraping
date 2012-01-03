@@ -101,6 +101,8 @@ class Download(object):
         """
         self.reload_proxies()
         self.final_url = None # for tracking redirects
+        self.response_code = '' # keep response code
+        self.response_headers = {} # keep response headers
                 
         # update settings with any local overrides
         settings = adt.Bag(self.settings)
@@ -222,7 +224,11 @@ class Download(object):
                 # invalid result from download
                 content = None
                 common.logger.info('Content did not match expected pattern - %s' % url)
+            self.response_code = '200'
+            self.response_headers = dict(response.headers)
         except Exception, e:
+            if hasattr(e, 'code'):
+                self.response_code = e.code
             # so many kinds of errors are possible here so just catch them all
             common.logger.info('Error: %s %s' % (url, e))
             content, self.final_url = None, url

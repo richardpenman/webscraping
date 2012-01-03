@@ -100,7 +100,8 @@ class Download(object):
         `kwargs' can override any of the arguments passed to constructor
         """
         self.reload_proxies()
-        self.final_url = None # for tracking redirects
+        # for tracking the request
+        self.final_url = self.response_headers = None 
                 
         # update settings with any local overrides
         settings = adt.Bag(self.settings)
@@ -156,9 +157,10 @@ class Download(object):
         if self.cache and settings.write_cache:
             # cache results
             self.cache[key] = html
+            meta = dict(headers=self.response_headers)
             if url != self.final_url:
-                # cache what URL was redirected to
-                self.cache.meta(key, dict(url=self.final_url))
+                meta[url] = self.final_url
+            self.cache.meta(key, meta)
         
         # return default if no content
         return html or settings.default 
@@ -217,7 +219,9 @@ class Download(object):
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
                 content = gzip.GzipFile(fileobj=StringIO(content)).read()
-            self.final_url = response.url # store where redirected to
+            # keep track of server interaction so can save
+            self.final_url = response.url 
+            self.response_headers = dict(response.headers)
             if pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(content):
                 # invalid result from download
                 content = None

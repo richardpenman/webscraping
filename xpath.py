@@ -328,7 +328,7 @@ def split_tag(html):
                 # found top level match
                 i = match.end()
                 break
-        splits[html] = i, tag
+        #splits[html] = i, tag
     if i is None:
         return html + '</%s>' % tag, ''
     else:

@@ -4,7 +4,9 @@ __doc__ = 'Common web scraping related functions'
 
 import os
 import re
+import sys
 import csv
+csv.field_size_limit(sys.maxint)
 import time
 import glob
 import string

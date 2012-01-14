@@ -255,7 +255,7 @@ def find_descendants(html, tag):
     return results
 
 
-tag_regex = re.compile('<(\w+)')
+tag_regex = re.compile('<([\w\:]+)')
 def jump_next_tag(html):
     """Return html at start of next tag
 

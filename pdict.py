@@ -62,15 +62,10 @@ class PersistentDict(object):
         else:
             raise KeyError("Key `%s' does not exist" % key)
     
-    
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
-        try:
-            self._conn.execute("INSERT INTO config (key, value, meta) VALUES(?, ?, ?);", (key, self.serialize(value), self.serialize({})))
-        except sqlite3.IntegrityError:
-            # already exists, so update
-            self._conn.execute("UPDATE config SET value=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
+        self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (key, self.serialize(value), self.serialize({})))
 
     def __delitem__(self, key):
         """remove the specifed value from the database
@@ -129,6 +124,15 @@ class PersistentDict(object):
         updated = current_data.get('updated')
         # already exists, so update
         self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated, key))
+
+    def add(self, d):
+        """insert multiple records in a transaction for effeciency
+        """
+        self._conn.execute('BEGIN TRANSACTION;')
+        for k, v in d.items():
+            self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (k, self.serialize(v), self.serialize({})))
+        self._conn.execute('COMMIT;')
+        
 
     def meta(self, key, value=None):
         """Set of get the meta attribute

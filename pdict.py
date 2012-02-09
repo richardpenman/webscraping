@@ -50,6 +50,14 @@ class PersistentDict(object):
         row = self._conn.execute("SELECT updated FROM config WHERE key=?;", (key,)).fetchone()
         return row and self.is_fresh(row[0])
             
+    def __iter__(self):
+        """iterate each key in the database
+        """
+        c = self._conn.cursor()
+        c.execute("SELECT key FROM config;")
+        for row in c:
+            yield row[0]
+
     def __getitem__(self, key):
         """return the value of the specified key or raise KeyError if not found
         """
@@ -82,14 +90,6 @@ class PersistentDict(object):
         """
         if value:
             return pickle.loads(zlib.decompress(value))
-
-    def keys(self):
-        """returns a generator of each key in the database
-        """
-        c = self._conn.cursor()
-        c.execute("SELECT key FROM config;")
-        for row in c:
-            yield row[0]
 
     def is_fresh(self, t):
         """returns whether this datetime has expired

@@ -53,7 +53,7 @@ class PersistentDict:
     # buffer data so can insert multiple records in a single transaction
     buffered_data = BufferDict()
 
-    def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, max_buffer_size=10):
+    def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, max_buffer_size=0):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.

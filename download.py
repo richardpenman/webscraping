@@ -5,19 +5,20 @@ License: LGPL
 """
 
 import os
-import gzip
 import re
-import time
+import copy
+import collections 
 import random
 import urllib
 import urllib2
-from urlparse import urljoin
-from StringIO import StringIO
+import urlparse
+import StringIO
+import time
+import datetime
 import subprocess
-from datetime import datetime, timedelta
-from collections import defaultdict, deque
 import socket
-from threading import Thread, Event
+import gzip
+import threading
 try:
     import hashlib
 except ImportError:
@@ -63,12 +64,13 @@ class Download(object):
         `pattern' is a regular expression that the downloaded HTML has to match to be considered a valid download
         """
         socket.setdefaulttimeout(timeout)
-        cache_file = cache_file or settings.cache_file
-        if pdict:
+        need_cache = read_cache or write_cache
+        if pdict and need_cache:
+            cache_file = cache_file or settings.cache_file
             self.cache = cache or pdict.PersistentDict(cache_file)
         else:
             self.cache = None
-            if read_cache or write_cache:
+            if need_cache:
                 common.logger.info('Cache disabled because could not import pdict')
 
         self.settings = adt.Bag(
@@ -152,7 +154,7 @@ class Download(object):
                     html = self.get(redirect_url, **settings) or ''
                     # make relative links absolute so will still work after redirect
                     relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
-                    html = relative_re.sub(lambda m: m.group(1) + urljoin(url, m.group(2)), html)
+                    html = relative_re.sub(lambda m: m.group(1) + urlparse.urljoin(url, m.group(2)), html)
             html = self.clean_content(html=html, max_size=settings.max_size, force_html=settings.force_html, force_ascii=settings.force_ascii)
 
         if self.cache and settings.write_cache:
@@ -194,7 +196,7 @@ class Download(object):
         """
         match = re.compile('<meta[^>]*?url=(.*?)["\']', re.IGNORECASE).search(html)
         if match:
-            return urljoin(url, common.unescape(match.groups()[0].strip())) 
+            return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):
@@ -218,7 +220,7 @@ class Download(object):
             content = response.read()
             if response.headers.get('content-encoding') == 'gzip':
                 # data came back gzip-compressed so decompress it          
-                content = gzip.GzipFile(fileobj=StringIO(content)).read()
+                content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()
             self.final_url = response.url # store where redirected to
             if pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(content):
                 # invalid result from download
@@ -245,11 +247,11 @@ class Download(object):
         `variance' is the amount of randomness in delay, 0-1
         """
         key = str(proxy) + ':' + common.get_domain(url)
-        start = datetime.now()
-        while datetime.now() < Download.domains.get(key, start):
+        start = datetime.datetime.now()
+        while datetime.datetime.now() < Download.domains.get(key, start):
             time.sleep(SLEEP_TIME)
         # update domain timestamp to when can query next
-        Download.domains[key] = datetime.now() + timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
+        Download.domains[key] = datetime.datetime.now() + datetime.timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
 
     def reload_proxies(self):
@@ -273,7 +275,7 @@ class Download(object):
             import json
         url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
         html = self.get(url, delay=delay)
-        results = defaultdict(str)
+        results = collections.defaultdict(str)
         if html:
             try:
                 geo_data = json.loads(html)
@@ -317,7 +319,7 @@ class Download(object):
         """
         scraped = adt.HashDict()
         c = CrawlerCallback(max_depth=max_depth)
-        outstanding = deque([website])
+        outstanding = collections.deque([website])
         emails = []
         while outstanding and (max_urls is None or len(scraped) < max_urls) \
                           and (max_emails is None or len(emails) < max_emails):
@@ -348,7 +350,7 @@ class Download(object):
         if html:
             m = re.compile(r'<frame src="([^"]+)" name=c>', re.DOTALL|re.IGNORECASE).search(html)
             if m:
-                frame_src = urljoin(url, common.unescape(m.groups()[0].strip()))
+                frame_src = urlparse.urljoin(url, common.unescape(m.groups()[0].strip()))
                 # force to check redirect here
                 if kwargs.has_key('num_redirects'): kwargs['num_redirects'] = 1
                 html = self.get(frame_src, **kwargs)
@@ -375,7 +377,7 @@ class Download(object):
                 html = self.get(query_url)
                 match = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
                 if match:
-                    script_url = urljoin(query_url, match.groups()[0])
+                    script_url = urlparse.urljoin(query_url, match.groups()[0])
                     text = self.get(script_url, read_cache=False)
 
                 if '@' not in text:
@@ -426,16 +428,23 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
     `post' is whether to use POST instead of default GET
     `depth' sets to traverse depth first rather than the default breadth first
     """
-    class DownloadThread(Thread):
+    cache = kwargs.pop('cache', None)
+    if cache:
+        common.logger.info('Need to make copy of cache for each thread')
+        
+    class DownloadThread(threading.Thread):
         """Download data
         """
-        processing = deque()
+        processing = collections.deque()
 
         def __init__(self):
-            Thread.__init__(self)
+            threading.Thread.__init__(self)
 
         def run(self):
-            D = Download(**kwargs)
+            new_cache = None
+            if cache:
+                new_cache = copy.copy(cache)
+            D = Download(cache=new_cache, **kwargs)
             while urls or DownloadThread.processing:
                 # keep track that are processing url
                 DownloadThread.processing.append(1) 
@@ -464,7 +473,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
     # put urls into thread safe queue
     urls = urls or []
     if url: urls.append(url)
-    urls = deque(urls)
+    urls = collections.deque(urls)
     threads = [DownloadThread() for i in range(num_threads)]
     for thread in threads:
         thread.start()
@@ -522,7 +531,7 @@ class CrawlerCallback:
                 # remove internal links to avoid duplicates
                 link = link[:link.index('#')] 
             link = common.unescape(link) # remove &amp; from link
-            return urljoin(url, link) # support relative links
+            return urlparse.urljoin(url, link) # support relative links
 
         def valid(link):
             """Check if should crawl this link

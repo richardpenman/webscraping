@@ -4,7 +4,8 @@ It uses pickle to store Python objects and strings, which are then compressed
 Multithreading is supported
 """
 
-from datetime import datetime
+import sys
+import datetime
 import sqlite3
 import zlib
 import threading
@@ -14,20 +15,52 @@ except ImportError:
     import pickle
 
 
-class PersistentDict(object):
+
+class BufferDict:
+    """Track memory used by buffer
+    """
+    def __init__(self, *args, **kwargs):
+        self.d = {}
+        self.num_bytes = 0
+
+    def __len__(self):
+        return len(self.d)
+
+    def __setitem__(self, key, value):
+        """set the value of the specified key
+        """
+        self.d[key] = value
+        self.num_bytes += len(value)
+
+    def is_full(self, max_buffer_size):
+        """returns whether buffer data size is greater than max_buffer_size in MB
+        """
+        BYTES_PER_MB = 1024 * 1024
+        #print 'buffer size', self.num_bytes, len(self.d), 'records'
+        return self.num_bytes > max_buffer_size * BYTES_PER_MB
+
+    def pop_all(self):
+        self.num_bytes = 0
+        data, self.d = self.d, {}
+        return data
+        
+
+
+class PersistentDict:
     """stores and retrieves persistent data through a dict-like interface
     data is stored compressed on disk using sqlite3 
     """
-    buffered_data = {}
+    # buffer data so can insert multiple records in a single transaction
+    buffered_data = BufferDict()
 
-    def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, max_buffer_size=1000):
+    def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, max_buffer_size=10):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.
         compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
         expires: a timedelta object of how old data can be before expires. By default is set to None to disable.
         timeout: how long should a thread wait for sqlite to be ready
-        max_buffer_size: how many records can be buffered before writing to sqlite
+        max_buffer_size: maximum size in MB of buffered data before write to sqlite
         """
         self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
@@ -50,7 +83,6 @@ class PersistentDict(object):
 
     
     def __del__(self):
-        print 'deleting pdict'
         self.flush() 
   
 
@@ -89,35 +121,33 @@ class PersistentDict(object):
             raise KeyError("Key `%s' does not exist" % key)
 
 
-    def __setitem__(self, key, value):
-        """set the value of the specified key
-        """
-        PersistentDict.buffered_data[key] = value
-        if len(PersistentDict.buffered_data) > self.max_buffer_size:
-            self.flush()
-
-
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
 
 
+    def __setitem__(self, key, value):
+        """set the value of the specified key
+        """
+        PersistentDict.buffered_data[key] = self.serialize(value)
+        if PersistentDict.buffered_data.is_full(self.max_buffer_size):
+            self.flush()
+
     # XXX need to lock
     def flush(self):
         """write any buffered records to sqlite
         """
-        #self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (key, self.serialize(value), self.serialize({})))
-        insert_data, PersistentDict.buffered_data = PersistentDict.buffered_data, {}
-        print 'flushing', len(insert_data), 'records'
-        need_transaction = len(insert_data) > 1
-        if need_transaction:
-            self._conn.execute('BEGIN TRANSACTION;')
-        meta = self.serialize({})
-        for k, v in insert_data.items():
-            self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (k, self.serialize(v), meta))
-        if need_transaction:
-            self._conn.execute('COMMIT;')
+        if PersistentDict.buffered_data:
+            insert_data = PersistentDict.buffered_data.pop_all()
+            need_transaction = len(insert_data) > 1
+            if need_transaction:
+                self._conn.execute('BEGIN TRANSACTION;')
+            meta = self.serialize({})
+            for k, v in insert_data.items():
+                self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (k, v, meta))
+            if need_transaction:
+                self._conn.execute('COMMIT;')
 
 
     def serialize(self, value):
@@ -135,7 +165,7 @@ class PersistentDict(object):
     def is_fresh(self, t):
         """returns whether this datetime has expired
         """
-        return self.expires is None or datetime.now() - t < self.expires
+        return self.expires is None or datetime.datetime.now() - t < self.expires
 
 
     def get(self, key, default=None):
@@ -180,7 +210,7 @@ class PersistentDict(object):
                 raise KeyError("Key `%s' does not exist" % key)
         else:
             # want to set meta
-            self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.now(), key))
+            self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
     def clear(self):

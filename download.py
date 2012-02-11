@@ -302,8 +302,13 @@ class Download(object):
                     elif 'country' in types:
                         results['country'] = value
                 results['full_address'] = result['formatted_address']
-                results['lat'] = result['geometry']['location']['lat']
-                results['lng'] = result['geometry']['location']['lng']
+                m = re.compile(r'"geometry" : {\s*"location" : {\s*"lat" : ([\d\-\.]+),\s*"lng" : ([\d\-\.]+)').search(html)
+                if m:
+                    results['lat'] = m.groups()[0].strip()
+                    results['lng'] = m.groups()[1].strip()
+                else:
+                    results['lat'] = result['geometry']['location']['lat']
+                    results['lng'] = result['geometry']['location']['lng']
             if 'street' in results:
                 results['address'] = (results['number'] + ' ' + results['street']).strip()
         if not results:

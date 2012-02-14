@@ -16,21 +16,26 @@ except ImportError:
 
 
 
-class BufferDict:
+class BufferList:
     """Track memory used by buffer
     """
     def __init__(self, *args, **kwargs):
-        self.d = {}
+        self.data = []
         self.num_bytes = 0
 
     def __len__(self):
-        return len(self.d)
+        return len(self.data)
 
-    def __setitem__(self, key, value):
-        """set the value of the specified key
+    def add(self, sql, args):
+        """add sql and args to list
         """
-        self.d[key] = value
-        self.num_bytes += len(value)
+        self.data.append((sql, args))
+        self.num_bytes += len(sql) 
+        for arg in args:
+            try:
+                self.num_bytes += len(arg)
+            except TypeError:
+                pass
 
     def is_full(self, max_buffer_size):
         """returns whether buffer data size is greater than max_buffer_size in MB
@@ -41,17 +46,21 @@ class BufferDict:
 
     def pop_all(self):
         self.num_bytes = 0
-        data, self.d = self.d, {}
+        data, self.data = self.data, []
         return data
         
 
-
+"""
+change above class to storing sql string list
+collect sql strings from many operations
+use decorator to test flush
+"""
 class PersistentDict:
     """stores and retrieves persistent data through a dict-like interface
     data is stored compressed on disk using sqlite3 
     """
     # buffer data so can insert multiple records in a single transaction
-    buffered_data = BufferDict()
+    buffered_sql = BufferList()
 
     def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, max_buffer_size=0):
         """initialize a new PersistentDict with the specified database file.
@@ -124,28 +133,32 @@ class PersistentDict:
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
-        self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
+        self.buffer_execute("DELETE FROM config WHERE key=?;", (key,))
 
 
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
-        PersistentDict.buffered_data[key] = self.serialize(value)
-        if PersistentDict.buffered_data.is_full(self.max_buffer_size):
+        self.buffer_execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (key, self.serialize(value), self.serialize({})))
+
+
+    def buffer_execute(self, sql, args):
+        #if re.match('(INSERT|UPDATE|DELETE)', sql):
+        PersistentDict.buffered_sql.add(sql, args)
+        if PersistentDict.buffered_sql.is_full(self.max_buffer_size):
             self.flush()
 
-    # XXX need to lock
+    # XXX need to lock?
     def flush(self):
         """write any buffered records to sqlite
         """
-        if PersistentDict.buffered_data:
-            insert_data = PersistentDict.buffered_data.pop_all()
-            need_transaction = len(insert_data) > 1
+        if PersistentDict.buffered_sql:
+            sql_args = PersistentDict.buffered_sql.pop_all()
+            need_transaction = len(sql_args) > 1
             if need_transaction:
                 self._conn.execute('BEGIN TRANSACTION;')
-            meta = self.serialize({})
-            for k, v in insert_data.items():
-                self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (k, v, meta))
+            for sql, args in sql_args:
+                self._conn.execute(sql, args)
             if need_transaction:
                 self._conn.execute('COMMIT;')
 
@@ -188,18 +201,21 @@ class PersistentDict:
 
         data is a dict {'value': ..., 'meta': ..., 'created': ..., 'updated': ...}
         """
-        current_data = self.get(key)
+        current_data = self.get(key, {})
         current_data.update(new_data)
         value = self.serialize(current_data.get('value'))
         meta = self.serialize(current_data.get('meta'))
         created = current_data.get('created')
         updated = current_data.get('updated')
-        # already exists, so update
-        self._conn.execute("UPDATE config SET value=?, meta=?, created=?, updated=? WHERE key=?;", (value, meta, created, updated, key))
+        self.buffer_execute("INSERT OR REPLACE INTO config (key, value, meta, created, updated) VALUES(?, ?, ?, ?, ?);", (key, value, meta, created, updated))
 
 
     def meta(self, key, value=None):
-        """Set of get the meta attribute
+        """
+        if value is passed then set the meta attribute for this key
+        XXX return true/false if successful
+
+        otherwise get the existing meta attribute for this key
         """
         if value is None:
             # want to get meta
@@ -210,7 +226,7 @@ class PersistentDict:
                 raise KeyError("Key `%s' does not exist" % key)
         else:
             # want to set meta
-            self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
+            self.buffer_execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
     def clear(self):

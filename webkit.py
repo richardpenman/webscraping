@@ -483,5 +483,4 @@ if __name__ == '__main__':
     # click search button 
     w.click('input[id=search_button_homepage]')
     # show webpage for 10 seconds
-    w.screenshot('duckduckgo_results.jpg')
     w.wait(10)

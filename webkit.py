@@ -7,7 +7,7 @@ import urllib2
 import random
 from time import time, sleep
 from datetime import datetime
-from PyQt4.QtGui import QApplication, QDesktopServices
+from PyQt4.QtGui import QApplication, QDesktopServices, QImage, QPainter
 from PyQt4.QtCore import QByteArray, QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
 from PyQt4.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
@@ -417,8 +417,6 @@ class WebkitBrowser(QWebView):
         """
         for e in self.page().mainFrame().findAllElements(pattern):
             tag = str(e.tagName()).lower()
-            print e
-            print e.attribute("type")
             if tag == 'input':
                 #e.setAttribute('value', value)
                 e.evaluateJavaScript('this.value = "%s"' % value)
@@ -455,6 +453,17 @@ class WebkitBrowser(QWebView):
         #print reply.url().toString(), ':', len(reply.data)
         
 
+    def screenshot(self, output_file):
+        """Take screenshot of current webpage and save results
+        """
+        frame = self.page().mainFrame()
+        image = QImage(self.page().viewportSize(), QImage.Format_ARGB32)
+        painter = QPainter(image)
+        frame.render(painter)
+        painter.end()
+        common.logger.debug('saving', output_file)
+        image.save(output_file)
+
     def closeEvent(self, event):
         """Catch the close window event and stop the script
         """
@@ -462,8 +471,17 @@ class WebkitBrowser(QWebView):
 
 
 if __name__ == '__main__':
-    w = WebkitBrowser(gui=True)
+    # initiate webkit and show gui
+    # once script is working you can disable the gui
+    w = WebkitBrowser(gui=True) 
+    # load webpage
     w.get('http://duckduckgo.com')
+    # fill search textbox 
     w.fill('input[id=search_form_input_homepage]', 'sitescraper')
+    # take screenshot of webpage
+    w.screenshot('duckduckgo.jpg')
+    # click search button 
     w.click('input[id=search_button_homepage]')
+    # show webpage for 10 seconds
+    w.screenshot('duckduckgo_results.jpg')
     w.wait(10)

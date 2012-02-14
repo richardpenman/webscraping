@@ -268,7 +268,7 @@ class WebPage(QWebPage):
 
 
 
-class JQueryBrowser(QWebView):
+class WebkitBrowser(QWebView):
     """Render webpages using webkit
     """
 
@@ -299,9 +299,8 @@ class JQueryBrowser(QWebView):
         self.jquery_lib = None
         #enable flash plugin etc.
         self.settings().setAttribute(QWebSettings.PluginsEnabled, enable_plugins)
-        QTimer.singleShot(0, self.run) # start crawling when all events processed
+        #XXXQTimer.singleShot(0, self.run) # start crawling when all events processed
         if gui: self.show() 
-        self.app.exec_() # start GUI thread
     
     def set_proxy(self, proxy):
         self.page().networkAccessManager().setProxy(proxy)
@@ -317,12 +316,12 @@ class JQueryBrowser(QWebView):
         return unicode(self.page().mainFrame().toHtml())
 
 
-    def get(self, url=None, script=None, retries=1, inject=True):
+    def get(self, url=None, script=None, num_retries=1, jquery=False):
         """Load given url in webkit and return html when loaded
 
         script is some javasript to exexute that will change the loaded page (eg form submission)
-        retries is how many times to try downloading this URL or executing this script
-        inject is whether to inject JQuery into the document
+        num_retries is how many times to try downloading this URL or executing this script
+        jquery is whether to inject JQuery into the document
         """
         t1 = time()
         self.base_url = self.base_url or url # set base URL if not set
@@ -353,14 +352,13 @@ class JQueryBrowser(QWebView):
                 self.wait(self.delay - (time() - t1))
             else:
                 # didn't download in time
-                if retries > 0:
+                if num_retries > 0:
                     common.logger.debug('Timeout - retrying')
-                    parsed_html = self.get(url, script=script, retries=retries-1, inject=inject)
+                    parsed_html = self.get(url, script=script, num_retries=num_retries-1, jquery=jquery)
                 else:
                     common.logger.debug('Timed out')
                     parsed_html = ''
         return parsed_html
-
 
 
     def wait(self, secs=1):
@@ -368,7 +366,7 @@ class JQueryBrowser(QWebView):
         """
         deadline = time() + secs
         while time() < deadline:
-            sleep(0.1)
+            sleep(0)
             self.app.processEvents()
             #print 'wait', wait_secs
         # randomize the delay so less suspicious
@@ -376,10 +374,10 @@ class JQueryBrowser(QWebView):
         #time.sleep(max(0, wait_secs))
 
 
-    def jsget(self, script, retries=1, inject=True):
+    def jsget(self, script, num_retries=1, jquery=True):
         """Execute JavaScript that will cause page submission, and wait for page to load
         """
-        return self.get(script=script, retries=retries, inject=inject)
+        return self.get(script=script, num_retries=num_retries, jquery=jquery)
 
     def js(self, script):
         """Shortcut to execute javascript on current document and return result
@@ -396,8 +394,10 @@ class JQueryBrowser(QWebView):
         self.js(self.jquery_lib)
 
 
-    def click(self, pattern):
+    def click(self, pattern='input'):
         """Click all elements that match the pattern
+
+        uses standard CSS pattern matching: http://www.w3.org/TR/CSS2/selector.html
         """
         for e in self.page().mainFrame().findAllElements(pattern):
             e.evaluateJavaScript("var evObj = document.createEvent('MouseEvents'); evObj.initEvent('click', true, true); this.dispatchEvent(evObj);")
@@ -417,6 +417,8 @@ class JQueryBrowser(QWebView):
         """
         for e in self.page().mainFrame().findAllElements(pattern):
             tag = str(e.tagName()).lower()
+            print e
+            print e.attribute("type")
             if tag == 'input':
                 #e.setAttribute('value', value)
                 e.evaluateJavaScript('this.value = "%s"' % value)
@@ -442,12 +444,9 @@ class JQueryBrowser(QWebView):
     
     
     def run(self):
-        """Override this method in subclass to automate interaction with website
+        """Run the Qt event loop so can interact with the browser
         """
-        self.app.processEvents()
-        self.get('http://code.google.com/p/webscraping/')
-        #print self.data('http://www.google-analytics.com/ga.js')
-        QTimer.singleShot(5000, self.app.quit)
+        self.app.exec_() # start GUI thread
 
     def finished(self, reply):
         """Override this method in subclasses to process downloaded urls
@@ -463,4 +462,8 @@ class JQueryBrowser(QWebView):
 
 
 if __name__ == '__main__':
-    JQueryBrowser(gui=True)
+    w = WebkitBrowser(gui=True)
+    w.get('http://duckduckgo.com')
+    w.fill('input[id=search_form_input_homepage]', 'sitescraper')
+    w.click('input[id=search_button_homepage]')
+    w.wait(10)

@@ -422,6 +422,62 @@ class Download(object):
 
 
 
+def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
+    import gevent
+    from gevent import monkey, queue, event, pool
+    gevent.monkey.patch_all()
+
+    def scheduler():
+        """Coordinate downloading in greenlet threads.
+        When the worker queue fills up the scheduler will block on the put() operation.  
+        If the job queue is empty and no workers are active the pool is stopped."""
+        while True:
+            # join dead greenlets
+            for greenlet in list(pool):
+                if greenlet.dead:
+                    pool.discard(greenlet)
+
+            try:
+                url = inq.get_nowait()
+            except queue.Empty:
+                # No urls remaining
+                if pool.free_count() != pool.size:
+                    worker_finished.wait()
+                    worker_finished.clear()
+                else:
+                    # No workers left, shutting down.")
+                    pool.join()
+                    return True
+            else:
+                # spawn worker for url
+                pool.spawn(worker, url)
+
+    def worker(url):
+        html = (D.post if post else D.get)(url, **kwargs)
+        if cb:
+            for url in (cb(D, url, html) or []):
+                urls.put(url)
+        worker_finished.set()
+        raise gevent.GreenletExit('success')
+
+    # incoming queue of urls to download
+    inq = queue.LifoQueue() if depth else queue.Queue()
+    urls = urls or []
+    if url: urls.append(url)
+    for url in urls:
+        inq.put(url)
+
+    # start async pool with this many workers maximum
+    pool = pool.Pool(num_threads)
+    worker_finished = event.Event()
+
+    D = Download(**kwargs)
+    scheduler_greenlet = gevent.spawn(scheduler)
+    scheduler_greenlet.join()
+
+
+
+
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
     """Download these urls in parallel
 

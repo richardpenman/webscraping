@@ -337,7 +337,6 @@ def split_tag(html):
         else:
             return html[:i], html[i:]
 
-a_re = re.compile('//a/@href')
 js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')
 def get_links(html, url=None, local=True, external=True):
     """Return all links from html and convert relative to absolute if source url is provided
@@ -360,7 +359,7 @@ def get_links(html, url=None, local=True, external=True):
         else:
             link = None # ignore mailto, etc
         return link
-    a_links = a_re.search(html)
+    a_links = search(html, '//a/@href')
     js_links = js_re.findall(html)
     links = []
     for link in a_links + js_links:

@@ -456,7 +456,7 @@ def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=Fa
         html = (D.post if post else D.get)(url, **kwargs)
         if cb:
             for url in (cb(D, url, html) or []):
-                urls.put(url)
+                inq.put(url)
         worker_finished.set()
         raise gevent.GreenletExit('success')
 

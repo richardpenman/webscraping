@@ -7,3 +7,4 @@ user_agent = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:5.0) Gecko/20100101 Firefox
 log_level = logging.INFO # logging level
 log_file = 'webscraping.log' # default logging file
 default_encoding = 'utf-8'
+default_headers =  {'User-agent': user_agent, 'Accept-encoding': 'gzip', 'Referer': '', 'Accept-Language': 'en-us,en;q=0.5'}

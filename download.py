@@ -210,7 +210,11 @@ class Download(object):
                 opener.add_handler(urllib2.ProxyHandler({'https' : proxy}))
             else:
                 opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
-        default_headers =  {'User-agent': user_agent or settings.user_agent, 'Accept-encoding': 'gzip', 'Referer': url, 'Accept-Language': 'en-us,en;q=0.5'}
+        default_headers = settings.default_headers
+        if 'User-agent' in default_headers and user_agent:
+            default_headers['User-agent'] = user_agent
+        if 'Referer' in default_headers:
+            default_headers['Referer'] = url
         headers = headers and default_headers.update(headers) or default_headers
         
         if isinstance(data, dict):
@@ -461,7 +465,7 @@ def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=Fa
         raise gevent.GreenletExit('success')
 
     # incoming queue of urls to download
-    inq = queue.LifoQueue() if depth else queue.Queue()
+    inq = queue.Queue() if depth else queue.LifoQueue()
     urls = urls or []
     if url: urls.append(url)
     for url in urls:

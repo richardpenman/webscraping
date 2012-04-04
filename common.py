@@ -412,13 +412,19 @@ class UnicodeWriter(object):
     >>> fp.read().strip()
     'a,1'
     """
-    def __init__(self, file, encoding=settings.default_encoding, mode='wb', unique=False, quoting=csv.QUOTE_ALL, **argv):
+    def __init__(self, file, encoding=settings.default_encoding, mode='wb', unique=False, quoting=csv.QUOTE_ALL, utf8_bom=False, **argv):
         self.encoding = encoding
         self.unique = unique
         if hasattr(file, 'write'):
             self.fp = file
         else:
-            self.fp = open(file, mode)
+            if utf8_bom:
+                self.fp = open(file, 'wb')
+                self.fp.write('\xef\xbb\xbf')
+                self.fp.close()
+                self.fp = open(file, mode=mode.replace('w', 'a'))
+            else:
+                self.fp = open(file, mode)
         if self.unique:
             self.rows = adt.HashDict() # cache the rows that have already been written
             for row in csv.reader(open(self.fp.name)):

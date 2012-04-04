@@ -139,7 +139,7 @@ class PersistentDict:
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
-        self.buffer_execute("INSERT OR REPLACE INTO config (key, value, meta) VALUES(?, ?, ?);", (key, self.serialize(value), self.serialize({})))
+        self.buffer_execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (key, self.serialize(value), self.serialize({}), datetime.datetime.now()))
 
 
     def buffer_execute(self, sql, args):

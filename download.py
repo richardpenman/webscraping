@@ -270,7 +270,7 @@ class Download(object):
                     common.logger.debug('Reloaded proxies.')
 
 
-    def geocode(self, address, delay=5):
+    def geocode(self, address, delay=5, read_cache=True):
         """Geocode address using Google's API and return dictionary of useful fields
         """
         try:
@@ -278,7 +278,7 @@ class Download(object):
         except ImportError:
             import json
         url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
-        html = self.get(url, delay=delay)
+        html = self.get(url, delay=delay, read_cache=read_cache)
         results = collections.defaultdict(str)
         if html:
             try:

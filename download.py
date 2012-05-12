@@ -19,6 +19,7 @@ import subprocess
 import socket
 import gzip
 import threading
+import contextlib
 try:
     import hashlib
 except ImportError:
@@ -219,19 +220,21 @@ class Download(object):
         
         if isinstance(data, dict):
             data = urllib.urlencode(data) 
+
         try:
-            response = opener.open(urllib2.Request(url, data, headers))
-            content = response.read()
-            if response.headers.get('content-encoding') == 'gzip':
-                # data came back gzip-compressed so decompress it          
-                content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()
-            self.final_url = response.url # store where redirected to
-            if pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(content):
-                # invalid result from download
-                content = None
-                common.logger.info('Content did not match expected pattern - %s' % url)
-            self.response_code = '200'
-            self.response_headers = dict(response.headers)
+            request = urllib2.Request(url, data, headers)
+            with contextlib.closing(opener.open(request)) as response:
+                content = response.read()
+                if response.headers.get('content-encoding') == 'gzip':
+                    # data came back gzip-compressed so decompress it          
+                    content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()
+                self.final_url = response.url # store where redirected to
+                if pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(content):
+                    # invalid result from download
+                    content = None
+                    common.logger.info('Content did not match expected pattern - %s' % url)
+                self.response_code = '200'
+                self.response_headers = dict(response.headers)
         except Exception, e:
             if hasattr(e, 'code'):
                 self.response_code = e.code

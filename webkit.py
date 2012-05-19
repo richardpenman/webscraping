@@ -399,7 +399,7 @@ class WebkitBrowser(QWebView):
 
         uses standard CSS pattern matching: http://www.w3.org/TR/CSS2/selector.html
         """
-        for e in self.page().mainFrame().findAllElements(pattern):
+        for e in self.find(pattern):
             e.evaluateJavaScript("var evObj = document.createEvent('MouseEvents'); evObj.initEvent('click', true, true); this.dispatchEvent(evObj);")
 
     def attr(self, pattern, name, value=None):
@@ -409,13 +409,13 @@ class WebkitBrowser(QWebView):
             # want to get attribute
             return str(self.page().mainFrame().findFirstElement(pattern).attribute(name))
         else:
-            for e in self.page().mainFrame().findAllElements(pattern):
+            for e in self.find(pattern):
                 e.setAttribute(name, value)
            
     def fill(self, pattern, value):
         """Set text of these elements to value
         """
-        for e in self.page().mainFrame().findAllElements(pattern):
+        for e in self.find(pattern):
             tag = str(e.tagName()).lower()
             if tag == 'input':
                 #e.setAttribute('value', value)
@@ -426,7 +426,7 @@ class WebkitBrowser(QWebView):
     def find(self, pattern):
         """Returns whether element matching xpath pattern exists
         """
-        return self.page().mainFrame().findAllElements(pattern)
+        return self.page().mainFrame().findAllElements(pattern).toList()
 
 
     def data(self, url):

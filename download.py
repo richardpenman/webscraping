@@ -81,7 +81,7 @@ class Download(object):
             delay = delay,
             proxies = (common.read_list(proxy_file) if proxy_file else []) or proxies or [],
             proxy_file = proxy_file,
-            user_agent = user_agent or settings.user_agent,
+            user_agent = user_agent,
             opener = opener,
             headers = headers,
             data = data,
@@ -200,6 +200,8 @@ class Download(object):
             return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
+    # cache the user agent used for each proxy
+    proxy_agents = {}
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):
         """Simply download the url and return the content
         """
@@ -211,12 +213,23 @@ class Download(object):
                 opener.add_handler(urllib2.ProxyHandler({'https' : proxy}))
             else:
                 opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
-        default_headers = settings.default_headers
-        if 'User-agent' in default_headers and user_agent:
-            default_headers['User-agent'] = user_agent
-        if 'Referer' in default_headers:
-            default_headers['Referer'] = url
-        headers = headers and default_headers.update(headers) or default_headers
+        
+        headers = headers or {}
+        for k, v in settings.default_headers.items():
+            if k not in headers:
+                if k == 'Referer':
+                    v = url
+                headers[k] = v
+
+        if not user_agent:
+            # get user agent for this proxy
+            if proxy in Download.proxy_agents:
+                user_agent = Download.proxy_agents[proxy]
+            else:
+                # assign random user agent to this proxy
+                user_agent = random.choice(settings.user_agents)
+                Download.proxy_agents[proxy] = user_agent
+        headers['User-agent'] = user_agent
         
         if isinstance(data, dict):
             data = urllib.urlencode(data) 

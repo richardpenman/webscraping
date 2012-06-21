@@ -37,11 +37,33 @@ except ImportError:
 SLEEP_TIME = 0.1 # how long to sleep when waiting for network activity
 
 
+
+class ProxyPerformance:
+    """Track performance of proxies
+    If 10 errors in a row that other proxies could handle then need to remove
+    """
+    def __init__(self):
+        self.proxy_errors = collections.defaultdict(int)
+
+    def success(self, proxy):
+        """Successful download - so clear error count
+        """
+        self.proxy_errors[proxy] = 0
+
+    def error(self, proxy):
+        """Add to error count and returns number of consecutive errors for this proxy
+        """
+        if proxy:
+            self.proxy_errors[proxy] += 1
+        return self.proxy_errors[proxy]
+
+
+
 class Download(object):
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
-            user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, opener=None, 
-            headers=None, data=None, num_retries=0, num_redirects=1,
+            user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=None,
+            opener=None, headers=None, data=None, num_retries=0, num_redirects=1,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None):
         """
         `cache' is a pdict object to use for the cache
@@ -52,6 +74,8 @@ class Download(object):
         `user_agent' sets the User Agent to download content with
         `timeout' is the maximum amount of time to wait for http response
         `delay' is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
+        `proxy_file' is a filename to read proxies from
+        `max_proxy_errors' is the maximum number of consecutive errors allowed per proxy before discarding
         `proxies' is a list of proxies to cycle through when downloading content
         `opener' sets an optional opener to use instead of using urllib2 directly
         `headers' are the headers to include in the request
@@ -79,8 +103,9 @@ class Download(object):
             write_cache = write_cache,
             use_network = use_network,
             delay = delay,
-            proxies = (common.read_list(proxy_file) if proxy_file else []) or proxies or [],
+            proxies = collections.deque((common.read_list(proxy_file) if proxy_file else []) or proxies or []),
             proxy_file = proxy_file,
+            max_proxy_errors = max_proxy_errors,
             user_agent = user_agent,
             opener = opener,
             headers = headers,
@@ -96,6 +121,7 @@ class Download(object):
         self.last_load_time = self.last_mtime = time.time()
 
 
+    proxy_performance = ProxyPerformance()
     def get(self, url, **kwargs):
         """Download this URL and return the HTML. Data is cached so only have to download once.
 
@@ -133,16 +159,34 @@ class Download(object):
             return settings.default 
 
         html = None
+        failed_proxies = set() # record which proxies failed to download for this URL
         # attempt downloading content at URL
-        while html is None:
-            # crawl slowly for each domain to reduce risk of being blocked
-            settings.proxy = random.choice(settings.proxies) if settings.proxies else None
-            self.throttle(url, delay=settings.delay, proxy=settings.proxy) 
-            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=settings.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
-            if settings.num_retries == 0:
-                break # don't try downloading again
+        while settings.num_retries >= 0 and html is None:
+            settings.num_retries -= 1
+            if settings.proxies:
+                # select next available proxy
+                proxy = settings.proxies[0]
+                settings.proxies.rotate(1)
             else:
-                settings.num_retries -= 1
+                proxy = None
+            # crawl slowly for each domain to reduce risk of being blocked
+            self.throttle(url, delay=settings.delay, proxy=proxy) 
+            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
+
+            if html:
+                # successfully downloaded
+                if settings.max_proxy_errors is not None:
+                    Download.proxy_performance.success(proxy)
+                    # record which proxies failed for this download
+                    for proxy in failed_proxies:
+                        if Download.proxy_performance.error(proxy) > settings.max_proxy_errors:
+                            # this proxy has had too many errors so remove
+                            common.logger.info('Removing unstable proxy from list after %d consecutive errors: %s' % (settings.max_proxy_errors, proxy))
+                            settings.proxies.remove(proxy)
+            else:
+                # download failed - try again
+                failed_proxies.add(proxy)
+
 
         if html:
             if settings.num_redirects > 0:
@@ -232,6 +276,7 @@ class Download(object):
         headers['User-agent'] = user_agent
         
         if isinstance(data, dict):
+            # encode data for POST
             data = urllib.urlencode(data) 
 
         try:
@@ -282,8 +327,9 @@ class Download(object):
             if os.path.exists(self.settings.proxy_file):
                 if os.stat(self.settings.proxy_file).st_mtime != self.last_mtime:
                     self.last_mtime = os.stat(self.settings.proxy_file).st_mtime
-                    self.settings.proxies = common.read_list(self.settings.proxy_file)
-                    common.logger.debug('Reloaded proxies.')
+                    self.settings.proxies = collections.deque(common.read_list(self.settings.proxy_file))
+                    Download.proxy_status.clear()
+                    common.logger.debug('Reloaded proxies from updated file.')
 
 
     def geocode(self, address, delay=5, read_cache=True):
@@ -511,7 +557,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
     """
     cache = kwargs.pop('cache', None)
     if cache:
-        common.logger.info('Need to make copy of cache for each thread')
+        common.logger.debug('Making a copy of the cache for each thread')
         
     class DownloadThread(threading.Thread):
         """Download data

@@ -328,7 +328,6 @@ class Download(object):
                 if os.stat(self.settings.proxy_file).st_mtime != self.last_mtime:
                     self.last_mtime = os.stat(self.settings.proxy_file).st_mtime
                     self.settings.proxies = collections.deque(common.read_list(self.settings.proxy_file))
-                    #Download.proxy_status.clear()
                     common.logger.debug('Reloaded proxies from updated file.')
 
 

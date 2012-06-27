@@ -62,7 +62,7 @@ class ProxyPerformance:
 class Download(object):
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
-            user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=None,
+            user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=1,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None):
         """
@@ -76,6 +76,8 @@ class Download(object):
         `delay' is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
         `proxy_file' is a filename to read proxies from
         `max_proxy_errors' is the maximum number of consecutive errors allowed per proxy before discarding
+            an error is only counted if another proxy is able to successfully download the URL
+            set to None to disable
         `proxies' is a list of proxies to cycle through when downloading content
         `opener' sets an optional opener to use instead of using urllib2 directly
         `headers' are the headers to include in the request

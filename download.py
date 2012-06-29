@@ -313,12 +313,13 @@ class Download(object):
         `proxy' is the proxy to download through
         `variance' is the amount of randomness in delay, 0-1
         """
-        key = str(proxy) + ':' + common.get_domain(url)
-        start = datetime.datetime.now()
-        while datetime.datetime.now() < Download.domains.get(key, start):
-            time.sleep(SLEEP_TIME)
-        # update domain timestamp to when can query next
-        Download.domains[key] = datetime.datetime.now() + datetime.timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
+        if delay > 0:
+            key = str(proxy) + ':' + common.get_domain(url)
+            start = datetime.datetime.now()
+            while datetime.datetime.now() < Download.domains.get(key, start):
+                time.sleep(SLEEP_TIME)
+            # update domain timestamp to when can query next
+            Download.domains[key] = datetime.datetime.now() + datetime.timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
 
     def reload_proxies(self):
@@ -604,11 +605,12 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
     urls = collections.deque(urls)
     threads = [DownloadThread() for i in range(num_threads)]
     for thread in threads:
+        thread.setDaemon(True) # set daemon so can exit with ctrl-c
         thread.start()
     # wait for threads to finish
-    for thread in threads:
-        thread.join()
-
+    while threading.active_count() > 0:
+        time.sleep(SLEEP_TIME)
+    
 
 class CrawlerCallback:
     """Example callback to crawl the website

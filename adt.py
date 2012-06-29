@@ -50,4 +50,3 @@ class HashDict:
 
     def get_hash(self, value):
         return hash(value)
-        #return hashlib.md5(value).hexdigest()

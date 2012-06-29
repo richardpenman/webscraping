@@ -18,12 +18,19 @@ import datetime
 import subprocess
 import socket
 import gzip
+import thread
 import threading
 import contextlib
+import tempfile
 try:
     import hashlib
 except ImportError:
     import md5 as hashlib
+try:
+    import cPickle as pickle
+except:
+    import pickle
+
 import adt
 import alg
 import common
@@ -608,11 +615,112 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
         thread.setDaemon(True) # set daemon so can exit with ctrl-c
         thread.start()
     # wait for threads to finish
-    while threading.active_count() > 0:
+    while threading.active_count() > 1:
         time.sleep(SLEEP_TIME)
     
 
-class CrawlerCallback:
+
+
+class ThreadedCallback:
+    """Base class for creating a crawler callback
+    """
+    def __call__(self, D, url, html):
+        """Scrape HTML
+        """
+        self.scrape(D, url, html)
+        return self.crawl(D, url, html)
+
+    def scrape(self, D, url, html):
+        """Reimplement this in subclass to scrape data
+        """
+        pass
+
+    def crawl(self, D, url, html): 
+        """Reimplement this in subclass to crawl website
+
+        Return list of additional URL's to crawl
+        """
+        pass
+
+
+class StateCallback(ThreadedCallback):
+    """Example callback that saves state
+    """
+    active_urls = set()
+    found = adt.HashDict() # track found URLs
+
+    def __init__(self, output_file, header):
+        # load state from previous run, if exists
+        state = self.load_state()
+        # settings to start crawl from beginning
+        self.new_urls = False
+        write_header = True
+        mode = 'wb'
+        if StateCallback.active_urls:
+            # incomplete crawl
+            common.logger.info('Loading previous crawl state')
+            self.new_urls = True
+            if os.path.exists(output_file):
+                mode = 'ab'
+                write_header = False
+
+        self.writer = common.UnicodeWriter(output_file, mode=mode) 
+        if write_header:
+            self.writer.writerow(header)
+
+
+    def __call__(self, D, url, html):
+        if self.new_urls:
+            # restoring state so can ignore the starting url
+            # instead return urls previously in queue
+            self.new_urls = False
+            new_urls = StateCallback.active_urls
+        else:
+            self.scrape(D, url, html)
+            new_urls = self.crawl(D, url, html)
+            # add newly scraped urls
+            StateCallback.active_urls.update(new_urls)
+            # this url has already been processed
+            StateCallback.active_urls.discard(url)
+            # save state in thread
+            thread.start_new_thread(self.save_state, tuple())
+        return new_urls
+
+
+    def save_state(self, output_file='.state.pickle'):
+        """Save state of current crawl to pickle file
+        """
+        # to ensure atomic write save state to temporary file first and then rename
+        pickled_data = pickle.dumps(dict(
+            urls = StateCallback.active_urls, 
+            found = StateCallback.found
+        ))
+        tmp_file = tempfile.NamedTemporaryFile(prefix=output_file + '.').name
+        print 'thread', tmp_file
+        fp = open(tmp_file, 'wb')
+        fp.write(pickled_data)
+        # ensure all content is written to disk
+        fp.flush()
+        os.fsync(fp.fileno()) 
+        fp.close()
+        os.rename(tmp_file, output_file)
+        print 'end', tmp_file
+
+
+    def load_state(self, input_file='.state.pickle'):
+        """Load previous state from pickle file
+        """
+        if os.path.exists(input_file):
+            data = pickle.load(open(input_file))
+            StateCallback.active_urls.update(data.get('urls', []))
+            StateCallback.found = data.get('found', StateCallback.found)
+        else:
+            data = {}
+        return data
+
+
+
+class CrawlerCallback(ThreadedCallback):
     """Example callback to crawl the website
     """
     found = adt.HashDict(int) # track depth of found URLs
@@ -637,18 +745,6 @@ class CrawlerCallback:
         self.banned_urls = re.compile(banned_urls)
         self.robots = robots
         self.crawl_existing = crawl_existing
-
-
-    def __call__(self, D, url, html):
-        """Scrape HTML
-        """
-        self.scrape(D, url, html)
-        return self.crawl(D, url, html)
-
-    def scrape(self, D, url, html):
-        """Reimplement this in subclass to scrape data
-        """
-        pass
 
 
     def crawl(self, D, url, html): 

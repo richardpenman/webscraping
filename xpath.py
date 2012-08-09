@@ -151,7 +151,7 @@ def xpath_iter(xpath):
         yield separator, tag, index, attributes
 
 
-attributes_regex = re.compile('([\w-]+)\s*=\s*(".*?"|\'.*?\'|\w+)', re.DOTALL)
+attributes_regex = re.compile('([\w-]+)\s*=\s*(".*?"|\'.*?\'|\S+)', re.DOTALL)
 def get_attributes(html):
     """Extract the attributes of the passed HTML tag
 

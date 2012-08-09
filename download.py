@@ -696,15 +696,14 @@ class StateCallback(ThreadedCallback):
             found = StateCallback.found
         ))
         tmp_file = tempfile.NamedTemporaryFile(prefix=output_file + '.').name
-        print 'thread', tmp_file
         fp = open(tmp_file, 'wb')
         fp.write(pickled_data)
         # ensure all content is written to disk
         fp.flush()
         os.fsync(fp.fileno()) 
         fp.close()
+        # XXX error on Windows if dest exists
         os.rename(tmp_file, output_file)
-        print 'end', tmp_file
 
 
     def load_state(self, input_file='.state.pickle'):

@@ -285,7 +285,7 @@ class WebkitBrowser(QWebView):
         """
         self.app = QApplication(sys.argv) # must instantiate first
         QWebView.__init__(self)
-        webpage = WebPage(user_agent or settings.user_agent)
+        webpage = WebPage(user_agent or random.choice(settings.user_agents))
         allowed_media = allowed_media or ['css', 'js']
         manager = NetworkAccessManager(proxy, allowed_media, allowed_regex)
         manager.finished.connect(self.finished)

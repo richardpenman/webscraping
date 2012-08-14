@@ -8,6 +8,7 @@ import sys
 import csv
 csv.field_size_limit(sys.maxint)
 import time
+import random
 import glob
 import string
 import urllib

@@ -305,7 +305,16 @@ def pretty_paragraph(s):
         if '\r' in text or '\n' in text: return '\n'
         return ' '
     return re.sub('\s+', fixup, s).strip()
-    
+
+def list_random(l):
+    """Make a list sort random
+    """
+    size = len(l)
+    for i in range(len(l)):
+        i1 = random.randint(0, size-1)
+        i2 = random.randint(0, size-1)
+        l[i1], l[i2] = l[i2], l[i1]
+    return l    
 
 def get_extension(url):
     """Return extension from given URL

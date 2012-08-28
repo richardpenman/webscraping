@@ -112,7 +112,7 @@ class Download(object):
             write_cache = write_cache,
             use_network = use_network,
             delay = delay,
-            proxies = collections.deque((common.list_random(common.read_list(proxy_file)) if proxy_file else []) or proxies or []),
+            proxies = collections.deque((random.shuffle(common.read_list(proxy_file)) if proxy_file else []) or proxies or []),
             proxy_file = proxy_file,
             max_proxy_errors = max_proxy_errors,
             user_agent = user_agent,

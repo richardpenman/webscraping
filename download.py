@@ -112,7 +112,7 @@ class Download(object):
             write_cache = write_cache,
             use_network = use_network,
             delay = delay,
-            proxies = collections.deque((random.shuffle(common.read_list(proxy_file)) if proxy_file else []) or proxies or []),
+            proxies = collections.deque((common.read_list(proxy_file) if proxy_file else []) or proxies or []),
             proxy_file = proxy_file,
             max_proxy_errors = max_proxy_errors,
             user_agent = user_agent,
@@ -128,7 +128,6 @@ class Download(object):
             pattern = pattern
         )
         self.last_load_time = self.last_mtime = time.time()
-
 
     proxy_performance = ProxyPerformance()
     def get(self, url, **kwargs):
@@ -322,9 +321,9 @@ class Download(object):
         """
         if delay > 0:
             key = str(proxy) + ':' + common.get_domain(url)
-            start = datetime.datetime.now()
-            while datetime.datetime.now() < Download.domains.get(key, start):
-                time.sleep(SLEEP_TIME)
+            if key in Download.domains:
+                while datetime.datetime.now() < Download.domains.get(key):
+                    time.sleep(SLEEP_TIME)
             # update domain timestamp to when can query next
             Download.domains[key] = datetime.datetime.now() + datetime.timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 

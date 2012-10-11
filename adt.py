@@ -4,14 +4,8 @@ Website: http://code.google.com/p/webscraping/
 License: LGPL
 """
 
-
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
-try:
-    import hashlib
-except ImportError:
-    import md5 as hashlib
-
 
 
 class Bag(dict):

@@ -552,7 +552,7 @@ def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=Fa
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=True, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -585,9 +585,9 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
                 DownloadThread.processing.append(1) 
                 try:
                     if depth:
-                        url = urls.popleft()
-                    else:
                         url = urls.pop()
+                    else:
+                        url = urls.popleft()
                 except IndexError:
                     # currently no urls to process
                     DownloadThread.processing.popleft()

@@ -552,7 +552,7 @@ def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=Fa
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=True, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download

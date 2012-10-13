@@ -599,7 +599,13 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
                         html = (D.post if post else D.get)(url, **kwargs)
                         if cb:
                             # use callback to process downloaded HTML
-                            urls.extend(cb(D, url, html) or [])
+                            try:
+                                cb_urls = cb(D, url, html)
+                            except Exception, e:
+                                common.logger.error('Error in callback for: ' + url)
+                                common.logger.error(e)
+                            else:
+                                urls.extend(cb_urls or [])
                     finally:
                         # have finished processing
                         # make sure this is called even on exception

@@ -1,10 +1,17 @@
 __doc__ = 'default application wide settings'
 
 import logging
+import os
 
-cache_file = '.cache.db' # file to use for pdict cache
+
+state_dir = '.state' # where to store these output files
+if not os.path.exists(state_dir):
+    os.mkdir(state_dir)
+cache_file  = os.path.join(state_dir, 'cache.db') # file to use for pdict cache
+status_file = os.path.join(state_dir, 'status.js') # where to store state of crawl
+log_file    = os.path.join(state_dir, 'webscraping.log') # default logging file
+
 log_level = logging.INFO # logging level
-log_file = 'webscraping.log' # default logging file
 default_encoding = 'utf-8'
 default_headers =  {'Accept-encoding': 'gzip', 'Referer': '', 'Accept-Language': 'en-us,en;q=0.5'}
 # user-agents for HTTP requests

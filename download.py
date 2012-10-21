@@ -16,6 +16,7 @@ import StringIO
 import time
 import datetime
 import subprocess
+import itertools
 import socket
 import gzip
 import thread
@@ -30,6 +31,10 @@ try:
     import cPickle as pickle
 except:
     import pickle
+try:
+    import json
+except ImportError:
+    import simplejson as json
 
 import adt
 import alg
@@ -343,10 +348,6 @@ class Download(object):
     def geocode(self, address, delay=5, read_cache=True):
         """Geocode address using Google's API and return dictionary of useful fields
         """
-        try:
-            import simplejson as json
-        except ImportError:
-            import json
         url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
         html = self.get(url, delay=delay, read_cache=read_cache)
         results = collections.defaultdict(str)
@@ -562,11 +563,12 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
         whatever URLs are returned are added to the crawl queue
     `post' is whether to use POST instead of default GET
     `depth' sets to traverse depth first rather than the default breadth first
+    `wait_finish' sets whether this function should wait until all downloading has finished
     """
     cache = kwargs.pop('cache', None)
     if cache:
         common.logger.debug('Making a copy of the cache for each thread')
-        
+
     class DownloadThread(threading.Thread):
         """Download data
         """
@@ -610,45 +612,74 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
                         # have finished processing
                         # make sure this is called even on exception
                         DownloadThread.processing.popleft()
+                    state.update(in_queue=len(urls))
+       
 
     # put urls into thread safe queue
     urls = urls or []
     if url: urls.append(url)
     urls = collections.deque(urls)
+    state = State()
     threads = [DownloadThread() for i in range(num_threads)]
     for thread in threads:
         thread.setDaemon(True) # set daemon so can exit with ctrl-c
         thread.start()
-    # wait for threads to finish
+    # Wait for all download threads to finish
     while threading.active_count() > 1:
         time.sleep(SLEEP_TIME)
     
 
-
-
-class ThreadedCallback:
-    """Base class for creating a crawler callback
+class State:
+    """Save state to disk periodically
     """
-    def __call__(self, D, url, html):
-        """Scrape HTML
+    def __init__(self, output_file=settings.status_file, timeout=1):
+        # where to save state to
+        self.output_file = output_file
+        # how long to wait between saving state
+        self.timeout = timeout
+        # increment counter 
+        self.counter = itertools.count(start=1)
+        # data to save to disk
+        self.data = {}
+        # whether data needs to be saved to dosk
+        self.flush = False
+        # track time duration of crawl
+        self.start_time = time.time()
+        # start the saving timeout
+        self.save()
+
+    def update(self, **args):
+        """Update the state
         """
-        self.scrape(D, url, html)
-        return self.crawl(D, url, html)
+        self.data = args
+        self.data['num_downloads'] = self.counter.next()
+        self.flush = True
 
-    def scrape(self, D, url, html):
-        """Reimplement this in subclass to scrape data
+    def save(self):
+        """Save state to disk
         """
-        pass
+        if self.flush:
+            self.data['duration_secs'] = int(time.time() - self.start_time)
+            self.flush = False
+            text = json.dumps(self.data)
+            #tmp_file = tempfile.NamedTemporaryFile(prefix=settings.state_file + '.').name
+            tmp_file = self.output_file + '.tmp'
+            fp = open(tmp_file, 'wb')
+            fp.write(text)
+            # ensure all content is written to disk
+            fp.flush()
+            fp.close()
+            if os.name == 'nt': 
+                # on wineows can not rename if file exists
+                if os.path.exists(self.output_file):
+                    os.remove(self.output_file)
+            os.rename(tmp_file, self.output_file)
+        # save state to disk again after timeout
+        threading.Timer(self.timeout, self.save).start()
 
-    def crawl(self, D, url, html): 
-        """Reimplement this in subclass to crawl website
-
-        Return list of additional URL's to crawl
-        """
-        pass
 
 
-class StateCallback(ThreadedCallback):
+class StateCallback:
     """Example callback that saves state
     """
     active_urls = set()
@@ -705,7 +736,6 @@ class StateCallback(ThreadedCallback):
         fp.write(pickled_data)
         # ensure all content is written to disk
         fp.flush()
-        os.fsync(fp.fileno()) 
         fp.close()
         # XXX error on Windows if dest exists
         os.rename(tmp_file, output_file)
@@ -724,7 +754,7 @@ class StateCallback(ThreadedCallback):
 
 
 
-class CrawlerCallback(ThreadedCallback):
+class CrawlerCallback:
     """Example callback to crawl the website
     """
     found = adt.HashDict(int) # track depth of found URLs

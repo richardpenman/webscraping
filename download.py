@@ -16,7 +16,6 @@ import StringIO
 import time
 import datetime
 import subprocess
-import itertools
 import socket
 import gzip
 import thread
@@ -612,7 +611,8 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
                         # have finished processing
                         # make sure this is called even on exception
                         DownloadThread.processing.popleft()
-                    state.update(in_queue=len(urls))
+                    is_error = not html
+                    state.update(queue_size=len(urls), is_error=is_error)
        
 
     # put urls into thread safe queue
@@ -637,8 +637,8 @@ class State:
         self.output_file = output_file
         # how long to wait between saving state
         self.timeout = timeout
-        # increment counter 
-        self.counter = itertools.count(start=1)
+        # track the number of downloads and errors
+        self.num_downloads = self.num_errors = 0
         # data to save to disk
         self.data = {}
         # whether data needs to be saved to dosk
@@ -648,11 +648,16 @@ class State:
         # start the saving timeout
         self.save()
 
-    def update(self, **args):
+    def update(self, queue_size, is_error):
         """Update the state
         """
-        self.data = args
-        self.data['num_downloads'] = self.counter.next()
+        if is_error:
+            self.num_errors += 1
+        else:
+            self.num_downloads += 1
+        self.data['num_downloads'] = self.num_downloads
+        self.data['num_errors'] = self.num_errors
+        self.data['queue_size'] = queue_size
         self.flush = True
 
     def save(self):

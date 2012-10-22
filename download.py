@@ -552,7 +552,7 @@ def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=Fa
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, wait_finish=True, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -562,7 +562,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
         whatever URLs are returned are added to the crawl queue
     `post' is whether to use POST instead of default GET
     `depth' sets to traverse depth first rather than the default breadth first
-    `wait_finish' sets whether this function should wait until all downloading has finished
+    `wait_finish' sets whether this function should wait until all download threads have finished before returning
     """
     cache = kwargs.pop('cache', None)
     if cache:
@@ -614,7 +614,6 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
                     is_error = not html
                     state.update(queue_size=len(urls), is_error=is_error)
        
-
     # put urls into thread safe queue
     urls = urls or []
     if url: urls.append(url)
@@ -622,10 +621,13 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
     state = State()
     threads = [DownloadThread() for i in range(num_threads)]
     for thread in threads:
-        thread.setDaemon(True) # set daemon so can exit with ctrl-c
+        thread.setDaemon(True) # set daemon so main thread can exit when receives ctrl-c
         thread.start()
     # Wait for all download threads to finish
-    while threading.active_count() > 1:
+    while threads and wait_finish:
+        for thread in threads:
+            if not thread.is_alive():
+                threads.remove(thread)
         time.sleep(SLEEP_TIME)
     
 
@@ -680,7 +682,9 @@ class State:
                     os.remove(self.output_file)
             os.rename(tmp_file, self.output_file)
         # save state to disk again after timeout
-        threading.Timer(self.timeout, self.save).start()
+        thread = threading.Timer(self.timeout, self.save)
+        thread.setDaemon(True) # set daemon so program can exit even though this thread is still running
+        thread.start()
 
 
 

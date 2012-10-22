@@ -30,8 +30,6 @@ import common
 import settings
 
 
-USE_BUFFER = False
-
 
 def search(html, xpath, remove=None):
     """Query HTML document using XPath
@@ -161,10 +159,7 @@ def get_attributes(html):
 
     for i, c in enumerate(html):
         if c == '>':
-            if USE_BUFFER:
-                html = buffer(html, 0, i)
-            else:
-                html = html[:i]
+            html = html[:i]
             break
     return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in attributes_regex.findall(html))
 
@@ -246,10 +241,7 @@ def find_descendants(html, tag):
         raise common.WebScrapingError("`*' not currently supported for // because too inefficient")
     results = []
     for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
-        if USE_BUFFER:
-            tag_html = buffer(html, match.start())
-        else:
-            tag_html = html[match.start():]
+        tag_html = html[match.start():]
         tag_html, _ = split_tag(tag_html)
         results.append(tag_html)
     return results
@@ -265,22 +257,13 @@ def jump_next_tag(html):
     '<div>abc</div>'
     >>> str(jump_next_tag('</span> <div>abc</div>'))
     '<div>abc</div>'
-    >>> str(jump_next_tag('<br> <div>abc</div>'))
-    '<div>abc</div>'
+    >>> str(jump_next_tag(' <br> <div>abc</div>'))
+    '<br> <div>abc</div>'
     """
     while 1:
         match = tag_regex.search(html)
         if match:
-            if match.groups()[0].lower() in common.EMPTY_TAGS:
-                if USE_BUFFER:
-                    html = buffer(html, match.end())
-                else:
-                    html = html[match.end():]
-            else:
-                if USE_BUFFER:
-                    return buffer(html, match.start())
-                else:
-                    return html[match.start():]
+            return html[match.start():]
         else:
             return None
 
@@ -300,7 +283,6 @@ def get_tag(html):
         return None
 
 
-splits = adt.HashDict()
 def split_tag(html):
     """Extract starting tag and contents from HTML
 
@@ -311,31 +293,28 @@ def split_tag(html):
     >>> [str(s) for s in split_tag('<div>abc<div>def</div>abc</span>')]
     ['<div>abc<div>def</div>abc</span></div>', '']
     """
-    if html in splits:
-        i, tag = splits[html]
-    else:
-        i = None
-        tag = get_tag(html)
-        depth = 0 # how far nested
-        for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
-            if html[match.start() + 1] == '/':
-                depth -= 1
-            elif html[match.end() - 2] == '/':
-                pass # tag starts and ends (eg <br />)
-            else:
-                depth += 1
-            if depth == 0:
-                # found top level match
-                i = match.end()
-                break
-        #splits[html] = i, tag
+    i = None
+    tag = get_tag(html)
+    depth = 0 # how far nested
+    for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
+        if html[match.start() + 1] == '/':
+            depth -= 1 # found closing tag
+        elif tag in common.EMPTY_TAGS:
+            pass # this tag type does not close
+        elif html[match.end() - 2] == '/':
+            pass # tag starts and ends (eg <br />)
+        else:
+            depth += 1 # found opening tag
+        if depth == 0:
+            # found top level match
+            i = match.end()
+            break
     if i is None:
+        # all html is within this tag
         return html + '</%s>' % tag, ''
     else:
-        if USE_BUFFER:
-            return html[:i], buffer(html, i)
-        else:
-            return html[:i], html[i:]
+        return html[:i], html[i:]
+
 
 js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')
 def get_links(html, url=None, local=True, external=True):

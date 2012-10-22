@@ -1,10 +1,13 @@
 __doc__ = 'default application wide settings'
 
-import logging
+import sys
 import os
+import logging
 
 
-state_dir = '.state' # where to store these output files
+# default location to store output state files
+dirname, filename = os.path.split(sys.argv[0])
+state_dir = os.path.join(dirname, '.' + filename.replace('.py', '')) 
 if not os.path.exists(state_dir):
     os.mkdir(state_dir)
 cache_file  = os.path.join(state_dir, 'cache.db') # file to use for pdict cache

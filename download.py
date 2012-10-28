@@ -427,7 +427,7 @@ class Download(object):
         url = 'http://translate.google.com/translate?sl=nl&anno=2&u=%s' % urllib.quote(url)
         html = self.get(url, **kwargs)
         if html:
-            m = re.compile(r'<frame src="([^"]+)" name=c>', re.DOTALL|re.IGNORECASE).search(html)
+            m = re.compile(r'<iframe[^<>]*src="([^"]+)"[^<>]*name=c', re.DOTALL|re.IGNORECASE).search(html)
             if m:
                 frame_src = urlparse.urljoin(url, common.unescape(m.groups()[0].strip()))
                 # force to check redirect here

@@ -436,7 +436,26 @@ class Download(object):
                 if html:
                     # remove google translations content
                     return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
+   
     
+    def archive_get(self, url, timestamp=None, **kwargs):
+        """Get page via archive.org cache
+
+        If `timestamp' is set then will return the page closest to this date,
+        else the most recent archived page
+        """
+        if timestamp:
+            formatted_ts = timestamp.strftime('%Y%m%d%H%M%S')
+        else:
+            formatted_ts = '2' # will return most recent archive
+        url = 'http://wayback.archive.org/web/%s/%s' % (formatted_ts, url)
+        html = self.get(url, **kwargs)
+
+        # remove wayback toolbar
+        html = re.compile('<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->', re.DOTALL).sub('', html)
+        html = re.compile('<!--\s+FILE ARCHIVED ON.*?-->', re.DOTALL).sub('', html)
+        return html
+
 
     def whois(self, url, timeout=10):
         """Query whois info

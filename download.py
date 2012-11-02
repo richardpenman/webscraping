@@ -653,7 +653,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
 class State:
     """Save state to disk periodically
     """
-    def __init__(self, output_file=settings.status_file, timeout=1):
+    def __init__(self, output_file=settings.status_file, timeout=10):
         # where to save state to
         self.output_file = output_file
         # how long to wait between saving state
@@ -666,8 +666,9 @@ class State:
         self.flush = False
         # track time duration of crawl
         self.start_time = time.time()
-        # start the saving timeout
-        self.save()
+        self.last_time = time.time()
+        # a lock to prevent multiple threads writing at once
+        self.lock = threading.Lock()
 
     def update(self, queue_size, is_error):
         """Update the state
@@ -679,16 +680,18 @@ class State:
         self.data['num_downloads'] = self.num_downloads
         self.data['num_errors'] = self.num_errors
         self.data['queue_size'] = queue_size
-        self.flush = True
+        self.save()
 
     def save(self):
         """Save state to disk
         """
-        if self.flush:
-            self.data['duration_secs'] = int(time.time() - self.start_time)
+        current_time = time.time()
+        if current_time - self.last_time > self.timeout:
+            self.last_time = current_time
+            self.lock.acquire()
+            self.data['duration_secs'] = int(current_time - self.start_time)
             self.flush = False
             text = json.dumps(self.data)
-            #tmp_file = tempfile.NamedTemporaryFile(prefix=settings.state_file + '.').name
             tmp_file = self.output_file + '.tmp'
             fp = open(tmp_file, 'wb')
             fp.write(text)
@@ -700,10 +703,7 @@ class State:
                 if os.path.exists(self.output_file):
                     os.remove(self.output_file)
             os.rename(tmp_file, self.output_file)
-        # save state to disk again after timeout
-        thread = threading.Timer(self.timeout, self.save)
-        thread.setDaemon(True) # set daemon so program can exit even though this thread is still running
-        thread.start()
+            self.lock.release()
 
 
 

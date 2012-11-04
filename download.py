@@ -144,6 +144,7 @@ class Download(object):
         self.final_url = None # for tracking redirects
         self.response_code = '' # keep response code
         self.response_headers = {} # keep response headers
+        self.num_downloads = self.num_errors = 0 # track the number of downloads made
                 
         # update settings with any local overrides
         settings = adt.Bag(self.settings)
@@ -187,6 +188,7 @@ class Download(object):
 
             if html:
                 # successfully downloaded
+                self.num_downloads += 1
                 if settings.max_proxy_errors is not None:
                     Download.proxy_performance.success(proxy)
                     # record which proxies failed for this download
@@ -197,6 +199,7 @@ class Download(object):
                             settings.proxies.remove(proxy)
             else:
                 # download failed - try again
+                self.num_errors += 1
                 failed_proxies.add(proxy)
 
 
@@ -630,8 +633,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
                         # have finished processing
                         # make sure this is called even on exception
                         DownloadThread.processing.popleft()
-                    is_error = not html
-                    state.update(queue_size=len(urls), is_error=is_error)
+                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, queue_size=len(urls))
        
     # put urls into thread safe queue
     urls = urls or []
@@ -670,13 +672,11 @@ class State:
         # a lock to prevent multiple threads writing at once
         self.lock = threading.Lock()
 
-    def update(self, queue_size, is_error):
+    def update(self, num_downloads, num_errors, queue_size):
         """Update the state
         """
-        if is_error:
-            self.num_errors += 1
-        else:
-            self.num_downloads += 1
+        self.num_downloads += num_downloads
+        self.num_errors += num_errors
         self.data['num_downloads'] = self.num_downloads
         self.data['num_errors'] = self.num_errors
         self.data['queue_size'] = queue_size

@@ -434,12 +434,13 @@ class Download(object):
             if m:
                 frame_src = urlparse.urljoin(url, common.unescape(m.groups()[0].strip()))
                 # force to check redirect here
-                if kwargs.has_key('num_redirects'): kwargs['num_redirects'] = 1
+                #XXXif kwargs.has_key('num_redirects'): kwargs['num_redirects'] = 1
                 html = self.get(frame_src, **kwargs)
                 if html:
                     # remove google translations content
                     return re.compile(r'<span class="google-src-text".+?</span>', re.DOTALL|re.IGNORECASE).sub('', html)
-   
+        return self.settings.default
+
     
     def archive_get(self, url, timestamp=None, **kwargs):
         """Get page via archive.org cache
@@ -574,7 +575,7 @@ def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=Fa
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, wait_finish=True, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -582,7 +583,10 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
     `cb' is called after each download with the HTML of the download   
         the arguments are the url and downloaded html
         whatever URLs are returned are added to the crawl queue
-    `post' is whether to use POST instead of default GET
+    `dl' is a function to call for downloading
+        takes the download object and url and should return the HTML
+        for example to perform a POST request instead of the default GET:
+            dl=lambda D, url: D.post(url)
     `depth' sets to traverse depth first rather than the default breadth first
     `wait_finish' sets whether this function should wait until all download threads have finished before returning
     """
@@ -619,7 +623,7 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth
                 else:
                     # download this url
                     try:
-                        html = (D.post if post else D.get)(url, **kwargs)
+                        html = dl(D, url, **kwargs) if dl else D.get(url, **kwargs)
                         if cb:
                             # use callback to process downloaded HTML
                             try:

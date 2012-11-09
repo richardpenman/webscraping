@@ -305,7 +305,7 @@ def pretty_paragraph(s):
         if '\r' in text or '\n' in text: return '\n'
         return ' '
     return re.sub('\s+', fixup, s).strip()
-
+    
 
 def get_extension(url):
     """Return extension from given URL
@@ -428,10 +428,9 @@ class UnicodeWriter(object):
     >>> fp.read().strip()
     'a,1'
     """
-    def __init__(self, file, encoding=settings.default_encoding, mode='wb', unique=False, quoting=csv.QUOTE_ALL, utf8_bom=False, unescape=True, **argv):
+    def __init__(self, file, encoding=settings.default_encoding, mode='wb', unique=False, quoting=csv.QUOTE_ALL, utf8_bom=False, **argv):
         self.encoding = encoding
         self.unique = unique
-        self.unescape = unescape
         if hasattr(file, 'write'):
             self.fp = file
         else:
@@ -452,8 +451,7 @@ class UnicodeWriter(object):
         if isinstance(s, basestring):
             if isinstance(s, unicode):
                 s = s.encode(self.encoding, 'ignore')
-            if self.unescape:
-                s = unescape(s, self.encoding)
+            #s = unescape(s, self.encoding)
         elif s is None:
             s = ''
         else:

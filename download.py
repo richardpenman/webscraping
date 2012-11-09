@@ -629,7 +629,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                             try:
                                 cb_urls = cb(D, url, html)
                             except Exception, e:
-                                common.logger.error('Error in callback for: ' + url)
+                                common.logger.error('Error in callback for: ' + str(url))
                                 common.logger.error(e)
                             else:
                                 urls.extend(cb_urls or [])

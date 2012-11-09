@@ -116,7 +116,7 @@ class Download(object):
             write_cache = write_cache,
             use_network = use_network,
             delay = delay,
-            proxies = collections.deque((common.read_list(proxy_file) if proxy_file else []) or proxies or []),
+            proxies = (common.read_list(proxy_file) if proxy_file else []) or proxies or [],
             proxy_file = proxy_file,
             max_proxy_errors = max_proxy_errors,
             user_agent = user_agent,
@@ -178,8 +178,8 @@ class Download(object):
             settings.num_retries -= 1
             if settings.proxies:
                 # select next available proxy
-                proxy = settings.proxies[0]
-                settings.proxies.rotate(1)
+                proxy = settings.proxies.pop(0)
+                settings.proxies = settings.proxies + [proxy]
             else:
                 proxy = None
             # crawl slowly for each domain to reduce risk of being blocked
@@ -343,7 +343,7 @@ class Download(object):
             if os.path.exists(self.settings.proxy_file):
                 if os.stat(self.settings.proxy_file).st_mtime != self.last_mtime:
                     self.last_mtime = os.stat(self.settings.proxy_file).st_mtime
-                    self.settings.proxies = collections.deque(common.read_list(self.settings.proxy_file))
+                    self.settings.proxies = common.read_list(self.settings.proxy_file)
                     common.logger.debug('Reloaded proxies from updated file.')
 
 
@@ -586,7 +586,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
     `dl' is a function to call for downloading
         takes the download object and url and should return the HTML
         for example to perform a POST request instead of the default GET:
-            dl=lambda D, url: D.post(url)
+            dl=lambda D, url: D.get(url, data=data)
     `depth' sets to traverse depth first rather than the default breadth first
     `wait_finish' sets whether this function should wait until all download threads have finished before returning
     """

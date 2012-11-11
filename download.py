@@ -178,8 +178,7 @@ class Download(object):
             settings.num_retries -= 1
             if settings.proxies:
                 # select next available proxy
-                proxy = settings.proxies.pop(0)
-                settings.proxies = settings.proxies + [proxy]
+                proxy = random.choice(settings.proxies)
             else:
                 proxy = None
             # crawl slowly for each domain to reduce risk of being blocked
@@ -654,7 +653,9 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
             if not thread.is_alive():
                 threads.remove(thread)
         time.sleep(SLEEP_TIME)
-    
+    # save the final state
+    state.save()
+
 
 class State:
     """Save state to disk periodically
@@ -665,50 +666,55 @@ class State:
         # how long to wait between saving state
         self.timeout = timeout
         # track the number of downloads and errors
-        self.num_downloads = self.num_errors = 0
+        self.num_downloads = self.num_errors = self.num_caches = 0
         # data to save to disk
         self.data = {}
         # whether data needs to be saved to dosk
         self.flush = False
         # track time duration of crawl
         self.start_time = time.time()
-        self.last_time = time.time()
+        self.last_time = 0
         # a lock to prevent multiple threads writing at once
         self.lock = threading.Lock()
 
     def update(self, num_downloads, num_errors, queue_size):
         """Update the state
         """
-        self.num_downloads += num_downloads
-        self.num_errors += num_errors
+        if num_downloads or num_errors:
+            self.num_downloads += num_downloads
+            self.num_errors += num_errors
+        else:
+            # no download or error so must have read from cache
+            self.num_caches += 1
         self.data['num_downloads'] = self.num_downloads
         self.data['num_errors'] = self.num_errors
+        self.data['num_caches'] = self.num_caches
         self.data['queue_size'] = queue_size
-        self.save()
+
+        if time.time() - self.last_time > self.timeout:
+            self.lock.acquire()
+            self.save()
+            self.lock.release()
 
     def save(self):
         """Save state to disk
         """
-        current_time = time.time()
-        if current_time - self.last_time > self.timeout:
-            self.last_time = current_time
-            self.lock.acquire()
-            self.data['duration_secs'] = int(current_time - self.start_time)
-            self.flush = False
-            text = json.dumps(self.data)
-            tmp_file = self.output_file + '.tmp'
-            fp = open(tmp_file, 'wb')
-            fp.write(text)
-            # ensure all content is written to disk
-            fp.flush()
-            fp.close()
-            if os.name == 'nt': 
-                # on wineows can not rename if file exists
-                if os.path.exists(self.output_file):
-                    os.remove(self.output_file)
-            os.rename(tmp_file, self.output_file)
-            self.lock.release()
-
+        self.last_time = time.time()
+        self.data['duration_secs'] = int(self.last_time - self.start_time)
+        self.flush = False
+        text = json.dumps(self.data)
+        tmp_file = self.output_file + '.tmp'
+        fp = open(tmp_file, 'wb')
+        fp.write(text)
+        # ensure all content is written to disk
+        fp.flush()
+        fp.close()
+        if os.name == 'nt': 
+            # on wineows can not rename if file exists
+            if os.path.exists(self.output_file):
+                os.remove(self.output_file)
+        # atomic copy to new location so state file is never partially written
+        os.rename(tmp_file, self.output_file)
 
 
 class StateCallback:

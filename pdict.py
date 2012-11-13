@@ -15,90 +15,51 @@ except ImportError:
     import pickle
 
 
-
-class BufferList:
-    """Track memory used by buffer
-    """
-    def __init__(self, *args, **kwargs):
-        self.data = []
-        self.num_bytes = 0
-
-    def __len__(self):
-        return len(self.data)
-
-    def add(self, sql, args):
-        """add sql and args to list
-        """
-        self.data.append((sql, args))
-        self.num_bytes += len(sql) 
-        for arg in args:
-            try:
-                self.num_bytes += len(arg)
-            except TypeError:
-                pass
-
-    def is_full(self, max_buffer_size):
-        """returns whether buffer data size is greater than max_buffer_size in MB
-        """
-        BYTES_PER_MB = 1024 * 1024
-        #print 'buffer size', self.num_bytes, len(self.d), 'records'
-        return self.num_bytes > max_buffer_size * BYTES_PER_MB
-
-    def pop_all(self):
-        self.num_bytes = 0
-        data, self.data = self.data, []
-        return data
-        
-
-"""
-change above class to storing sql string list
-collect sql strings from many operations
-use decorator to test flush
-"""
 class PersistentDict:
     """stores and retrieves persistent data through a dict-like interface
     data is stored compressed on disk using sqlite3 
     """
-    # buffer data so can insert multiple records in a single transaction
-    buffered_sql = BufferList()
-
-    def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, max_buffer_size=0):
+    def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, isolation_level=None):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.
         compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
         expires: a timedelta object of how old data can be before expires. By default is set to None to disable.
         timeout: how long should a thread wait for sqlite to be ready
-        max_buffer_size: maximum size in MB of buffered data before write to sqlite
+        isolation_level: None for autocommit or else 'DEFERRED' / 'IMMEDIATE' / 'EXCLUSIVE'
         """
-        self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=None, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self.filename = filename
+        self.compress_level = compress_level
+        self.expires = expires
+        self.timeout = timeout
+        self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
         sql = """
         CREATE TABLE IF NOT EXISTS config (
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
             value BLOB,
             meta BLOB,
+            status INTEGER,
             created timestamp DEFAULT (datetime('now', 'localtime')),
             updated timestamp DEFAULT (datetime('now', 'localtime'))
         );
         """
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
-        self.filename = filename
-        self.compress_level = compress_level
-        self.expires = expires
-        self.timeout = timeout
-        self.max_buffer_size = max_buffer_size
+        try:
+            self._conn.execute("ALTER TABLE config ADD COLUMN status INTEGER;")
+        except sqlite3.OperationalError:
+            pass # column already exists
+        else:
+            # set default status to True to new column
+            self.set_status(key=None, status=True)
+        #self._conn.execute("CREATE INDEX IF NOT EXISTS crawled ON config (status);")
 
-    
-    def __del__(self):
-        self.flush() 
-  
 
     def __copy__(self):
         """make copy with current cache settings
         """
-        return PersistentDict(filename=self.filename, compress_level=self.compress_level, expires=self.expires, timeout=self.timeout, max_buffer_size=self.max_buffer_size)
+        return PersistentDict(filename=self.filename, compress_level=self.compress_level, expires=self.expires, timeout=self.timeout)
 
 
     def __contains__(self, key):
@@ -120,9 +81,11 @@ class PersistentDict:
     def __getitem__(self, key):
         """return the value of the specified key or raise KeyError if not found
         """
-        row = self._conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
+        row = self._conn.execute("SELECT value, status, updated FROM config WHERE key=?;", (key,)).fetchone()
         if row:
-            if self.is_fresh(row[1]):
+            if self.is_fresh(row[2]):
+                if row[1] == False:
+                    self.set_status(key=key, status=True)
                 return self.deserialize(row[0])
             else:
                 raise KeyError("Key `%s' is stale" % key)
@@ -133,34 +96,16 @@ class PersistentDict:
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
-        self.buffer_execute("DELETE FROM config WHERE key=?;", (key,))
+        self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
 
 
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
-        self.buffer_execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (key, self.serialize(value), self.serialize({}), datetime.datetime.now()))
-
-
-    def buffer_execute(self, sql, args):
-        #if re.match('(INSERT|UPDATE|DELETE)', sql):
-        PersistentDict.buffered_sql.add(sql, args)
-        if PersistentDict.buffered_sql.is_full(self.max_buffer_size):
-            self.flush()
-
-    # XXX need to lock?
-    def flush(self):
-        """write any buffered records to sqlite
-        """
-        if PersistentDict.buffered_sql:
-            sql_args = PersistentDict.buffered_sql.pop_all()
-            need_transaction = len(sql_args) > 1
-            if need_transaction:
-                self._conn.execute('BEGIN TRANSACTION;')
-            for sql, args in sql_args:
-                self._conn.execute(sql, args)
-            if need_transaction:
-                self._conn.execute('COMMIT;')
+        updated = datetime.datetime.now()
+        self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, status, updated) VALUES(?, ?, ?, ?, ?);", (
+            key, self.serialize(value), self.serialize({}), True, updated)
+        )
 
 
     def serialize(self, value):
@@ -196,6 +141,33 @@ class PersistentDict:
                 )
         return data
 
+
+    def touch(self, keys, status=False):
+        """Add records for these keys without setting the content
+        """
+        self._conn.execute('BEGIN TRANSACTION;')
+        created = updated = datetime.datetime.now()
+        for key in keys:
+            # ignore if key already exists
+            self._conn.execute("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", (key, None, None, status, created, updated))
+        self._conn.execute('COMMIT;')
+
+    def get_touched(self, limit=1000):
+        """Get a sample of rows that have been touched - status=False
+        """
+        rows = self._conn.execute("SELECT key FROM config WHERE status=? LIMIT ?;", (False, limit)).fetchall()
+        return [row[0] for row in rows]
+
+    def set_status(self, key, status):
+        """Set status of given key
+        If key is None then set all keys
+        """
+        if key is None:
+            self._conn.execute("UPDATE config SET status=?;", (status,))
+        else:
+            self._conn.execute("UPDATE config SET status=? WHERE key=?;", (status, key))
+        
+
     def set(self, key, new_data):
         """set the data for the specified key
 
@@ -207,7 +179,7 @@ class PersistentDict:
         meta = self.serialize(current_data.get('meta'))
         created = current_data.get('created')
         updated = current_data.get('updated')
-        self.buffer_execute("INSERT OR REPLACE INTO config (key, value, meta, created, updated) VALUES(?, ?, ?, ?, ?);", (key, value, meta, created, updated))
+        self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, created, updated) VALUES(?, ?, ?, ?, ?);", (key, value, meta, created, updated))
 
 
     def meta(self, key, value=None):
@@ -226,7 +198,7 @@ class PersistentDict:
                 raise KeyError("Key `%s' does not exist" % key)
         else:
             # want to set meta
-            self.buffer_execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
+            self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
     def clear(self):

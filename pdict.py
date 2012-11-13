@@ -46,6 +46,8 @@ class PersistentDict:
         """
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
+        # XXX no performance increase
+        #self._conn.execute("CREATE INDEX IF NOT EXISTS timestamp ON config (created);")
         try:
             self._conn.execute("ALTER TABLE config ADD COLUMN status INTEGER;")
         except sqlite3.OperationalError:
@@ -152,11 +154,15 @@ class PersistentDict:
             self._conn.execute("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", (key, None, None, status, created, updated))
         self._conn.execute('COMMIT;')
 
-    def get_touched(self, limit=1000):
+    def get_touched(self, limit, ascending=True):
         """Get a sample of rows that have been touched - status=False
         """
-        rows = self._conn.execute("SELECT key FROM config WHERE status=? LIMIT ?;", (False, limit)).fetchall()
+        order = ascending and 'ASC' or 'DESC'
+        rows = self._conn.execute("SELECT key FROM config WHERE status=? ORDER BY created %s LIMIT ?;" % order, (False, limit)).fetchall()
         return [row[0] for row in rows]
+
+    def get_num_touched(self):
+        return self._conn.execute("SELECT count(*) FROM config WHERE status=?;", (False,)).fetchone()[0]
 
     def set_status(self, key, status):
         """Set status of given key

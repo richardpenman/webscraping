@@ -541,63 +541,7 @@ class Download(object):
 
 
 
-def async_get(url=None, urls=None, num_threads=10, cb=None, post=False, depth=False, **kwargs):
-    import gevent
-    from gevent import monkey, queue, event, pool
-    gevent.monkey.patch_all()
-
-    def scheduler():
-        """Coordinate downloading in greenlet threads.
-        When the worker queue fills up the scheduler will block on the put() operation.  
-        If the job queue is empty and no workers are active the pool is stopped."""
-        while True:
-            # join dead greenlets
-            for greenlet in list(pool):
-                if greenlet.dead:
-                    pool.discard(greenlet)
-
-            try:
-                url = inq.get_nowait()
-            except queue.Empty:
-                # No urls remaining
-                if pool.free_count() != pool.size:
-                    worker_finished.wait()
-                    worker_finished.clear()
-                else:
-                    # No workers left, shutting down.")
-                    pool.join()
-                    return True
-            else:
-                # spawn worker for url
-                pool.spawn(worker, url)
-
-    def worker(url):
-        html = (D.post if post else D.get)(url, **kwargs)
-        if cb:
-            for url in (cb(D, url, html) or []):
-                inq.put(url)
-        worker_finished.set()
-        raise gevent.GreenletExit('success')
-
-    # incoming queue of urls to download
-    inq = queue.Queue() if depth else queue.LifoQueue()
-    urls = urls or []
-    if url: urls.append(url)
-    for url in urls:
-        inq.put(url)
-
-    # start async pool with this many workers maximum
-    pool = pool.Pool(num_threads)
-    worker_finished = event.Event()
-
-    D = Download(**kwargs)
-    scheduler_greenlet = gevent.spawn(scheduler)
-    scheduler_greenlet.join()
-
-
-
-
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, cache_queue=False, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -612,33 +556,33 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
     `depth' sets to traverse depth first rather than the default breadth first
     `wait_finish' sets whether this function should wait until all download threads have finished before returning
     """
-    cache = kwargs.pop('cache', None)
-    if cache:
-        common.logger.debug('Making a copy of the cache for each thread')
+    if kwargs.pop('cache', None):
+        common.logger.debug('threaded_get does not support cache flag')
+    lock = threading.Lock()
+
 
     class DownloadThread(threading.Thread):
         """Download data
         """
         processing = collections.deque()
 
-        def __init__(self):
+        def __init__(self, seed_urls, state):
             threading.Thread.__init__(self)
+            self.seed_urls = seed_urls
+            self.state = state
 
         def run(self):
-            new_cache = None
-            if cache:
-                new_cache = copy.copy(cache)
-            D = Download(cache=new_cache, **kwargs)
-            while urls or DownloadThread.processing:
+            D = Download(**kwargs)
+            while self.seed_urls or DownloadThread.processing:
                 # keep track that are processing url
                 DownloadThread.processing.append(1) 
                 try:
                     if depth:
-                        url = urls.pop()
+                        url = self.seed_urls.pop()
                     else:
-                        url = urls.popleft()
+                        url = self.seed_urls.popleft()
                 except IndexError:
-                    # currently no urls to process
+                    # currently no urls to processa
                     DownloadThread.processing.popleft()
                     # so check again later
                     time.sleep(SLEEP_TIME)
@@ -654,22 +598,56 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                                 common.logger.error('Error in callback for: ' + str(url))
                                 common.logger.error(e)
                             else:
-                                urls.extend(cb_urls or [])
+                                if cache_queue:
+                                    if cb_urls:
+                                        D.cache.touch(cb_urls)
+                                    lock.acquire()
+                                    if not self.seed_urls:
+                                        self.seed_urls.extend(D.cache.get_touched())
+                                        print 'decached %d urls' % len(self.seed_urls)
+                                    lock.release()
+                                else:
+                                    self.seed_urls.extend(cb_urls or [])
                     finally:
                         # have finished processing
-                        # make sure this is called even on exception
+                        # make sure this is called even on exception to avoid eternal loop
                         DownloadThread.processing.popleft()
-                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, queue_size=len(urls))
+
+                    """
+                    when continue crawl will override CSV
+                    when restart crawl will recrawl everything
+
+                    if on start no new URL's
+                        either just starting or crawled everything
+                            either way recrawl everything
+                    """
+                    # XXX queue_size will be wrong
+                    self.state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, queue_size=len(self.seed_urls))
        
+    
     # put urls into thread safe queue
     urls = urls or []
     if url: urls.append(url)
-    urls = collections.deque(urls)
+    seed_urls = collections.deque(urls)
+    if cache_queue:
+        D = Download(**kwargs)
+        queued_urls = D.cache.get_touched()
+        if queued_urls:
+            # continue the previous crawl
+            seed_urls = collections.deque(queued_urls)
+            common.logger.info('Loading crawl queue')
+        else:
+            # set all key status to False so can crawl all
+            D.cache.set_status(key=None, status=False)
+            common.logger.info('Start new crawl')
+
     state = State()
-    threads = [DownloadThread() for i in range(num_threads)]
+    # start the download threads
+    threads = [DownloadThread(seed_urls, state) for i in range(num_threads)]
     for thread in threads:
         thread.setDaemon(True) # set daemon so main thread can exit when receives ctrl-c
         thread.start()
+
     # Wait for all download threads to finish
     while threads and wait_finish:
         for thread in threads:
@@ -678,6 +656,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
         time.sleep(SLEEP_TIME)
     # save the final state
     state.save()
+
 
 
 class State:
@@ -738,80 +717,6 @@ class State:
                 os.remove(self.output_file)
         # atomic copy to new location so state file is never partially written
         os.rename(tmp_file, self.output_file)
-
-
-class StateCallback:
-    """Example callback that saves state
-    """
-    active_urls = set()
-    found = adt.HashDict() # track found URLs
-
-    def __init__(self, output_file, header):
-        # load state from previous run, if exists
-        state = self.load_state()
-        # settings to start crawl from beginning
-        self.new_urls = False
-        write_header = True
-        mode = 'wb'
-        if StateCallback.active_urls:
-            # incomplete crawl
-            common.logger.info('Loading previous crawl state')
-            self.new_urls = True
-            if os.path.exists(output_file):
-                mode = 'ab'
-                write_header = False
-
-        self.writer = common.UnicodeWriter(output_file, mode=mode) 
-        if write_header:
-            self.writer.writerow(header)
-
-
-    def __call__(self, D, url, html):
-        if self.new_urls:
-            # restoring state so can ignore the starting url
-            # instead return urls previously in queue
-            self.new_urls = False
-            new_urls = StateCallback.active_urls
-        else:
-            self.scrape(D, url, html)
-            new_urls = self.crawl(D, url, html)
-            # add newly scraped urls
-            StateCallback.active_urls.update(new_urls)
-            # this url has already been processed
-            StateCallback.active_urls.discard(url)
-            # save state in thread
-            thread.start_new_thread(self.save_state, tuple())
-        return new_urls
-
-
-    def save_state(self, output_file='.state.pickle'):
-        """Save state of current crawl to pickle file
-        """
-        # to ensure atomic write save state to temporary file first and then rename
-        pickled_data = pickle.dumps(dict(
-            urls = StateCallback.active_urls, 
-            found = StateCallback.found
-        ))
-        tmp_file = tempfile.NamedTemporaryFile(prefix=output_file + '.').name
-        fp = open(tmp_file, 'wb')
-        fp.write(pickled_data)
-        # ensure all content is written to disk
-        fp.flush()
-        fp.close()
-        # XXX error on Windows if dest exists
-        os.rename(tmp_file, output_file)
-
-
-    def load_state(self, input_file='.state.pickle'):
-        """Load previous state from pickle file
-        """
-        if os.path.exists(input_file):
-            data = pickle.load(open(input_file))
-            StateCallback.active_urls.update(data.get('urls', []))
-            StateCallback.found = data.get('found', StateCallback.found)
-        else:
-            data = {}
-        return data
 
 
 

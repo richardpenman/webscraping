@@ -398,22 +398,45 @@ class Download(object):
     def get_emails(self, website, max_depth=1, max_urls=None, max_emails=None):
         """Crawl this website and return all emails found
         """
+        def score(link):
+            """Return how valuable this link is, for ordering crawling
+            The lower the better"""
+            link = link.lower()
+            total = 0
+            if 'contact' in link:
+                pass # this page is top priority
+            elif 'about' in link:
+                total += 10
+            elif 'help' in link:
+                total += 20
+            else:
+                # generic page
+                total += 100
+            # bias towards shorter links
+            total += len(link)
+            return total
+
         scraped = adt.HashDict()
         c = CrawlerCallback(max_depth=max_depth)
-        outstanding = collections.deque([website])
+        outstanding = [(0, website)] # list of URLs and their score
         emails = []
         while outstanding and (max_urls is None or len(scraped) < max_urls) \
                           and (max_emails is None or len(emails) < max_emails):
-            url = outstanding.popleft()
+            _, url = outstanding.pop(0)
             scraped[url] = True
-            html = self.get(url, delay=1)
+            html = self.get(url)
             if html:
                 for email in alg.extract_emails(html):
                     if email not in emails:
                         emails.append(email)
                         if len(emails) == max_emails:
                             break
-                outstanding.extend(c.crawl(self, url, html))
+                # crawl the linked URLs
+                for link in c.crawl(self, url, html):
+                    if link not in scraped:
+                        outstanding.append((score(link), link))
+                outstanding.sort()
+                # sort based on 
         return list(emails)
 
 

@@ -4,11 +4,14 @@ It uses pickle to store Python objects and strings, which are then compressed
 Multithreading is supported
 """
 
+import os
 import sys
 import datetime
 import sqlite3
 import zlib
 import threading
+import md5
+import shutil
 try:
     import cPickle as pickle
 except ImportError:
@@ -16,10 +19,48 @@ except ImportError:
 
 
 class PersistentDict:
-    """stores and retrieves persistent data through a dict-like interface
-    data is stored compressed on disk using sqlite3 
+    """Stores and retrieves persistent data through a dict-like interface
+    Data is stored compressed on disk using sqlite3 
+
+    >>> filename = 'cache.db'
+    >>> cache = PersistentDict(filename)
+    >>> url = 'http://google.com/abc'
+    >>> html = '<html>abc</html>'
+    >>>
+    >>> url in cache
+    False
+    >>> cache[url] = html
+    >>> url in cache
+    True
+    >>> cache[url] == html
+    True
+    >>> cache.get(url)['value'] == html
+    True
+    >>> now = datetime.datetime.now()
+    >>> cache.set(url, dict(created=now))
+    >>> cache.meta(url)
+    {}
+    >>> cache.meta(url, 'meta')
+    >>> cache.meta(url)
+    'meta'
+    >>> del cache[url]
+    >>> url in cache
+    False
+    >>>
+    >>> keys = ['a', 'b', 'c']
+    >>> cache.touch(keys)
+    >>> cache.get_touched(len(keys)) == keys
+    True
+    >>> cache.get_num_touched()
+    3
+    >>> key = keys.pop()
+    >>> cache.set_status(key, True)
+    >>> cache.get_num_touched()
+    2
+    >>> os.remove(filename)
     """
-    def __init__(self, filename=':memory:', compress_level=6, expires=None, timeout=1000, isolation_level=None):
+
+    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=1000, isolation_level=None):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.
@@ -56,6 +97,7 @@ class PersistentDict:
             # set default status to True to new column
             self.set_status(key=None, status=True)
         #self._conn.execute("CREATE INDEX IF NOT EXISTS crawled ON config (status);")
+        self.fscache = FSCache(os.path.dirname(filename))
 
 
     def __copy__(self):
@@ -88,7 +130,12 @@ class PersistentDict:
             if self.is_fresh(row[2]):
                 if row[1] == False:
                     self.set_status(key=key, status=True)
-                return self.deserialize(row[0])
+                try:
+                    value = self.fscache[key]
+                except KeyError:
+                    # XXX remove this when migrated
+                    value = row[0]
+                return self.deserialize(value)
             else:
                 raise KeyError("Key `%s' is stale" % key)
         else:
@@ -99,15 +146,17 @@ class PersistentDict:
         """remove the specifed value from the database
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
+        del self.fscache[key]
 
 
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
         updated = datetime.datetime.now()
-        self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, status, updated) VALUES(?, ?, ?, ?, ?);", (
-            key, self.serialize(value), self.serialize({}), True, updated)
+        self._conn.execute("INSERT OR REPLACE INTO config (key, meta, status, updated) VALUES(?, ?, ?, ?);", (
+            key, self.serialize({}), True, updated)
         )
+        self.fscache[key] = self.serialize(value)
 
 
     def serialize(self, value):
@@ -135,8 +184,12 @@ class PersistentDict:
         if key:
             row = self._conn.execute("SELECT value, meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
+                try:
+                    value = self.fscache[key]
+                except KeyError:
+                    value = row[0] # XXX remove after migrated
                 data = dict(
-                    value=self.deserialize(row[0]),
+                    value=self.deserialize(value),
                     meta=self.deserialize(row[1]),
                     created=row[2],
                     updated=row[3]
@@ -154,6 +207,7 @@ class PersistentDict:
             self._conn.execute("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", (key, None, None, status, created, updated))
         self._conn.execute('COMMIT;')
 
+
     def get_touched(self, limit, ascending=True):
         """Get a sample of rows that have been touched - status=False
         """
@@ -161,8 +215,10 @@ class PersistentDict:
         rows = self._conn.execute("SELECT key FROM config WHERE status=? ORDER BY created %s LIMIT ?;" % order, (False, limit)).fetchall()
         return [row[0] for row in rows]
 
+
     def get_num_touched(self):
         return self._conn.execute("SELECT count(*) FROM config WHERE status=?;", (False,)).fetchone()[0]
+
 
     def set_status(self, key, status):
         """Set status of given key
@@ -174,26 +230,30 @@ class PersistentDict:
             self._conn.execute("UPDATE config SET status=? WHERE key=?;", (status, key))
         
 
-    def set(self, key, new_data):
-        """set the data for the specified key
+    def set(self, key, data):
+        """Set data for the specified key
 
         data is a dict {'value': ..., 'meta': ..., 'created': ..., 'updated': ...}
         """
-        current_data = self.get(key, {})
-        current_data.update(new_data)
-        value = self.serialize(current_data.get('value'))
-        meta = self.serialize(current_data.get('meta'))
-        created = current_data.get('created')
-        updated = current_data.get('updated')
-        self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, created, updated) VALUES(?, ?, ?, ?, ?);", (key, value, meta, created, updated))
+        if 'value' in data:
+            value = self.serialize(data['value'])
+            self.fscache[key] = value
+        row = self._conn.execute("SELECT meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
+        if row:
+            current_data = dict(meta=self.deserialize(row[0]), created=row[1], updated=row[2])
+            current_data.update(data)
+            data = current_data
+        meta = self.serialize(data.get('meta'))
+        created = data.get('created')
+        updated = data.get('updated')
+        self._conn.execute("INSERT OR REPLACE INTO config (key, meta, created, updated) VALUES(?, ?, ?, ?);", (key, meta, created, updated))
 
 
     def meta(self, key, value=None):
-        """
-        if value is passed then set the meta attribute for this key
-        XXX return true/false if successful
+        """Get / set meta for this value
 
-        otherwise get the existing meta attribute for this key
+        if value is passed then set the meta attribute for this key
+        if not then get the existing meta data for this key
         """
         if value is None:
             # want to get meta
@@ -207,11 +267,24 @@ class PersistentDict:
             self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
+    def view(self, key):
+        """View content at this key in a web browser
+        """
+        import tempfile
+        import webbrowser
+        value = self[key]
+        filename = tempfile.NamedTemporaryFile().name
+        fp = open(filename, 'w')
+        fp.write(value)
+        fp.flush()
+        webbrowser.open(filename)
+        
+
     def clear(self):
         """Clear all cached data
         """
         self._conn.execute("DELETE FROM config;")
-
+        self.fscache.clear()
 
     def merge(self, db, override=False):
         """Merge this databases content
@@ -220,6 +293,94 @@ class PersistentDict:
         for key in db.keys():
             if override or key not in self:
                 self[key] = db[key]
+
+
+class FSCache:
+    """Cache files in the file system
+
+    >>> fscache = FSCache('.')
+    >>> url = 'http://google.com/abc'
+    >>> html = '<html>abc</html>'
+    >>> url in fscache
+    False
+    >>> fscache[url] = html
+    >>> url in fscache
+    True
+    >>> fscache.get(url) == html
+    True
+    >>> fscache.get(html) == ''
+    True
+    >>> fscache.clear()
+    """
+    PARENT_DIR = 'fscache'
+    FILE_NAME = 'index.html'
+
+    def __init__(self, folder):
+        self.folder = os.path.join(folder, FSCache.PARENT_DIR)
+
+    
+    def __contains__(self, key):
+        """Does data for this key exist
+        """
+        return os.path.exists(self._key_path(key))
+
+
+    def __getitem__(self, key):
+        path = self._key_path(key)
+        try:
+            fp = open(path)
+        except IOError:
+            # key does not exist
+            raise KeyError('%s does not exist' % key)
+        else:
+            # get value in key
+            return fp.read()
+
+
+    def __setitem__(self, key, value):
+        """Save value at this key to this value
+        """
+        path = self._key_path(key)
+        folder = os.path.dirname(path)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        open(path, 'wb').write(value)
+
+
+    def __delitem__(self, key):
+        """Remove the value at this key and any empty parent sub-directories
+        """
+        path = self._key_path(key)
+        try:
+            os.remove(path)
+            os.removedirs(os.path.dirname(path))
+        except OSError:
+            pass
+
+    def _key_path(self, key):
+        """The fils system path for this key
+        """
+        # create unique hash for this key
+        h = md5.md5(key).hexdigest()
+        # create file system path
+        path = os.path.join(self.folder, os.path.sep.join(h), FSCache.FILE_NAME)
+        return path
+
+
+    def get(self, key, default=''):
+        """Get data at this key and return default if does not exist
+        """
+        try:
+            value = self[key]
+        except KeyError:
+            value = default
+        return value
+
+
+    def clear(self):
+        """Remove all the cached values
+        """
+        shutil.rmtree(self.folder)
 
 
 

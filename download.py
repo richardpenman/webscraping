@@ -543,7 +543,7 @@ class Download(object):
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, max_queue=10000, cache_queue=False, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, max_queue=10000, cache_queue=True, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download

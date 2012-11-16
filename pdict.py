@@ -51,12 +51,10 @@ class PersistentDict:
     >>> cache.touch(keys)
     >>> cache.get_touched(len(keys)) == keys
     True
-    >>> cache.get_num_touched()
-    3
     >>> key = keys.pop()
     >>> cache.set_status(key, True)
-    >>> cache.get_num_touched()
-    2
+    >>> cache.get_touched(len(keys)) == keys
+    True
     >>> os.remove(filename)
     """
 
@@ -199,13 +197,16 @@ class PersistentDict:
 
     def touch(self, keys, status=False):
         """Add records for these keys without setting the content
+
+        Will not insert if key already exists.
+        Returns the number of inserted rows.
         """
-        self._conn.execute('BEGIN TRANSACTION;')
         created = updated = datetime.datetime.now()
-        for key in keys:
-            # ignore if key already exists
-            self._conn.execute("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", (key, None, None, status, created, updated))
-        self._conn.execute('COMMIT;')
+        rows = [(key, None, None, status, created, updated) for key in keys]
+        c = self._conn.cursor()
+        # ignore if key already exists
+        c.executemany("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", rows)
+        return c.rowcount
 
 
     def get_touched(self, limit, ascending=True):
@@ -214,10 +215,6 @@ class PersistentDict:
         order = ascending and 'ASC' or 'DESC'
         rows = self._conn.execute("SELECT key FROM config WHERE status=? ORDER BY created %s LIMIT ?;" % order, (False, limit)).fetchall()
         return [row[0] for row in rows]
-
-
-    def get_num_touched(self):
-        return self._conn.execute("SELECT count(*) FROM config WHERE status=?;", (False,)).fetchone()[0]
 
 
     def set_status(self, key, status):

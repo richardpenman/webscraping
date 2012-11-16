@@ -568,22 +568,20 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
         """
         processing = collections.deque()
 
-        def __init__(self, seed_urls, state):
+        def __init__(self):
             threading.Thread.__init__(self)
-            self.seed_urls = seed_urls
-            self.state = state
 
         def run(self):
             D = Download(**kwargs)
-            queue_size = 0
-            while self.seed_urls or DownloadThread.processing:
+            while seed_urls or DownloadThread.processing:
+                queue_change = 0
                 # keep track that are processing url
                 DownloadThread.processing.append(1) 
                 try:
                     if depth:
-                        url = self.seed_urls.pop()
+                        url = seed_urls.pop()
                     else:
-                        url = self.seed_urls.popleft()
+                        url = seed_urls.popleft()
 
                 except IndexError:
                     # currently no urls to processa
@@ -591,6 +589,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                     # so check again later
                     time.sleep(SLEEP_TIME)
                 else:
+                    queue_change -= 1
                     try:
                         # download this url
                         html = dl(D, url, **kwargs) if dl else D.get(url, **kwargs)
@@ -606,29 +605,27 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                                 if cache_queue:
                                     if cb_urls:
                                         # add these URL's to crawl queue
-                                        D.cache.touch(cb_urls)
+                                        queue_change += D.cache.touch(cb_urls)
                                     lock.acquire()
-                                    if not self.seed_urls:
+                                    if not seed_urls:
                                         # get next batch of URLs from cache
-                                        # XXX when load URL's from cache small chance that currently downloading
-                                        self.seed_urls.extend(D.cache.get_touched(max_queue))
-                                        if len(self.seed_urls) < max_queue:
-                                            queue_size = len(self.seed_urls)
-                                        else:
-                                            # need to find the true queue size
-                                            queue_size = D.cache.get_num_touched()
+                                        # XXX when load URL's from cache some could still be currently downloading
+                                        seed_urls.extend(D.cache.get_touched(max_queue))
                                     lock.release()
                                 else:
-                                    queue_size = len(self.seed_urls)
-                                    self.seed_urls.extend(cb_urls or [])
+                                    #queue_size = len(seed_urls)
+                                    seed_urls.extend(cb_urls or [])
                     finally:
                         # have finished processing
                         # make sure this is called even on exception to avoid eternal loop
                         DownloadThread.processing.popleft()
                     # update the crawler state
-                    self.state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, queue_size=queue_size)
+                    # no download or error so must have read from cache
+                    num_caches = 0 if D.num_downloads or D.num_errors else 1
+                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_change=queue_change)
        
     
+    state = State()
     # put urls into thread safe queue
     urls = urls or []
     if url: urls.append(url)
@@ -640,14 +637,14 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
             # continue the previous crawl
             seed_urls = collections.deque(queued_urls)
             common.logger.debug('Loading crawl queue')
+            state.update(queue_change=len(queued_urls))
         else:
             # set all key status to False so can crawl all
             D.cache.set_status(key=None, status=False)
             common.logger.debug('Start new crawl')
 
-    state = State()
     # start the download threads
-    threads = [DownloadThread(seed_urls, state) for i in range(num_threads)]
+    threads = [DownloadThread() for i in range(num_threads)]
     for thread in threads:
         thread.setDaemon(True) # set daemon so main thread can exit when receives ctrl-c
         thread.start()
@@ -672,7 +669,7 @@ class State:
         # how long to wait between saving state
         self.timeout = timeout
         # track the number of downloads and errors
-        self.num_downloads = self.num_errors = self.num_caches = 0
+        self.num_downloads = self.num_errors = self.num_caches = self.queue_size = 0
         # data to save to disk
         self.data = {}
         # whether data needs to be saved to dosk
@@ -683,19 +680,18 @@ class State:
         # a lock to prevent multiple threads writing at once
         self.lock = threading.Lock()
 
-    def update(self, num_downloads, num_errors, queue_size):
+    def update(self, num_downloads=0, num_errors=0, num_caches=0, queue_change=0):
         """Update the state
         """
-        if num_downloads or num_errors:
-            self.num_downloads += num_downloads
-            self.num_errors += num_errors
-        else:
-            # no download or error so must have read from cache
-            self.num_caches += 1
+        self.num_downloads += num_downloads
+        self.num_errors += num_errors
+        self.num_caches += num_caches
+        self.queue_size += queue_change
         self.data['num_downloads'] = self.num_downloads
         self.data['num_errors'] = self.num_errors
         self.data['num_caches'] = self.num_caches
-        self.data['queue_size'] = queue_size
+        self.data['queue_size'] = self.queue_size
+        print self.data
 
         if time.time() - self.last_time > self.timeout:
             self.lock.acquire()

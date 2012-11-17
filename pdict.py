@@ -398,7 +398,8 @@ class FSCache:
     def clear(self):
         """Remove all the cached values
         """
-        shutil.rmtree(self.folder)
+        if os.path.exists(self.folder):
+            shutil.rmtree(self.folder)
 
 
 

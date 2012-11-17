@@ -458,7 +458,6 @@ class Download(object):
             if m:
                 frame_src = urlparse.urljoin(url, common.unescape(m.groups()[0].strip()))
                 # force to check redirect here
-                #XXXif kwargs.has_key('num_redirects'): kwargs['num_redirects'] = 1
                 html = self.get(frame_src, **kwargs)
                 if html:
                     # remove google translations content
@@ -566,7 +565,8 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
     class DownloadThread(threading.Thread):
         """Download data
         """
-        processing = collections.deque()
+        processing = collections.deque() # to track whether are still downloading
+        downloading = set() # the URL's that are currently being downloaded
 
         def __init__(self):
             threading.Thread.__init__(self)
@@ -588,7 +588,9 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                     DownloadThread.processing.popleft()
                     # so check again later
                     time.sleep(SLEEP_TIME)
+
                 else:
+                    DownloadThread.downloading.add(url)
                     queue_change -= 1
                     try:
                         # download this url
@@ -597,51 +599,54 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                             try:
                                 # use callback to process downloaded HTML
                                 cb_urls = cb(D, url, html)
+
                             except Exception, e:
                                 # catch any callback error to avoid losing thread
                                 common.logger.error('Error in callback for: ' + str(url))
                                 common.logger.error(e)
+
                             else:
-                                if cache_queue:
-                                    if cb_urls:
-                                        # add these URL's to crawl queue
-                                        queue_change += D.cache.touch(cb_urls)
-                                    lock.acquire()
-                                    if not seed_urls:
-                                        # get next batch of URLs from cache
-                                        # XXX when load URL's from cache some could still be currently downloading
-                                        seed_urls.extend(D.cache.get_touched(max_queue))
-                                    lock.release()
-                                else:
-                                    #queue_size = len(seed_urls)
-                                    seed_urls.extend(cb_urls or [])
+                                if cb_urls:
+                                    # add these URL's to crawl queue
+                                    queue_change += D.cache.add_status(status=False, keys=cb_urls)
+                                lock.acquire()
+                                if not seed_urls:
+                                    # get next batch of URLs from cache
+                                    for outstanding_url in D.cache.get_status(status=False, limit=max_queue, ascending=depth):
+                                        if outstanding_url not in DownloadThread.downloading:
+                                            # is not currently processing
+                                            seed_urls.append(outstanding_url)
+                                lock.release()
                     finally:
                         # have finished processing
                         # make sure this is called even on exception to avoid eternal loop
-                        DownloadThread.processing.popleft()
+                        DownloadThread.processing.pop()
+                        DownloadThread.downloading.discard(url)
                     # update the crawler state
                     # no download or error so must have read from cache
                     num_caches = 0 if D.num_downloads or D.num_errors else 1
                     state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_change=queue_change)
-       
+
     
-    state = State()
     # put urls into thread safe queue
     urls = urls or []
     if url: urls.append(url)
-    seed_urls = collections.deque(urls)
-    if cache_queue:
-        D = Download(**kwargs)
-        queued_urls = D.cache.get_touched(max_queue)
-        if queued_urls:
-            # continue the previous crawl
-            seed_urls = collections.deque(queued_urls)
-            common.logger.debug('Loading crawl queue')
-            state.update(queue_change=len(queued_urls))
-        else:
-            # set all key status to False so can crawl all
-            D.cache.set_status(key=None, status=False)
-            common.logger.debug('Start new crawl')
+    D = Download(**kwargs)
+    queued_urls = D.cache.get_status(status=False, limit=max_queue)
+    if queued_urls:
+        # continue the previous crawl
+        seed_urls = collections.deque(queued_urls)
+        common.logger.debug('Loading crawl queue')
+    else:
+        # set all key status to False so can crawl all
+        D.cache.set_status(key=None, status=False)
+        seed_urls = collections.deque(urls)
+        common.logger.debug('Start new crawl')
+
+    # initiate the state file with the number of URL's already in the queue
+    state = State()
+    num_queued = D.cache.get_status_count(status=False)
+    state.update(queue_change=num_queued or len(seed_urls))
 
     # start the download threads
     threads = [DownloadThread() for i in range(num_threads)]
@@ -655,7 +660,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
             if not thread.is_alive():
                 threads.remove(thread)
         time.sleep(SLEEP_TIME)
-    # save the final state
+    # save the final state after threads finish
     state.save()
 
 
@@ -691,7 +696,6 @@ class State:
         self.data['num_errors'] = self.num_errors
         self.data['num_caches'] = self.num_caches
         self.data['queue_size'] = self.queue_size
-        print self.data
 
         if time.time() - self.last_time > self.timeout:
             self.lock.acquire()

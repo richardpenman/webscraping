@@ -48,13 +48,19 @@ class PersistentDict:
     False
     >>>
     >>> keys = ['a', 'b', 'c']
-    >>> cache.touch(keys)
-    >>> cache.get_touched(len(keys)) == keys
+    >>> cache.add_status(status=False, keys=keys)
+    3
+    >>> cache.get_status_count(status=False)
+    3
+    >>> cache.get_status(status=False, limit=len(keys)) == keys 
     True
     >>> key = keys.pop()
-    >>> cache.set_status(key, True)
-    >>> cache.get_touched(len(keys)) == keys
-    True
+    >>> cache.set_status(key=key, status=True) # set status to True for this key
+    1
+    >>> cache.get_status_count(status=False) # get number of records with status False
+    2
+    >>> cache.set_status(key=None, status=True) # set all status to True
+    3
     >>> os.remove(filename)
     """
 
@@ -195,37 +201,52 @@ class PersistentDict:
         return data
 
 
-    def touch(self, keys, status=False):
+
+    def get_status(self, status, limit, ascending=True):
+        """Get keys with this status
+
+        Limit to given number
+        Orders by ascending by default
+        """
+        order = ascending and 'ASC' or 'DESC'
+        rows = self._conn.execute("SELECT key FROM config WHERE status=? ORDER BY created %s LIMIT ?;" % order, (status, limit)).fetchall()
+        return [row[0] for row in rows]
+
+
+    def get_status_count(self, status):
+        """Get number of rows with this status
+        """
+        row = self._conn.execute("SELECT count(*) FROM config WHERE status=?;", (status,)).fetchone()
+        return row[0]
+
+
+    def set_status(self, key, status):
+        """Set status of given key
+
+        If key is None then set all keys
+        Returns number of rows effected
+        """
+        c = self._conn.cursor()
+        if key is None:
+            c.execute("UPDATE config SET status=?;", (status,))
+        else:
+            c.execute("UPDATE config SET status=? WHERE key=?;", (status, key))
+        return c.rowcount
+        
+
+    def add_status(self, keys, status=False):
         """Add records for these keys without setting the content
 
         Will not insert if key already exists.
         Returns the number of inserted rows.
         """
-        created = updated = datetime.datetime.now()
-        rows = [(key, None, None, status, created, updated) for key in keys]
         c = self._conn.cursor()
+        timestamp = datetime.datetime.now()
+        records = [(key, None, None, status, timestamp, timestamp) for key in keys]
         # ignore if key already exists
-        c.executemany("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", rows)
+        c.executemany("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", records)
         return c.rowcount
 
-
-    def get_touched(self, limit, ascending=True):
-        """Get a sample of rows that have been touched - status=False
-        """
-        order = ascending and 'ASC' or 'DESC'
-        rows = self._conn.execute("SELECT key FROM config WHERE status=? ORDER BY created %s LIMIT ?;" % order, (False, limit)).fetchall()
-        return [row[0] for row in rows]
-
-
-    def set_status(self, key, status):
-        """Set status of given key
-        If key is None then set all keys
-        """
-        if key is None:
-            self._conn.execute("UPDATE config SET status=?;", (status,))
-        else:
-            self._conn.execute("UPDATE config SET status=? WHERE key=?;", (status, key))
-        
 
     def set(self, key, data):
         """Set data for the specified key

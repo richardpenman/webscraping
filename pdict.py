@@ -63,6 +63,7 @@ class PersistentDict:
     3
     >>> os.remove(filename)
     """
+    DEFAULT_LIMIT = 1000
 
     def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=1000, isolation_level=None):
         """initialize a new PersistentDict with the specified database file.
@@ -97,9 +98,6 @@ class PersistentDict:
             self._conn.execute("ALTER TABLE config ADD COLUMN status INTEGER;")
         except sqlite3.OperationalError:
             pass # column already exists
-        else:
-            # set default status to True to new column
-            self.set_status(key=None, status=True)
         #self._conn.execute("CREATE INDEX IF NOT EXISTS crawled ON config (status);")
         self.fscache = FSCache(os.path.dirname(filename))
 
@@ -202,7 +200,7 @@ class PersistentDict:
 
 
 
-    def get_status(self, status, limit, ascending=True):
+    def get_status(self, status, limit=DEFAULT_LIMIT, ascending=True):
         """Get keys with this status
 
         Limit to given number
@@ -234,7 +232,7 @@ class PersistentDict:
         return c.rowcount
         
 
-    def add_status(self, keys, status=False):
+    def add_status(self, keys, status):
         """Add records for these keys without setting the content
 
         Will not insert if key already exists.
@@ -291,6 +289,7 @@ class PersistentDict:
         self._conn.execute("DELETE FROM config;")
         self.fscache.clear()
 
+
     def merge(self, db, override=False):
         """Merge this databases content
         override determines whether to override existing keys
@@ -298,6 +297,32 @@ class PersistentDict:
         for key in db.keys():
             if override or key not in self:
                 self[key] = db[key]
+
+
+    def shrink(self):
+        """Shrink the cache by writing values to disk
+        """
+        limit = 998 # SQLITE_MAX_VARIABLE_NUMBER = 999
+        num_updates = 0
+        
+        #num_outstanding = c.execute("SELECT count(*) from config WHERE length(value) > 0;").fetchone()[0]
+        while True:
+            keys = []
+            for record in self._conn.execute("SELECT key, value from config WHERE length(value) > 0 LIMIT ?;", (limit, )):
+                num_updates += 1
+                key, value = record
+                self.fscache[key] = value
+                keys.append(key)
+            print num_updates
+            if keys:
+                self._conn.execute("UPDATE config SET value=? WHERE key IN (%s)" % ','.join('?' * len(keys)), [None] + keys)
+                #c.executemany("UPDATE config SET value=? WHERE key=?", [(None, key) for key in keys])
+            else:
+                break
+        if num_updates > 0:
+            # reduce size of database after values removed
+            self._conn.execute('VACUUM')
+        return num_updates
 
 
 class FSCache:

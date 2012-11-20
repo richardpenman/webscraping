@@ -285,19 +285,6 @@ class PersistentDict:
             self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
-    def view(self, key):
-        """View content at this key in a web browser
-        """
-        import tempfile
-        import webbrowser
-        value = self[key]
-        filename = tempfile.NamedTemporaryFile().name
-        fp = open(filename, 'w')
-        fp.write(value)
-        fp.flush()
-        webbrowser.open(filename)
-        
-
     def clear(self):
         """Clear all cached data
         """
@@ -404,24 +391,19 @@ class FSCache:
 
 
 if __name__ == '__main__':
-    # test performance of compression and verify stored data is correct
-    import os
-    import time
-    key = 'key'
-    input = 'abc' * 100000
-    for compress_level in range(1, 10):
-        print 'Compression:', compress_level
-        start = time.time()
-        file = 'persistent%d.db' % compress_level
-        try:
-            os.remove(file)
-        except OSError:
-            pass
-        p = PersistentDict(file, compress_level)
-        p[key] = input
-        print 'Time: %.2f seconds' % (time.time() - start)
-        print 'Size: %d bytes' % os.path.getsize(file)
-        print
-        assert key in p
-        assert input == p[key]
-        del p[key]
+    # View content at this key in a web browser
+    try:
+        cache_file = sys.argv[1]
+        url = sys.argv[2]
+    except IndexError:
+        print 'Usage: %s <cache file> <url>' % sys.argv[0]
+    else:
+        import tempfile
+        import webbrowser
+        cache = PersistentDict(cache_file)
+        value = cache[url]
+        filename = tempfile.NamedTemporaryFile().name
+        fp = open(filename, 'w')
+        fp.write(value)
+        fp.flush()
+        webbrowser.open(filename)

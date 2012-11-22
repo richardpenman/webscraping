@@ -391,6 +391,10 @@ class FSCache:
         """The fils system path for this key
         """
         # create unique hash for this key
+        try:
+            key = key.encode('utf-8')
+        except UnicodeDecodeError:
+            pass
         h = md5.md5(key).hexdigest()
         # create file system path
         path = os.path.join(self.folder, os.path.sep.join(h), FSCache.FILE_NAME)

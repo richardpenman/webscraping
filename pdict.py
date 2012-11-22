@@ -416,19 +416,44 @@ class FSCache:
 
 
 if __name__ == '__main__':
-    # View content at this key in a web browser
-    try:
-        cache_file = sys.argv[1]
-        url = sys.argv[2]
-    except IndexError:
-        print 'Usage: %s <cache file> <url>' % sys.argv[0]
+    import tempfile
+    import webbrowser
+    from optparse import OptionParser
+    parser = OptionParser(usage='usage: %prog [options] <cache file>')
+    parser.add_option('-k', '--key', dest='key', help='The key to use')
+    parser.add_option('-v', '--value', dest='value', help='The value to store')
+    parser.add_option('-b', '--browser', action='store_true', dest='browser', default=False, help='View content of this key in a web browser')
+    parser.add_option('-s', '--shrink', action='store_true', dest='shrink', default=False, help='Shrink the cache by saving to disk')
+    parser.add_option('-c', '--clear', action='store_true', dest='clear', default=False, help='Clear all data for this cache')
+    options, args = parser.parse_args()
+    if not args:
+        parser.error('Must specify the cache file')
+    cache = PersistentDict(args[0])
+
+    if options.value:
+        # store thie value 
+        if options.key:
+            cache[options.key] = options.value
+        else:
+            parser.error('Must specify the key')
+    elif options.browser:
+        if options.key:
+            value = cache[options.key]
+            filename = tempfile.NamedTemporaryFile().name
+            fp = open(filename, 'w')
+            fp.write(value)
+            fp.flush()
+            webbrowser.open(filename)
+        else:
+            parser.error('Must specify the key')
+    elif options.key:
+        print cache[options.key]
+    elif options.shrink:
+        cache.shrink()
+        print 'shrunk'
+    elif options.clear:
+        if raw_input('Really? Clear the cache? (y/n) ') == 'y':
+            cache.clear()
+            print 'cleared'
     else:
-        import tempfile
-        import webbrowser
-        cache = PersistentDict(cache_file)
-        value = cache[url]
-        filename = tempfile.NamedTemporaryFile().name
-        fp = open(filename, 'w')
-        fp.write(value)
-        fp.flush()
-        webbrowser.open(filename)
+        parser.error('No options selected')

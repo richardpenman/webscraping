@@ -34,7 +34,7 @@ import settings
 def search(html, xpath, remove=None):
     """Query HTML document using XPath
     
-    remove is a list of tags to ignore
+    remove is a list of tags to ignore, by default: 'br', 'hr'
 
     >>> search('<span>1</span><div>abc<a>LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a>LINK 3</a>jkl</div>', '/div/a')
     ['LINK 1', 'LINK 3']
@@ -53,6 +53,7 @@ def search(html, xpath, remove=None):
     len(search('<div><span>!</span></div>' * 10000, '//span'))
     10000
     """
+    remove = remove or ('br', 'hr')
     orig_html = html
     html = clean_html(html, remove)
     contexts = [html] # initial context is entire webpage

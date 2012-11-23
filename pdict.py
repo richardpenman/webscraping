@@ -37,7 +37,6 @@ class PersistentDict:
     >>> cache.get(url)['value'] == html
     True
     >>> now = datetime.datetime.now()
-    >>> cache.set(url, dict(created=now))
     >>> cache.meta(url)
     {}
     >>> cache.meta(url, 'meta')
@@ -65,7 +64,7 @@ class PersistentDict:
     """
     DEFAULT_LIMIT = 1000
 
-    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=5000, isolation_level=None):
+    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=5000, isolation_level=None, disk=False):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.
@@ -92,14 +91,16 @@ class PersistentDict:
         """
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
-        # XXX no performance increase
-        #self._conn.execute("CREATE INDEX IF NOT EXISTS timestamp ON config (created);")
         try:
             self._conn.execute("ALTER TABLE config ADD COLUMN status INTEGER;")
         except sqlite3.OperationalError:
             pass # column already exists
+        # XXX no performance increase
         #self._conn.execute("CREATE INDEX IF NOT EXISTS crawled ON config (status);")
-        self.fscache = FSCache(os.path.dirname(filename))
+        if disk:
+            self.fscache = FSCache(os.path.dirname(filename))
+        else:
+            self.fscache = None
 
 
     def __copy__(self):
@@ -131,9 +132,12 @@ class PersistentDict:
         if row:
             if self.is_fresh(row[2]):
                 try:
-                    value = self.fscache[key]
+                    if self.fscache:
+                        value = self.fscache[key]
+                    else:
+                        # XXX remove this when migrated
+                        raise KeyError()
                 except KeyError:
-                    # XXX remove this when migrated
                     value = row[0]
                 return self.deserialize(value)
             else:
@@ -146,17 +150,23 @@ class PersistentDict:
         """remove the specifed value from the database
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
-        del self.fscache[key]
+        if self.fscache:
+            del self.fscache[key]
 
 
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
         updated = datetime.datetime.now()
-        self._conn.execute("INSERT OR REPLACE INTO config (key, meta, status, updated) VALUES(?, ?, ?, ?);", (
-            key, self.serialize({}), True, updated)
-        )
-        self.fscache[key] = self.serialize(value)
+        if self.fscache:
+            self._conn.execute("INSERT OR REPLACE INTO config (key, meta, status, updated) VALUES(?, ?, ?, ?);", (
+                key, self.serialize({}), True, updated)
+            )
+            self.fscache[key] = self.serialize(value)
+        else:
+            self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, status, updated) VALUES(?, ?, ?, ?, ?);", (
+                key, self.serialize(value), self.serialize({}), True, updated)
+            )
 
 
     def serialize(self, value):
@@ -185,9 +195,13 @@ class PersistentDict:
             row = self._conn.execute("SELECT value, meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 try:
-                    value = self.fscache[key]
+                    if self.fscache:
+                        value = self.fscache[key]
+                    else:
+                        # XXX remove after migrated
+                        raise KeyError()
                 except KeyError:
-                    value = row[0] # XXX remove after migrated
+                    value = row[0] 
                 data = dict(
                     value=self.deserialize(value),
                     meta=self.deserialize(row[1]),
@@ -244,25 +258,6 @@ class PersistentDict:
         return c.rowcount
 
 
-    def set(self, key, data):
-        """Set data for the specified key
-
-        data is a dict {'value': ..., 'meta': ..., 'created': ..., 'updated': ...}
-        """
-        if 'value' in data:
-            value = self.serialize(data['value'])
-            self.fscache[key] = value
-        row = self._conn.execute("SELECT meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
-        if row:
-            current_data = dict(meta=self.deserialize(row[0]), created=row[1], updated=row[2])
-            current_data.update(data)
-            data = current_data
-        meta = self.serialize(data.get('meta'))
-        created = data.get('created')
-        updated = data.get('updated')
-        self._conn.execute("INSERT OR REPLACE INTO config (key, meta, created, updated) VALUES(?, ?, ?, ?);", (key, meta, created, updated))
-
-
     def meta(self, key, value=None):
         """Get / set meta for this value
 
@@ -285,7 +280,8 @@ class PersistentDict:
         """Clear all cached data
         """
         self._conn.execute("DELETE FROM config;")
-        self.fscache.clear()
+        if self.fscache:
+            self.fscache.clear()
 
 
     def merge(self, db, override=False):
@@ -300,6 +296,10 @@ class PersistentDict:
     def shrink(self):
         """Shrink the cache by writing values to disk
         """
+        if not self.fscache:
+            print 'fscache disabled'
+            return
+
         limit = 998 # SQLITE_MAX_VARIABLE_NUMBER = 999
         num_updates = 0
         

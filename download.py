@@ -612,10 +612,12 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                                 lock.acquire()
                                 if not seed_urls:
                                     # get next batch of URLs from cache
-                                    for outstanding_url in D.cache.get_status(status=False, limit=max_queue, ascending=depth):
-                                        if outstanding_url not in DownloadThread.downloading:
+                                    keys = D.cache.get_status(status=False, limit=max_queue, ascending=depth)
+                                    D.cache.set_status(keys=keys, status=True)
+                                    for key in keys:
+                                        if key not in DownloadThread.downloading:
                                             # is not currently processing
-                                            seed_urls.append(outstanding_url)
+                                            seed_urls.append(key)
                                 lock.release()
                     finally:
                         # have finished processing
@@ -639,7 +641,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
         common.logger.debug('Loading crawl queue')
     else:
         # set all key status to False so can crawl all
-        D.cache.set_status(key=None, status=False)
+        D.cache.set_status(keys=None, status=False)
         seed_urls = collections.deque(urls)
         common.logger.debug('Start new crawl')
 

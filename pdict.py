@@ -55,23 +55,23 @@ class PersistentDict:
     >>> cache.get_status(status=False, limit=len(keys)) == keys 
     True
     >>> key = keys.pop()
-    >>> cache.set_status(key=key, status=True) # set status to True for this key
+    >>> cache.set_status(keys=[key], status=True) # set status to True for this key
     1
     >>> cache.get_status_count(status=False) # get number of records with status False
     2
-    >>> cache.set_status(key=None, status=True) # set all status to True
+    >>> cache.set_status(keys=None, status=True) # set all status to True
     3
     >>> os.remove(filename)
     """
     DEFAULT_LIMIT = 1000
 
-    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=1000, isolation_level=None):
+    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=5000, isolation_level=None):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.
         compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
         expires: a timedelta object of how old data can be before expires. By default is set to None to disable.
-        timeout: how long should a thread wait for sqlite to be ready
+        timeout: how long should a thread wait for sqlite to be ready (in ms)
         isolation_level: None for autocommit or else 'DEFERRED' / 'IMMEDIATE' / 'EXCLUSIVE'
         """
         self.filename = filename
@@ -130,8 +130,6 @@ class PersistentDict:
         row = self._conn.execute("SELECT value, status, updated FROM config WHERE key=?;", (key,)).fetchone()
         if row:
             if self.is_fresh(row[2]):
-                if row[1] == False:
-                    self.set_status(key=key, status=True)
                 try:
                     value = self.fscache[key]
                 except KeyError:
@@ -218,17 +216,17 @@ class PersistentDict:
         return row[0]
 
 
-    def set_status(self, key, status):
+    def set_status(self, keys, status):
         """Set status of given key
 
         If key is None then set all keys
         Returns number of rows effected
         """
         c = self._conn.cursor()
-        if key is None:
+        if keys is None:
             c.execute("UPDATE config SET status=?;", (status,))
         else:
-            c.execute("UPDATE config SET status=? WHERE key=?;", (status, key))
+            c.executemany("UPDATE config SET status=? WHERE key=? AND status!=?;", [(status, key, status) for key in keys])
         return c.rowcount
         
 
@@ -358,7 +356,7 @@ class FSCache:
     def __getitem__(self, key):
         path = self._key_path(key)
         try:
-            fp = open(path)
+            fp = open(path, 'rb')
         except IOError:
             # key does not exist
             raise KeyError('%s does not exist' % key)

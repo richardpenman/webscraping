@@ -542,7 +542,7 @@ class Download(object):
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, max_queue=10000, cache_queue=True, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, max_queue=100, cache_queue=True, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -611,13 +611,17 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                                     queue_change += D.cache.add_status(status=False, keys=cb_urls)
                                 lock.acquire()
                                 if not seed_urls:
+                                    if queued_urls:
+                                        # set status of previous batch
+                                        D.cache.set_status(keys=queued_urls, status=True)
+                                        while queued_urls:
+                                            queued_urls.pop()
                                     # get next batch of URLs from cache
-                                    keys = D.cache.get_status(status=False, limit=max_queue, ascending=depth)
-                                    D.cache.set_status(keys=keys, status=True)
-                                    for key in keys:
-                                        if key not in DownloadThread.downloading:
+                                    queued_urls.extend(D.cache.get_status(status=False, limit=max_queue, ascending=depth))
+                                    for queued_url in queued_urls:
+                                        if queued_url not in DownloadThread.downloading:
                                             # is not currently processing
-                                            seed_urls.append(key)
+                                            seed_urls.append(queued_url)
                                 lock.release()
                     finally:
                         # have finished processing

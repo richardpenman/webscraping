@@ -573,6 +573,8 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
         def run(self):
             D = Download(**kwargs)
+            queue = pdict.Queue(settings.queue_file)
+
             while seed_urls or DownloadThread.processing:
                 queue_change = 0
                 # keep track that are processing url
@@ -608,17 +610,11 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                             else:
                                 if cb_urls:
                                     # add these URL's to crawl queue
-                                    queue_change += D.cache.add_status(status=False, keys=cb_urls)
+                                    queue_change += queue.push(keys=cb_urls)
                                 lock.acquire()
                                 if not seed_urls:
-                                    if queued_urls:
-                                        # set status of previous batch
-                                        D.cache.set_status(keys=queued_urls, status=True)
-                                        while queued_urls:
-                                            queued_urls.pop()
                                     # get next batch of URLs from cache
-                                    queued_urls.extend(D.cache.get_status(status=False, limit=max_queue, ascending=depth))
-                                    for queued_url in queued_urls:
+                                    for queued_url in queue.pull(limit=max_queue):
                                         if queued_url not in DownloadThread.downloading:
                                             # is not currently processing
                                             seed_urls.append(queued_url)
@@ -634,25 +630,26 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                     state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_change=queue_change)
 
     
-    # put urls into thread safe queue
-    urls = urls or []
-    if url: urls.append(url)
-    D = Download(**kwargs)
-    queued_urls = D.cache.get_status(status=False, limit=max_queue)
+    queue = pdict.Queue(settings.queue_file)
+    queued_urls = queue.pull(limit=max_queue)
     if queued_urls:
         # continue the previous crawl
         seed_urls = collections.deque(queued_urls)
         common.logger.debug('Loading crawl queue')
     else:
-        # set all key status to False so can crawl all
-        D.cache.set_status(keys=None, status=False)
-        seed_urls = collections.deque(urls)
+        # remove any queued URL's so can crawl again
+        queue.clear()
+        # put urls into thread safe queue
+        seed_urls = collections.deque()
+        if url:
+            seed_urls.append(url)
+        if urls:
+            seed_urls.extend(urls)
         common.logger.debug('Start new crawl')
 
     # initiate the state file with the number of URL's already in the queue
     state = State()
-    num_queued = D.cache.get_status_count(status=False)
-    state.update(queue_change=num_queued or len(seed_urls))
+    state.update(queue_change=len(queue) or len(seed_urls))
 
     # start the download threads
     threads = [DownloadThread() for i in range(num_threads)]

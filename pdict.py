@@ -283,12 +283,13 @@ class Queue:
         sql = """
         CREATE TABLE IF NOT EXISTS queue (
             key TEXT NOT NULL PRIMARY KEY UNIQUE,
-            status INTEGER
+            status INTEGER,
+            priority INTEGER
         );
         """
         self._conn.execute(sql)
-        #self._conn.execute("CREATE INDEX IF NOT EXISTS ids ON queue (id);")
-        self.keys = []
+        self._conn.execute("CREATE INDEX IF NOT EXISTS priorities ON queue (priority);")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON queue (key);")
 
 
     def __len__(self):
@@ -301,35 +302,38 @@ class Queue:
     def pull(self, limit=DEFAULT_LIMIT):
         """Get queued keys up to limit
         """
-        if self.keys:
-            self.pop(keys=self.keys)
-        rows = self._conn.execute("SELECT key FROM queue WHERE status=? LIMIT ?;", (False, limit)).fetchall()
-        self.keys = [row[0] for row in rows]
-        return self.keys
-
-
-    def pop(self, keys):
-        """Set these keys status to True
-        """
         c = self._conn.cursor()
-        c.executemany("UPDATE queue SET status=? WHERE key=? AND status=?;", [(True, key, False) for key in keys])
-        return c.rowcount
-        
+        rows = c.execute("SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?;", (False, limit)).fetchall()
+        keys = [row[0] for row in rows]
+        c.executemany("UPDATE queue SET status=? WHERE key=?;", [(True, key) for key in keys])
+        #print 'pull', keys
+        return keys
 
-    def push(self, keys):
+
+    def push(self, keys, priorities=None, default=0):
         """Add these keys to the queue
 
+        `priorities' is a map of the priority for each key
+        `default' is used if key is not in priorities
         Will not insert if key already exists.
         Returns the number of inserted rows.
         """
+        priorities = priorities or {}
         c = self._conn.cursor()
-        c.executemany("INSERT OR IGNORE INTO queue (key, status) VALUES(?, ?);", [(key, False) for key in keys])
+        c.executemany("INSERT OR IGNORE INTO queue (key, priority, status) VALUES(?, ?, ?);", [(key, priorities.get(key, default), False) for key in keys])
         return c.rowcount
 
 
-    def clear(self):
+    def clear(self, keys=None):
+        """Remove keys from queue 
+
+        If keys is None remove all
+        """
         c = self._conn.cursor()
-        c.execute("DELETE FROM queue;")
+        if keys:
+            c.executemany("DELETE FROM queue WHERE key=?;", [(key,) for key in keys])
+        else:
+            c.execute("DELETE FROM queue;")
         return c.rowcount
 
 

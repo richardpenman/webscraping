@@ -542,7 +542,7 @@ class Download(object):
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, max_queue=100, cache_queue=True, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, max_queue=100, cache_queue=None, **kwargs):
     """Download these urls in parallel
 
     `url[s]' are the webpages to download
@@ -610,7 +610,11 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                             else:
                                 if cb_urls:
                                     # add these URL's to crawl queue
-                                    queue_change += queue.push(keys=cb_urls)
+                                    if isinstance(cb_urls, dict):
+                                        keys, priorities = cb_urls.keys(), cb_urls
+                                    else:
+                                        keys, priorities = cb_urls, {}
+                                    queue_change += queue.push(keys, priorities)
                                 lock.acquire()
                                 if not seed_urls:
                                     # get next batch of URLs from cache
@@ -639,12 +643,12 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
     else:
         # remove any queued URL's so can crawl again
         queue.clear()
-        # put urls into thread safe queue
-        seed_urls = collections.deque()
         if url:
-            seed_urls.append(url)
+            queue.push([url])
         if urls:
-            seed_urls.extend(urls)
+            queue.push(urls)
+        # put urls into thread safe queue
+        seed_urls = collections.deque(queue.pull(limit=max_queue))
         common.logger.debug('Start new crawl')
 
     # initiate the state file with the number of URL's already in the queue

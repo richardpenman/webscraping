@@ -17,6 +17,9 @@ try:
 except ImportError:
     import pickle
 
+DEFAULT_LIMIT = 1000
+DEFAULT_TIMEOUT = 5000
+
 
 class PersistentDict:
     """Stores and retrieves persistent data through a dict-like interface
@@ -62,9 +65,7 @@ class PersistentDict:
     3
     >>> os.remove(filename)
     """
-    DEFAULT_LIMIT = 1000
-
-    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=5000, isolation_level=None, disk=False):
+    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None, disk=False):
         """initialize a new PersistentDict with the specified database file.
 
         filename: where to store sqlite database. Uses in memory by default.
@@ -85,18 +86,11 @@ class PersistentDict:
             value BLOB,
             meta BLOB,
             status INTEGER,
-            created timestamp DEFAULT (datetime('now', 'localtime')),
             updated timestamp DEFAULT (datetime('now', 'localtime'))
         );
         """
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
-        try:
-            self._conn.execute("ALTER TABLE config ADD COLUMN status INTEGER;")
-        except sqlite3.OperationalError:
-            pass # column already exists
-        # XXX no performance increase
-        #self._conn.execute("CREATE INDEX IF NOT EXISTS crawled ON config (status);")
         if disk:
             self.fscache = FSCache(os.path.dirname(filename))
         else:
@@ -128,9 +122,9 @@ class PersistentDict:
     def __getitem__(self, key):
         """return the value of the specified key or raise KeyError if not found
         """
-        row = self._conn.execute("SELECT value, status, updated FROM config WHERE key=?;", (key,)).fetchone()
+        row = self._conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
         if row:
-            if self.is_fresh(row[2]):
+            if self.is_fresh(row[1]):
                 try:
                     if self.fscache:
                         value = self.fscache[key]
@@ -159,13 +153,13 @@ class PersistentDict:
         """
         updated = datetime.datetime.now()
         if self.fscache:
-            self._conn.execute("INSERT OR REPLACE INTO config (key, meta, status, updated) VALUES(?, ?, ?, ?);", (
-                key, self.serialize({}), True, updated)
+            self._conn.execute("INSERT OR REPLACE INTO config (key, meta, updated) VALUES(?, ?, ?, ?);", (
+                key, self.serialize({}), updated)
             )
             self.fscache[key] = self.serialize(value)
         else:
-            self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, status, updated) VALUES(?, ?, ?, ?, ?);", (
-                key, self.serialize(value), self.serialize({}), True, updated)
+            self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (
+                key, self.serialize(value), self.serialize({}), updated)
             )
 
 
@@ -192,7 +186,7 @@ class PersistentDict:
         """
         data = default
         if key:
-            row = self._conn.execute("SELECT value, meta, created, updated FROM config WHERE key=?;", (key,)).fetchone()
+            row = self._conn.execute("SELECT value, meta, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 try:
                     if self.fscache:
@@ -205,57 +199,9 @@ class PersistentDict:
                 data = dict(
                     value=self.deserialize(value),
                     meta=self.deserialize(row[1]),
-                    created=row[2],
                     updated=row[3]
                 )
         return data
-
-
-
-    def get_status(self, status, limit=DEFAULT_LIMIT, ascending=True):
-        """Get keys with this status
-
-        Limit to given number
-        Orders by ascending by default
-        """
-        order = ascending and 'ASC' or 'DESC'
-        rows = self._conn.execute("SELECT key FROM config WHERE status=? ORDER BY created %s LIMIT ?;" % order, (status, limit)).fetchall()
-        return [row[0] for row in rows]
-
-
-    def get_status_count(self, status):
-        """Get number of rows with this status
-        """
-        row = self._conn.execute("SELECT count(*) FROM config WHERE status=?;", (status,)).fetchone()
-        return row[0]
-
-
-    def set_status(self, keys, status):
-        """Set status of given key
-
-        If key is None then set all keys
-        Returns number of rows effected
-        """
-        c = self._conn.cursor()
-        if keys is None:
-            c.execute("UPDATE config SET status=?;", (status,))
-        else:
-            c.executemany("UPDATE config SET status=? WHERE key=? AND status!=?;", [(status, key, status) for key in keys])
-        return c.rowcount
-        
-
-    def add_status(self, keys, status):
-        """Add records for these keys without setting the content
-
-        Will not insert if key already exists.
-        Returns the number of inserted rows.
-        """
-        c = self._conn.cursor()
-        timestamp = datetime.datetime.now()
-        records = [(key, None, None, status, timestamp, timestamp) for key in keys]
-        # ignore if key already exists
-        c.executemany("INSERT OR IGNORE INTO config (key, value, meta, status, created, updated) VALUES(?, ?, ?, ?, ?, ?);", records)
-        return c.rowcount
 
 
     def meta(self, key, value=None):
@@ -321,6 +267,66 @@ class PersistentDict:
             # reduce size of database after values removed
             self._conn.execute('VACUUM')
         return num_updates
+
+
+
+class Queue:
+
+    def __init__(self, filename, timeout=DEFAULT_TIMEOUT, isolation_level=None):
+        self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
+        sql = """
+        CREATE TABLE IF NOT EXISTS queue (
+            key TEXT NOT NULL PRIMARY KEY UNIQUE,
+            status INTEGER
+        );
+        """
+        self._conn.execute(sql)
+        #self._conn.execute("CREATE INDEX IF NOT EXISTS ids ON queue (id);")
+        self.keys = []
+
+
+    def __len__(self):
+        """Get number of records queued
+        """
+        row = self._conn.execute("SELECT count(*) FROM queue WHERE status=?;", (False,)).fetchone()
+        return row[0]
+
+
+    def pull(self, limit=DEFAULT_LIMIT):
+        """Get queued keys up to limit
+        """
+        if self.keys:
+            self.pop(keys=self.keys)
+        rows = self._conn.execute("SELECT key FROM queue WHERE status=? LIMIT ?;", (False, limit)).fetchall()
+        self.keys = [row[0] for row in rows]
+        return self.keys
+
+
+    def pop(self, keys):
+        """Set these keys status to True
+        """
+        c = self._conn.cursor()
+        c.executemany("UPDATE queue SET status=? WHERE key=? AND status!=?;", [(status, key, True) for key in keys])
+        return c.rowcount
+        
+
+    def push(self, keys):
+        """Add these keys to the queue
+
+        Will not insert if key already exists.
+        Returns the number of inserted rows.
+        """
+        c = self._conn.cursor()
+        c.executemany("INSERT OR IGNORE INTO queue (key, status) VALUES(?, ?);", [(key, False) for key in keys])
+        return c.rowcount
+
+
+    def clear(self):
+        c = self._conn.cursor()
+        c.execute("DELETE FROM queue;")
+        return c.rowcount
+
 
 
 class FSCache:

@@ -48,21 +48,6 @@ class PersistentDict:
     >>> del cache[url]
     >>> url in cache
     False
-    >>>
-    >>> keys = ['a', 'b', 'c']
-    >>> cache.add_status(status=False, keys=keys)
-    3
-    >>> cache.get_status_count(status=False)
-    3
-    >>> cache.get_status(status=False, limit=len(keys)) == keys 
-    True
-    >>> key = keys.pop()
-    >>> cache.set_status(keys=[key], status=True) # set status to True for this key
-    1
-    >>> cache.get_status_count(status=False) # get number of records with status False
-    2
-    >>> cache.set_status(keys=None, status=True) # set all status to True
-    3
     >>> os.remove(filename)
     """
     def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None, disk=False):
@@ -199,7 +184,7 @@ class PersistentDict:
                 data = dict(
                     value=self.deserialize(value),
                     meta=self.deserialize(row[1]),
-                    updated=row[3]
+                    updated=row[2]
                 )
         return data
 
@@ -271,6 +256,26 @@ class PersistentDict:
 
 
 class Queue:
+    """Stores queue of outstanding URL's on disk
+
+    >>> filename = 'queue.db'
+    >>> queue = Queue(filename)
+    >>> keys = ['a', 'b', 'c']
+    >>> queue.push(keys=keys) # add new keys
+    3
+    >>> queue.push(keys=keys) # trying adding duplicate keys
+    0
+    >>> len(queue)
+    3
+    >>> key = keys.pop()
+    >>> queue.pop(keys=[key]) # set status to True for this key
+    1
+    >>> len(queue) # get number of records with status False
+    2
+    >>> queue.clear() # remove all queue
+    3
+    >>> os.remove(filename)
+    """
 
     def __init__(self, filename, timeout=DEFAULT_TIMEOUT, isolation_level=None):
         self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)

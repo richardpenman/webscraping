@@ -307,7 +307,7 @@ class Queue:
         """Set these keys status to True
         """
         c = self._conn.cursor()
-        c.executemany("UPDATE queue SET status=? WHERE key=? AND status!=?;", [(status, key, True) for key in keys])
+        c.executemany("UPDATE queue SET status=? WHERE key=? AND status=?;", [(True, key, False) for key in keys])
         return c.rowcount
         
 

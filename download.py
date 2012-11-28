@@ -580,10 +580,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                 # keep track that are processing url
                 DownloadThread.processing.append(1) 
                 try:
-                    if depth:
-                        url = seed_urls.pop()
-                    else:
-                        url = seed_urls.popleft()
+                    url = seed_urls.pop()
 
                 except IndexError:
                     # currently no urls to processa

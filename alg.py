@@ -7,7 +7,6 @@ import math
 import logging
 from collections import defaultdict
 import common
-import settings
 import xpath
 
 
@@ -59,6 +58,25 @@ def extract_emails(html):
             if email not in emails:
                 emails.append(email)
     return emails
+
+
+def extract_phones(html):
+    """Extract phone numbers from this HTML
+
+    >>> extract_phones('Phone: (123) 456-7890 <br>')
+    ['(123) 456-7890']
+    >>> extract_phones('Phone 123.456.7890 ')
+    ['123.456.7890']
+    >>> extract_phones('+1-123-456-7890<br />123 456 7890n')
+    ['+1-123-456-7890', '123 456 7890']
+    """
+    phones = []
+    for match in re.findall('[\d\-\+ \.\(\)]+', html):
+        digits = ''.join([c for c in match if c.isdigit()])
+        if len(digits) >= 9:
+            # phone should have atleast 9 digits
+            phones.append(match.strip())
+    return phones
 
 
 def parse_us_address(address):

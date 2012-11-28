@@ -9,7 +9,10 @@ import logging
 dirname, filename = os.path.split(sys.argv[0])
 state_dir = os.path.join(dirname, '.' + filename.replace('.py', '')) 
 if not os.path.exists(state_dir):
-    os.mkdir(state_dir)
+    try:
+        os.mkdir(state_dir)
+    except OSError as e:
+        print 'Unable to create state directory:', e
 cache_file  = os.path.relpath(os.path.join(state_dir, 'cache.db')) # file to use for pdict cache
 queue_file  = os.path.relpath(os.path.join(state_dir, 'queue.db')) # file to use for pdict queue
 status_file = os.path.join(state_dir, 'status.js') # where to store state of crawl

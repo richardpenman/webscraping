@@ -141,6 +141,7 @@ class Download(object):
         `kwargs' can override any of the arguments passed to constructor
         """
         self.reload_proxies()
+        self.proxy = None # the current proxy
         self.final_url = None # for tracking redirects
         self.response_code = '' # keep response code
         self.response_headers = {} # keep response headers
@@ -149,7 +150,6 @@ class Download(object):
         # update settings with any local overrides
         settings = adt.Bag(self.settings)
         settings.update(kwargs)
-        
         # check cache for whether this content is already downloaded
         key = self.get_key(url, settings.data)
         if self.cache and settings.read_cache:
@@ -176,30 +176,33 @@ class Download(object):
         # attempt downloading content at URL
         while settings.num_retries >= 0 and html is None:
             settings.num_retries -= 1
-            if settings.proxies:
-                # select next available proxy
-                proxy = random.choice(settings.proxies)
+            if settings.proxy:
+                self.proxy = settings.proxy
             else:
-                proxy = None
+                if settings.proxies:
+                    # select next available proxy
+                    self.proxy = random.choice(settings.proxies)
+                else:
+                    self.proxy = None
             # crawl slowly for each domain to reduce risk of being blocked
-            self.throttle(url, delay=settings.delay, proxy=proxy) 
-            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
+            self.throttle(url, delay=settings.delay, proxy=self.proxy) 
+            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
 
             if html:
                 # successfully downloaded
                 self.num_downloads += 1
                 if settings.max_proxy_errors is not None:
-                    Download.proxy_performance.success(proxy)
+                    Download.proxy_performance.success(self.proxy)
                     # record which proxies failed for this download
                     for proxy in failed_proxies:
-                        if Download.proxy_performance.error(proxy) > settings.max_proxy_errors:
+                        if Download.proxy_performance.error(self.proxy) > settings.max_proxy_errors:
                             # this proxy has had too many errors so remove
-                            common.logger.info('Removing unstable proxy from list after %d consecutive errors: %s' % (settings.max_proxy_errors, proxy))
-                            settings.proxies.remove(proxy)
+                            common.logger.info('Removing unstable proxy from list after %d consecutive errors: %s' % (settings.max_proxy_errors, self.proxy))
+                            settings.proxies.remove(self.proxy)
             else:
                 # download failed - try again
                 self.num_errors += 1
-                failed_proxies.add(proxy)
+                failed_proxies.add(self.proxy)
 
 
         if html:

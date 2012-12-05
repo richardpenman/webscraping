@@ -14,12 +14,9 @@ In some cases I have found this faster/more accurate than using lxml.html and in
 """
 
 #TODO:
-# - convert to class to more efficiently handle html
-# -  and buffer tree selections
 # - parent
 # - search by text: text() == '...'
 # - return xpath for most similar to text
-# - change to breadth first search for faster finish with single element
 
 import re
 import sys
@@ -399,6 +396,7 @@ class Doc:
         >>> doc.parent_tag('<span id="abc">empty</span>')
         '<div><p></p><span id="abc">empty</span></div>'
         """
+        raise Exception('Not implemented')
         #index = self.html.find(html)
         #while index >= 0:
         #    index = self.html.rfind('<', start=0, end=index)
@@ -413,7 +411,7 @@ def get_doc(html, remove):
         prev_doc = Doc(html, remove)
     return prev_doc
     
-def get(html, xpath, remove=None):
+def get(html, xpath, remove=('br', 'hr')):
     """Return first element from search
 
     >>> html = '<div>1</div><div>2</div>'
@@ -426,7 +424,7 @@ def get(html, xpath, remove=None):
     """
     return get_doc(html, remove).get(xpath)
 
-def search(html, xpath, remove=None):
+def search(html, xpath, remove=('br', 'hr')):
     """Return all elements from search
     """
     return get_doc(html, remove).search(xpath)

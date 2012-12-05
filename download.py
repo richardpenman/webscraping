@@ -6,6 +6,7 @@ License: LGPL
 
 import os
 import re
+import sys
 import copy
 import collections 
 import random
@@ -395,7 +396,7 @@ class Download(object):
         return results
 
 
-    def get_emails(self, website, max_depth=1, max_urls=10, max_emails=None):
+    def get_emails(self, website, max_depth=1, max_urls=10, max_emails=1):
         """Crawl this website and return all emails found
         """
         def score(link):
@@ -632,7 +633,11 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
     
     queue = pdict.Queue(settings.queue_file)
-    queued_urls = queue.pull(limit=max_queue)
+    if '--use_queue' in sys.argv:
+        # queue enabled
+        queued_urls = queue.pull(limit=max_queue)
+    else:
+        queued_urls = []
     if queued_urls:
         # continue the previous crawl
         seed_urls = collections.deque(queued_urls)

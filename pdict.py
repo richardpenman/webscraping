@@ -12,6 +12,7 @@ import zlib
 import threading
 import md5
 import shutil
+import glob
 try:
     import cPickle as pickle
 except ImportError:
@@ -19,6 +20,20 @@ except ImportError:
 
 DEFAULT_LIMIT = 1000
 DEFAULT_TIMEOUT = 5000
+
+
+
+class PersistentDictPool:
+    def __init__(self, filename, max_size=2):
+        """Splits cache over multiple sqlite instances to avoid each exceeding the limit
+
+        `filename' of the cache
+        `max_size' in GB of the cache before splitting
+        """
+        #caches = glob.glob(filename + '*')
+        #print len(caches)
+        #os.path.getsize(f) for f in caches
+
 
 
 class PersistentDict:
@@ -267,11 +282,6 @@ class Queue:
     0
     >>> len(queue)
     3
-    >>> key = keys.pop()
-    >>> queue.pop(keys=[key]) # set status to True for this key
-    1
-    >>> len(queue) # get number of records with status False
-    2
     >>> queue.clear() # remove all queue
     3
     >>> os.remove(filename)

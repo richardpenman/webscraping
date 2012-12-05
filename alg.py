@@ -34,12 +34,12 @@ def extract_emails(html):
 
     >>> extract_emails('')
     []
-    >>> extract_emails('hello richard@sitescraper.net world')
-    ['richard@sitescraper.net']
-    >>> extract_emails('hello richard@<!-- trick comment -->sitescraper.net world')
-    ['richard@sitescraper.net']
-    >>> extract_emails('hello richard AT sitescraper DOT net world')
-    ['richard@sitescraper.net']
+    >>> extract_emails('hello contact@webscraping.com world')
+    ['contact@webscraping.com']
+    >>> extract_emails('hello contact@<!-- trick comment -->webscraping.com world')
+    ['contact@webscraping.com']
+    >>> extract_emails('hello contact AT webscraping DOT com world')
+    ['contact@webscraping.com']
     """
     email_re = re.compile('([\w\.-]{1,64})@(\w[\w\.-]{1,255})\.(\w+)')
     # remove comments, which can obfuscate emails

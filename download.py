@@ -636,7 +636,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
     
     queue = pdict.Queue(settings.queue_file)
-    if '--use_queue' in sys.argv:
+    if '--use-queue' in sys.argv:
         # queue enabled
         queued_urls = queue.pull(limit=max_queue)
     else:

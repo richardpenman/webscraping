@@ -44,6 +44,8 @@ class Doc:
     ['LINK 1', 'LINK 2']
     >>> doc.search('/div/a/@class')
     ['link', '']
+    >>> doc.search('/div[-1]/a')
+    ['LINK 3']
 
     # test searching unicode
     >>> doc = Doc(u'<a href="http://www.google.com" class="flink">google</a>')
@@ -114,17 +116,20 @@ class Doc:
             results.append(value)
         else:
             # have tag
-            # support negative indices
-            if index is not None and index < 0:
-                index += len(matches) + 1
-            # search direct children if / and all descendants if //
-            search_fn = self.find_children if separator == '' else self.find_descendants
-
             if counter > 0:
                 # get child html when not at root
                 html = self.get_content(html)
 
-            for child_i, child in enumerate(search_fn(html, tag)):
+            # search direct children if / and all descendants if //
+            search_fn = self.find_children if separator == '' else self.find_descendants
+            matches = search_fn(html, tag)
+
+            # support negative indices
+            if index is not None and index < 0:
+                matches = list(matches)
+                index += len(matches) + 1
+
+            for child_i, child in enumerate(matches):
                 # check if matches index
                 if index is None or index == child_i + 1:
                     # check if matches attributes
@@ -301,6 +306,7 @@ class Doc:
         >>> list(doc.find_descendants('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div'))
         ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
         """
+        # XXX search with attribute here
         if tag == '*':
             raise common.WebScrapingError("`*' not currently supported for //")
         for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
@@ -389,7 +395,7 @@ class Doc:
     def parent_tag(self, html):
         """Find parent tag of this current tag
 
-        >>> doc = Doc('<div><span id="abc">empty</span></div>')
+        >>> doc = Doc('<p><div><span id="abc">empty</span></div></p>')
         >>> doc.parent_tag('<span id="abc">empty</span>')
         '<div><span id="abc">empty</span></div>'
         >>> doc = Doc('<div><p></p><span id="abc">empty</span></div>')

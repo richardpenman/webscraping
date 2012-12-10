@@ -479,12 +479,15 @@ class Download(object):
             formatted_ts = timestamp.strftime('%Y%m%d%H%M%S')
         else:
             formatted_ts = '2' # will return most recent archive
-        url = 'http://wayback.archive.org/web/%s/%s' % (formatted_ts, url)
-        html = self.get(url, **kwargs)
+        html = self.get('http://wayback.archive.org/web/%s/%s' % (formatted_ts, url), **kwargs)
+        if not html:
+            html = self.get('http://liveweb.archive.org/' + url)
 
-        # remove wayback toolbar
-        html = re.compile('<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->', re.DOTALL).sub('', html)
-        html = re.compile('<!--\s+FILE ARCHIVED ON.*?-->', re.DOTALL).sub('', html)
+        if html:
+            # remove wayback toolbar
+            html = re.compile('<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->', re.DOTALL).sub('', html)
+            html = re.compile('<!--\s+FILE ARCHIVED ON.*?-->', re.DOTALL).sub('', html)
+            html = re.sub('http://web\.archive\.org/web/\d+/', '', html)
         return html
 
 

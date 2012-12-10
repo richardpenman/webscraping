@@ -183,6 +183,13 @@ def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
     >>> unescape('&lt;hello&nbsp;&amp;%20world&gt;\xc2\x85')
     '<hello & world>...'
     """
+    if not text:
+        return ''
+    try:
+        text = to_unicode(text, encoding)
+    except UnicodeError:
+        pass
+
     def fixup(m):
         text = m.group(0)
         if text[:2] == '&#':
@@ -201,10 +208,6 @@ def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
             except KeyError:
                 pass
         return text # leave as is
-    try:
-        text = to_unicode(text, encoding)
-    except UnicodeError:
-        pass
     #text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = re.sub('&#?\w+;', fixup, text)
     text = urllib.unquote(text)

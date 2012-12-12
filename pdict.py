@@ -277,9 +277,9 @@ class Queue:
     >>> queue = Queue(filename)
     >>> keys = ['a', 'b', 'c']
     >>> queue.push(keys=keys) # add new keys
+    >>> len(queue)
     3
     >>> queue.push(keys=keys) # trying adding duplicate keys
-    0
     >>> len(queue)
     3
     >>> queue.clear() # remove all queue
@@ -315,8 +315,9 @@ class Queue:
         c = self._conn.cursor()
         rows = c.execute("SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?;", (False, limit)).fetchall()
         keys = [row[0] for row in rows]
+        c.execute("BEGIN TRANSACTION")
         c.executemany("UPDATE queue SET status=? WHERE key=?;", [(True, key) for key in keys])
-        #print 'pull', keys
+        c.execute("END TRANSACTION")
         return keys
 
 
@@ -326,12 +327,12 @@ class Queue:
         `priorities' is a map of the priority for each key
         `default' is used if key is not in priorities
         Will not insert if key already exists.
-        Returns the number of inserted rows.
         """
         priorities = priorities or {}
         c = self._conn.cursor()
+        c.execute("BEGIN TRANSACTION")
         c.executemany("INSERT OR IGNORE INTO queue (key, priority, status) VALUES(?, ?, ?);", [(key, priorities.get(key, default), False) for key in keys])
-        return c.rowcount
+        c.execute("END TRANSACTION")
 
 
     def clear(self, keys=None):
@@ -341,7 +342,9 @@ class Queue:
         """
         c = self._conn.cursor()
         if keys:
+            c.execute("BEGIN TRANSACTION")
             c.executemany("DELETE FROM queue WHERE key=?;", [(key,) for key in keys])
+            c.execute("END TRANSACTION")
         else:
             c.execute("DELETE FROM queue;")
         return c.rowcount

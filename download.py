@@ -583,7 +583,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
             queue = pdict.Queue(settings.queue_file)
 
             while seed_urls or DownloadThread.processing:
-                queue_change = 0
+                queue_size = None
                 # keep track that are processing url
                 DownloadThread.processing.append(1) 
                 try:
@@ -597,7 +597,6 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
                 else:
                     DownloadThread.downloading.add(url)
-                    queue_change -= 1
                     try:
                         # download this url
                         html = dl(D, url, **kwargs) if dl else D.get(url, **kwargs)
@@ -618,15 +617,17 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                                         keys, priorities = cb_urls.keys(), cb_urls
                                     else:
                                         keys, priorities = cb_urls, {}
-                                    queue_change += queue.push(keys, priorities)
-                                lock.acquire()
+                                    queue.push(keys, priorities)
+                                    queue_size = len(queue)
                                 if not seed_urls:
-                                    # get next batch of URLs from cache
-                                    for queued_url in queue.pull(limit=max_queue):
-                                        if queued_url not in DownloadThread.downloading:
-                                            # is not currently processing
-                                            seed_urls.append(queued_url)
-                                lock.release()
+                                    lock.acquire()
+                                    if not seed_urls:
+                                        # get next batch of URLs from cache
+                                        for queued_url in queue.pull(limit=max_queue):
+                                            if queued_url not in DownloadThread.downloading:
+                                                # is not currently processing
+                                                seed_urls.append(queued_url)
+                                    lock.release()
                     finally:
                         # have finished processing
                         # make sure this is called even on exception to avoid eternal loop
@@ -635,7 +636,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                     # update the crawler state
                     # no download or error so must have read from cache
                     num_caches = 0 if D.num_downloads or D.num_errors else 1
-                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_change=queue_change)
+                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=queue_size)
 
     
     queue = pdict.Queue(settings.queue_file)
@@ -661,7 +662,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
     # initiate the state file with the number of URL's already in the queue
     state = State()
-    state.update(queue_change=len(queue) or len(seed_urls))
+    state.update(queue_size=len(queue) or len(seed_urls))
 
     # start the download threads
     threads = [DownloadThread() for i in range(num_threads)]
@@ -700,13 +701,14 @@ class State:
         # a lock to prevent multiple threads writing at once
         self.lock = threading.Lock()
 
-    def update(self, num_downloads=0, num_errors=0, num_caches=0, queue_change=0):
+    def update(self, num_downloads=0, num_errors=0, num_caches=0, queue_size=0):
         """Update the state
         """
         self.num_downloads += num_downloads
         self.num_errors += num_errors
         self.num_caches += num_caches
-        self.queue_size += queue_change
+        if queue_size:
+            self.queue_size = queue_size
         self.data['num_downloads'] = self.num_downloads
         self.data['num_errors'] = self.num_errors
         self.data['num_caches'] = self.num_caches

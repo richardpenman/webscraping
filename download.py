@@ -165,6 +165,7 @@ class Download(object):
                 if not html and settings.num_retries > 0:
                     # try downloading again
                     common.logger.debug('Redownloading')
+                    settings.num_retries -= 1
                 else:
                     # return previously downloaded content
                     return html or settings.default 
@@ -267,6 +268,7 @@ class Download(object):
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):
         """Simply download the url and return the content
         """
+        self.error_content = None
         common.logger.info('Downloading %s' % url)
         # create opener with headers
         opener = opener or urllib2.build_opener()
@@ -314,6 +316,8 @@ class Download(object):
         except Exception, e:
             if hasattr(e, 'code'):
                 self.response_code = e.code
+            if hasattr(e, 'read'):
+                self.error_content = e.read()
             # so many kinds of errors are possible here so just catch them all
             common.logger.info('Download error: %s %s' % (url, e))
             content, self.final_url = None, url

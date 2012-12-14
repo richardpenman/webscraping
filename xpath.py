@@ -76,12 +76,12 @@ class Doc:
 
     def __init__(self, html, remove=None):
         self.orig_html = html
-        self.html = self.clean(html, remove)
+        self.html = self.clean(remove)
         self.splits = adt.HashDict()
         self.num_searches = 0
 
     def __eq__(self, html):
-        return self.orig_html == html
+        return self.orig_html is html
 
 
     def get(self, xpath):
@@ -149,13 +149,14 @@ class Doc:
 
 
 
-    def clean(self, html, tags):
+    def clean(self, remove):
         """Remove specified unhelpful tags and comments
         """
-        html = re.compile('<!--.*?-->', re.DOTALL).sub('', html) # remove comments
-        if tags:
+        self.remove = remove
+        html = re.compile('<!--.*?-->', re.DOTALL).sub('', self.orig_html) # remove comments
+        if remove:
             # XXX combine tag list into single regex, if can match same at start and end
-            for tag in tags:
+            for tag in remove:
                 html = re.compile('<' + tag + '[^>]*?/>', re.DOTALL | re.IGNORECASE).sub('', html)
                 html = re.compile('<' + tag + '[^>]*?>.*?</' + tag + '>', re.DOTALL | re.IGNORECASE).sub('', html)
                 html = re.compile('<' + tag + '[^>]*?>', re.DOTALL | re.IGNORECASE).sub('', html)
@@ -395,11 +396,11 @@ class Doc:
     def parent_tag(self, html):
         """Find parent tag of this current tag
 
-        >>> doc = Doc('<p><div><span id="abc">empty</span></div></p>')
-        >>> doc.parent_tag('<span id="abc">empty</span>')
+        >> doc = Doc('<p><div><span id="abc">empty</span></div></p>')
+        >> doc.parent_tag('<span id="abc">empty</span>')
         '<div><span id="abc">empty</span></div>'
-        >>> doc = Doc('<div><p></p><span id="abc">empty</span></div>')
-        >>> doc.parent_tag('<span id="abc">empty</span>')
+        >> doc = Doc('<div><p></p><span id="abc">empty</span></div>')
+        >> doc.parent_tag('<span id="abc">empty</span>')
         '<div><p></p><span id="abc">empty</span></div>'
         """
         raise Exception('Not implemented')
@@ -411,7 +412,7 @@ class Doc:
 prev_doc = None
 def get_doc(html, remove):
     global prev_doc
-    if prev_doc == html:
+    if prev_doc == html and prev_doc.remove == remove:
         pass # can reuse current doc
     else:
         prev_doc = Doc(html, remove)
@@ -421,9 +422,9 @@ def get(html, xpath, remove=('br', 'hr')):
     """Return first element from search
 
     >>> html = '<div>1</div><div>2</div>'
-    >>> get(html, '/div')
+    >>> get(html, '/div', None)
     '1'
-    >>> search(html, '//div')
+    >>> search(html, '//div', None)
     ['1', '2']
     >>> get_doc(html, None).num_searches
     2

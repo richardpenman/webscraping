@@ -23,6 +23,7 @@ import thread
 import threading
 import contextlib
 import tempfile
+import traceback
 try:
     import hashlib
 except ImportError:
@@ -612,7 +613,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
                             except Exception, e:
                                 # catch any callback error to avoid losing thread
                                 common.logger.error('Error in callback for: ' + str(url))
-                                common.logger.error(e)
+                                common.logger.error(traceback.format_exc())
 
                             else:
                                 if cb_urls:

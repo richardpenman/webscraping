@@ -4,13 +4,11 @@ This module implements a subset of the XPath standard:
  - indices
  - attributes
  - descendants
-Plus a few extensions useful to my work:
- - attributes can contain regular expressions
- - indices can be negative
+
+This was created because I needed a pure Python XPath parser.
 
 Generally XPath solutions will normalize the HTML into XHTML before selecting nodes.
-However this module tries to navigate the HTML structure directly without normalizing.
-In some cases I have found this faster/more accurate than using lxml.html and in other cases less so.
+However this module tries to navigate the HTML structure directly without normalizing by searching for the next closing tag.
 """
 
 #TODO:
@@ -34,7 +32,13 @@ import settings
 
 
 class Doc:
-    """
+    """Wrapper around a parsed webpage
+
+    html:
+        The content of webpage to parse
+    remove:
+        A list of tags to remove
+
     >>> doc = Doc('<div>abc<a class="link">LINK 1</a><div><a>LINK 2</a>def</div>abc</div>ghi<div><a>LINK 3</a>jkl</div>')
     >>> doc.search('/div/a')
     ['LINK 1', 'LINK 3']
@@ -47,36 +51,36 @@ class Doc:
     >>> doc.search('/div[-1]/a')
     ['LINK 3']
 
-    # test searching unicode
+    >>> # test searching unicode
     >>> doc = Doc(u'<a href="http://www.google.com" class="flink">google</a>')
     >>> doc.get('//a[@class="flink"]')
     u'google'
 
-    # test finding just the first instance for a large amount of content
+    >>> # test finding just the first instance for a large amount of content
     >>> doc = Doc('<div><span>content</span></div>' * 10000)
     >>> doc.get('//span')
     'content'
 
-    # test extracting attribute of self closing tag
+    >>> # test extracting attribute of self closing tag
     >>> Doc('<div><img src="img.png"></div>').get('/div/img/@src')
     'img.png'
 
-    # test extracting attribute after self closing tag
+    >>> # test extracting attribute after self closing tag
     >>> Doc('<div><br><p>content</p></div>').get('/div/p')
     'content'
     """
 
     # regex to find a tag
-    tag_regex = re.compile('<([\w\:]+)')
+    _tag_regex = re.compile('<([\w\:]+)')
     # regex to find an attribute
-    attributes_regex = re.compile('([\w\:-]+)\s*=\s*(".*?"|\'.*?\'|\S+)', re.DOTALL)
+    _attributes_regex = re.compile('([\w\:-]+)\s*=\s*(".*?"|\'.*?\'|\S+)', re.DOTALL)
     # regex to find content of a tag
-    content_regex = re.compile('<.*?>(.*)</.*?>$', re.DOTALL)
+    _content_regex = re.compile('<.*?>(.*)</.*?>$', re.DOTALL)
 
 
     def __init__(self, html, remove=None):
         self.orig_html = html
-        self.html = self.clean(remove)
+        self.html = self._clean(remove)
         self.splits = adt.HashDict()
         self.num_searches = 0
 
@@ -85,14 +89,18 @@ class Doc:
 
 
     def get(self, xpath):
-        results = self.xpath(self.parse(xpath), self.html, limit=1)
+        """Return the first result from this XPath selection
+        """
+        results = self._xpath(self.parse(xpath), self.html, limit=1)
         return common.first(results)
 
     def search(self, xpath):
-        return self.xpath(self.parse(xpath), self.html, limit=sys.maxint)
+        """Return all results from this XPath selection
+        """
+        return self._xpath(self.parse(xpath), self.html, limit=sys.maxint)
 
 
-    def xpath(self, path, html, limit):
+    def _xpath(self, path, html, limit):
         """Recursively search HTML for content at XPath
         """
         counter, separator, tag, index, attributes = path.pop(0)
@@ -106,22 +114,22 @@ class Doc:
             results.append(self.get_parent(html))
         elif tag == 'text()':
             # extract child text
-            text = self.get_content(self.get_html(html))
+            text = self._get_content(self._get_html(html))
             results.append(common.remove_tags(text, keep_children=False))
             # check if next tag is selecting attribute
         elif tag.startswith('@'):
             attr = tag[1:].lower()
             #parent = self.get_parent(context)
-            value = self.get_attributes(html).get(attr, '')
+            value = self._get_attributes(html).get(attr, '')
             results.append(value)
         else:
             # have tag
             if counter > 0:
                 # get child html when not at root
-                html = self.get_content(html)
+                html = self._get_content(html)
 
             # search direct children if / and all descendants if //
-            search_fn = self.find_children if separator == '' else self.find_descendants
+            search_fn = self._find_children if separator == '' else self._find_descendants
             matches = search_fn(html, tag)
 
             # support negative indices
@@ -133,12 +141,12 @@ class Doc:
                 # check if matches index
                 if index is None or index == child_i + 1:
                     # check if matches attributes
-                    if not attributes or self.match_attributes(attributes, self.get_attributes(child)):
+                    if not attributes or self._match_attributes(attributes, self._get_attributes(child)):
                         if path:
-                            results.extend(self.xpath(path[:], child, limit))
+                            results.extend(self._xpath(path[:], child, limit))
                         else:
                             # final node
-                            results.append(self.get_content(child))
+                            results.append(self._get_content(child))
                         if len(results) > limit:
                             break
 
@@ -149,7 +157,7 @@ class Doc:
 
 
 
-    def clean(self, remove):
+    def _clean(self, remove):
         """Remove specified unhelpful tags and comments
         """
         self.remove = remove
@@ -197,11 +205,11 @@ class Doc:
         return tokens
 
 
-    def get_attributes(self, html):
+    def _get_attributes(self, html):
         """Extract the attributes of the passed HTML tag
 
         >>> doc = Doc('')
-        >>> doc.get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span class="inner name">SPAN</span></div>')
+        >>> doc._get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span class="inner name">SPAN</span></div>')
         {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
         """
 
@@ -209,31 +217,31 @@ class Doc:
             if c == '>':
                 html = html[:i]
                 break
-        return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in Doc.attributes_regex.findall(html))
+        return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in Doc._attributes_regex.findall(html))
 
 
-    def match_attributes(self, desired_attributes, available_attributes):
+    def _match_attributes(self, desired_attributes, available_attributes):
         """Returns True if all of desired attributes are in available attributes
         Supports regex, which is not part of the XPath standard but is so useful!
 
         >>> doc = Doc('')
-        >>> doc.match_attributes([], {})
+        >>> doc._match_attributes([], {})
         True
-        >>> doc.match_attributes([('class', 'test')], {})
+        >>> doc._match_attributes([('class', 'test')], {})
         False
-        >>> doc.match_attributes([], {'id':'test', 'class':'test2'})
+        >>> doc._match_attributes([], {'id':'test', 'class':'test2'})
         True
-        >>> doc.match_attributes([('class', 'test')], {'id':'test', 'class':'test2'})
+        >>> doc._match_attributes([('class', 'test')], {'id':'test', 'class':'test2'})
         False
-        >>> doc.match_attributes([('class', 'test')], {'id':'test2', 'class':'test'})
+        >>> doc._match_attributes([('class', 'test')], {'id':'test2', 'class':'test'})
         True
-        >>> doc.match_attributes([('class', 'test'), ('id', 'content')], {'id':'test', 'class':'content'})
+        >>> doc._match_attributes([('class', 'test'), ('id', 'content')], {'id':'test', 'class':'content'})
         False
-        >>> doc.match_attributes([('class', 'test'), ('id', 'content')], {'id':'content', 'class':'test'})
+        >>> doc._match_attributes([('class', 'test'), ('id', 'content')], {'id':'content', 'class':'test'})
         True
-        >>> doc.match_attributes([('class', 'test\d')], {'id':'test', 'class':'test2'})
+        >>> doc._match_attributes([('class', 'test\d')], {'id':'test', 'class':'test2'})
         True
-        >>> doc.match_attributes([('class', 'test\d')], {'id':'test2', 'class':'test'})
+        >>> doc._match_attributes([('class', 'test\d')], {'id':'test2', 'class':'test'})
         False
         """
         for name, value in desired_attributes:
@@ -242,7 +250,7 @@ class Doc:
         return True
 
 
-    def get_html(self, context):
+    def _get_html(self, context):
         """Return HTML at this context
         """
         return context
@@ -253,14 +261,14 @@ class Doc:
         return self.html[i:j]
 
 
-    def get_content(self, context, default=''):
+    def _get_content(self, context, default=''):
         """Extract the child HTML of a the passed HTML tag
 
         >>> doc = Doc('')
-        >>> doc.get_content('<div id="ID" name="NAME">content <span>SPAN</span></div>')
+        >>> doc._get_content('<div id="ID" name="NAME">content <span>SPAN</span></div>')
         'content <span>SPAN</span>'
         """
-        match = Doc.content_regex.match(self.get_html(context))
+        match = Doc._content_regex.match(self._get_html(context))
         if match:
             content = match.groups()[0]
         else:
@@ -268,26 +276,26 @@ class Doc:
         return content
 
 
-    def find_children(self, html, tag):
+    def _find_children(self, html, tag):
         """Find children with this tag type
 
         >>> doc = Doc('')
-        >>> list(doc.find_children('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div'))
+        >>> list(doc._find_children('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div'))
         ['<div>abc<div>def</div>abc</div>', '<div>jkl</div>']
-        >>> list(doc.find_children('<tbody><tr><td></td></tr></tbody>', 'tbody'))
+        >>> list(doc._find_children('<tbody><tr><td></td></tr></tbody>', 'tbody'))
         ['<tbody><tr><td></td></tr></tbody>']
-        >>> list(doc.find_children('<tr><td></td></tr>', 'tbody'))
+        >>> list(doc._find_children('<tr><td></td></tr>', 'tbody'))
         ['<tr><td></td></tr>']
         """
         found = True
         num_found = 0
         orig_html = html
         while found:
-            html = self.jump_next_tag(html)
+            html = self._jump_next_tag(html)
             if html:
-                tag_html, html = self.split_tag(html)
+                tag_html, html = self._split_tag(html)
                 if tag_html:
-                    if tag.lower() in ('*', self.get_tag(tag_html).lower()):
+                    if tag.lower() in ('*', self._get_tag(tag_html).lower()):
                         num_found += 1
                         yield tag_html
                 else:
@@ -300,11 +308,11 @@ class Doc:
             yield orig_html
 
 
-    def find_descendants(self, html, tag):
+    def _find_descendants(self, html, tag):
         """Find descendants with this tag type
 
         >>> doc = Doc('')
-        >>> list(doc.find_descendants('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div'))
+        >>> list(doc._find_descendants('<span>1</span><div>abc<div>def</div>abc</div>ghi<div>jkl</div>', 'div'))
         ['<div>abc<div>def</div>abc</div>', '<div>def</div>', '<div>jkl</div>']
         """
         # XXX search with attribute here
@@ -312,65 +320,65 @@ class Doc:
             raise common.WebScrapingError("`*' not currently supported for //")
         for match in re.compile('<%s' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
             tag_html = html[match.start():]
-            tag_html, _ = self.split_tag(tag_html)
+            tag_html, _ = self._split_tag(tag_html)
             yield tag_html
 
 
-    def jump_next_tag(self, html):
+    def _jump_next_tag(self, html):
         """Return html at start of next tag
 
         >>> doc = Doc('')
-        >>> doc.jump_next_tag('<div>abc</div>')
+        >>> doc._jump_next_tag('<div>abc</div>')
         '<div>abc</div>'
-        >>> doc.jump_next_tag(' <div>abc</div>')
+        >>> doc._jump_next_tag(' <div>abc</div>')
         '<div>abc</div>'
-        >>> doc.jump_next_tag('</span> <div>abc</div>')
+        >>> doc._jump_next_tag('</span> <div>abc</div>')
         '<div>abc</div>'
-        >>> doc.jump_next_tag(' <br> <div>abc</div>')
+        >>> doc._jump_next_tag(' <br> <div>abc</div>')
         '<br> <div>abc</div>'
         """
         while 1:
-            match = Doc.tag_regex.search(html)
+            match = Doc._tag_regex.search(html)
             if match:
                 return html[match.start():]
             else:
                 return None
 
 
-    def get_tag(self, html):
+    def _get_tag(self, html):
         """Find tag type at this location
 
         >>> doc = Doc('')
-        >>> doc.get_tag('<div>abc</div>')
+        >>> doc._get_tag('<div>abc</div>')
         'div'
-        >>> doc.get_tag(' <div>')
-        >>> doc.get_tag('div')
+        >>> doc._get_tag(' <div>')
+        >>> doc._get_tag('div')
         """
-        match = Doc.tag_regex.match(html)
+        match = Doc._tag_regex.match(html)
         if match:
             return match.groups()[0]
         else:
             return None
 
 
-    def split_tag(self, html):
+    def _split_tag(self, html):
         """Extract starting tag and contents from HTML
 
         >>> doc = Doc('')
-        >>> doc.split_tag('<div>abc<div>def</div>abc</div>ghi<div>jkl</div>')
+        >>> doc._split_tag('<div>abc<div>def</div>abc</div>ghi<div>jkl</div>')
         ('<div>abc<div>def</div>abc</div>', 'ghi<div>jkl</div>')
-        >>> doc.split_tag('<br /><div>abc</div>')
+        >>> doc._split_tag('<br /><div>abc</div>')
         ('<br />', '<div>abc</div>')
-        >>> doc.split_tag('<div>abc<div>def</div>abc</span>')
+        >>> doc._split_tag('<div>abc<div>def</div>abc</span>')
         ('<div>abc<div>def</div>abc</span></div>', '')
         >>> # test efficiency of splits
-        >>> a = [doc.split_tag('<div>abc<div>def</div>abc</span>') for i in range(10000)]
+        >>> a = [doc._split_tag('<div>abc<div>def</div>abc</span>') for i in range(10000)]
         """
         if html in self.splits:
             i, tag = self.splits[html]
         else:
             i = None
-            tag = self.get_tag(html)
+            tag = self._get_tag(html)
             depth = 0 # how far nested
             for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
                 if html[match.start() + 1] == '/':
@@ -393,14 +401,14 @@ class Doc:
             return html[:i], html[i:]
 
 
-    def parent_tag(self, html):
+    def _parent_tag(self, html):
         """Find parent tag of this current tag
 
         >> doc = Doc('<p><div><span id="abc">empty</span></div></p>')
-        >> doc.parent_tag('<span id="abc">empty</span>')
+        >> doc._parent_tag('<span id="abc">empty</span>')
         '<div><span id="abc">empty</span></div>'
         >> doc = Doc('<div><p></p><span id="abc">empty</span></div>')
-        >> doc.parent_tag('<span id="abc">empty</span>')
+        >> doc._parent_tag('<span id="abc">empty</span>')
         '<div><p></p><span id="abc">empty</span></div>'
         """
         raise Exception('Not implemented')
@@ -410,7 +418,17 @@ class Doc:
 
 
 prev_doc = None
-def get_doc(html, remove):
+def _get_doc(html, remove):
+    """Return previous doc object if same HTML, else create new one
+
+    >>> html = '<div>1</div><div>2</div>'
+    >>> get(html, '/div', None)
+    '1'
+    >>> search(html, '//div', None)
+    ['1', '2']
+    >>> _get_doc(html, None).num_searches
+    2
+    """
     global prev_doc
     if prev_doc == html and prev_doc.remove == remove:
         pass # can reuse current doc
@@ -420,21 +438,13 @@ def get_doc(html, remove):
     
 def get(html, xpath, remove=('br', 'hr')):
     """Return first element from search
-
-    >>> html = '<div>1</div><div>2</div>'
-    >>> get(html, '/div', None)
-    '1'
-    >>> search(html, '//div', None)
-    ['1', '2']
-    >>> get_doc(html, None).num_searches
-    2
     """
-    return get_doc(html, remove).get(xpath)
+    return _get_doc(html, remove).get(xpath)
 
 def search(html, xpath, remove=('br', 'hr')):
     """Return all elements from search
     """
-    return get_doc(html, remove).search(xpath)
+    return _get_doc(html, remove).search(xpath)
 
 
 
@@ -442,8 +452,14 @@ js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')
 def get_links(html, url=None, local=True, external=True):
     """Return all links from html and convert relative to absolute if source url is provided
 
-    local determines whether to include links from same domain
-    external determines whether to include linkes from other domains
+    html:
+        HTML to parse
+    url:
+        optional URL for determining path of relative links
+    local:
+        whether to include links from same domain
+    external:
+        whether to include linkes from other domains
     """
     def normalize_link(link):
         if urlsplit(link).scheme in ('http', 'https', ''):

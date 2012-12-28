@@ -23,7 +23,7 @@ DEFAULT_TIMEOUT = 5000
 
 
 
-class PersistentDictPool:
+class _PersistentDictPool:
     def __init__(self, filename, max_size=2):
         """Splits cache over multiple sqlite instances to avoid each exceeding the limit
 
@@ -39,6 +39,17 @@ class PersistentDictPool:
 class PersistentDict:
     """Stores and retrieves persistent data through a dict-like interface
     Data is stored compressed on disk using sqlite3 
+
+    filename: 
+        where to store sqlite database. Uses in memory by default.
+    compress_level: 
+        between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
+    expires: 
+        a timedelta object of how old data can be before expires. By default is set to None to disable.
+    timeout: 
+        how long should a thread wait for sqlite to be ready (in ms)
+    isolation_level: 
+        None for autocommit or else 'DEFERRED' / 'IMMEDIATE' / 'EXCLUSIVE'
 
     >>> filename = 'cache.db'
     >>> cache = PersistentDict(filename)
@@ -67,12 +78,6 @@ class PersistentDict:
     """
     def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None, disk=False):
         """initialize a new PersistentDict with the specified database file.
-
-        filename: where to store sqlite database. Uses in memory by default.
-        compress_level: between 1-9 (in my test levels 1-3 produced a 1300kb file in ~7 seconds while 4-9 a 288kb file in ~9 seconds)
-        expires: a timedelta object of how old data can be before expires. By default is set to None to disable.
-        timeout: how long should a thread wait for sqlite to be ready (in ms)
-        isolation_level: None for autocommit or else 'DEFERRED' / 'IMMEDIATE' / 'EXCLUSIVE'
         """
         self.filename = filename
         self.compress_level = compress_level
@@ -98,7 +103,7 @@ class PersistentDict:
 
 
     def __copy__(self):
-        """make copy with current cache settings
+        """make a copy of current cache settings
         """
         return PersistentDict(filename=self.filename, compress_level=self.compress_level, expires=self.expires, timeout=self.timeout)
 
@@ -322,11 +327,13 @@ class Queue:
 
 
     def push(self, keys, priorities=None, default=0):
-        """Add these keys to the queue
-
-        `priorities' is a map of the priority for each key
-        `default' is used if key is not in priorities
+        """Add these keys to the queue.
         Will not insert if key already exists.
+
+        priorities:
+            a map of the priority for each key
+        default:
+            used if key is not in priorities
         """
         priorities = priorities or {}
         c = self._conn.cursor()
@@ -336,9 +343,8 @@ class Queue:
 
 
     def clear(self, keys=None):
-        """Remove keys from queue 
-
-        If keys is None remove all
+        """Remove keys from queue.
+        If keys is None remove all.
         """
         c = self._conn.cursor()
         if keys:
@@ -353,6 +359,9 @@ class Queue:
 
 class FSCache:
     """Cache files in the file system
+
+    folder:
+        the root level folder for the cache
 
     >>> fscache = FSCache('.')
     >>> url = 'http://google.com/abc'

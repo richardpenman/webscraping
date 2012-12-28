@@ -1,4 +1,4 @@
-__doc__ = 'Framework for crawling and scraping webpages with JQuery'
+__doc__ = 'Interface to qt webkit for parsing JavaScript dependent webpages'
 
 import sys
 import os
@@ -31,7 +31,7 @@ implement watir API?
 """
 
 def qstring_to_unicode(qstr):
-    """Convert QString to unicode
+    """Convert QString to python unicode string
     """
     if isinstance(qstr, unicode):
         return qstr
@@ -45,8 +45,10 @@ class NetworkAccessManager(QNetworkAccessManager):
 
     def __init__(self, proxy, allowed_media, allowed_regex, cache_size=100, cache_dir='.webkit_cache'):
         """
-        See JQueryBrowser for details of arguments
-        cache_size is the maximum size of the webkit cache (MB)
+        See WebkitBrowser for details of arguments
+    
+        cache_size:
+            the maximum size of the webkit cache (MB)
         """
         QNetworkAccessManager.__init__(self)
         # initialize the manager cache
@@ -122,6 +124,8 @@ class NetworkAccessManager(QNetworkAccessManager):
 
 
     def catch_error(self, eid):
+        """Interpret the HTTP error ID received
+        """
         if eid not in (5, 301):
             errors = {
                 0 : 'no error condition. Note: When the HTTP protocol returns a redirect no error will be reported. You can check if there is a redirect with the QNetworkRequest::RedirectionTargetAttribute attribute.',
@@ -153,6 +157,8 @@ class NetworkAccessManager(QNetworkAccessManager):
 
 
 class NetworkReply(QNetworkReply):
+    """Override QNetworkReply so can save the original data
+    """
     def __init__(self, parent, reply):
         QNetworkReply.__init__(self, parent)
         self.reply = reply # reply to proxy
@@ -270,19 +276,26 @@ class WebPage(QWebPage):
 
 class WebkitBrowser(QWebView):
     """Render webpages using webkit
+
+    base_url: 
+        the domain that will be crawled
+    gui:
+        whether to show webkit window or run headless
+    user_agent:
+        the user-agent when downloading content
+    proxy:
+        a QNetworkProxy to download through
+    allowed_media:
+        the media extensions to allow
+    allowed_regex:
+        a regular expressions of URLS to allow
+    timeout:
+        the maximum amount of seconds to wait for a request
+    delay:
+        the minimum amount of seconds to wait between requests
     """
 
-    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5, enable_plugins=True):#, cache_file=None):
-        """
-        base_url is the domain that will be crawled
-        gui is whether to show webkit window or run headless
-        user_agent is used to set the user-agent when downloading content
-        proxy is a QNetworkProxy to download through
-        allowed_media are the media extensions to allow
-        allowed_regex is a regular expressions of URLS to allow
-        timeout is the maximum amount of seconds to wait for a request
-        delay is the minimum amount of seconds to wait between requests
-        """
+    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5, enable_plugins=True):
         self.app = QApplication(sys.argv) # must instantiate first
         QWebView.__init__(self)
         webpage = WebPage(user_agent or random.choice(settings.user_agents))
@@ -319,9 +332,12 @@ class WebkitBrowser(QWebView):
     def get(self, url=None, script=None, num_retries=1, jquery=False):
         """Load given url in webkit and return html when loaded
 
-        script is some javasript to exexute that will change the loaded page (eg form submission)
-        num_retries is how many times to try downloading this URL or executing this script
-        jquery is whether to inject JQuery into the document
+        script:
+            some javasript to exexute that will change the loaded page (eg form submission)
+        num_retries:
+            how many times to try downloading this URL or executing this script
+        jquery:
+            whether to inject JQuery library into the document
         """
         t1 = time()
         self.base_url = self.base_url or url # set base URL if not set
@@ -395,9 +411,9 @@ class WebkitBrowser(QWebView):
 
 
     def click(self, pattern='input'):
-        """Click all elements that match the pattern
+        """Click all elements that match the pattern.
 
-        uses standard CSS pattern matching: http://www.w3.org/TR/CSS2/selector.html
+        Uses standard CSS pattern matching: http://www.w3.org/TR/CSS2/selector.html
         """
         for e in self.find(pattern):
             e.evaluateJavaScript("var evObj = document.createEvent('MouseEvents'); evObj.initEvent('click', true, true); this.dispatchEvent(evObj);")

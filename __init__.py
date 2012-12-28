@@ -1,7 +1,9 @@
 __doc__ = """
-Description: webscraping library
-Website: http://code.google.com/p/webscraping/
-License: LGPL
+Website: 
+    http://code.google.com/p/webscraping/
+
+License: 
+    LGPL
 """
 
 if __name__ == '__main__':

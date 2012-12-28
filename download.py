@@ -1,8 +1,4 @@
-__doc__ = """
-Description: Helper methods to download and crawl web content using threads
-Website: http://code.google.com/p/webscraping/
-License: LGPL
-"""
+__doc__ = 'Helper methods to download and crawl web content using threads'
 
 import os
 import re
@@ -72,37 +68,59 @@ class ProxyPerformance:
 
 
 
-class Download(object):
+class Download:
+    """
+    cache:
+        a pdict object to use for the cache
+    cache_file:
+        filename to store cached data
+    read_cache:
+        whether to read from the cache
+    write_cache:
+        whether to write to the cache
+    use_network:
+        whether to download content not in the cache
+    user_agent
+        the User Agent to download content with
+    timeout:
+        the maximum amount of time to wait for http response
+    delay:
+        the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
+    proxy_file:
+        a filename to read proxies from
+    max_proxy_errors:
+        the maximum number of consecutive errors allowed per proxy before discarding
+        an error is only counted if another proxy is able to successfully download the URL
+        set to None to disable
+    proxies:
+        a list of proxies to cycle through when downloading content
+    opener:
+        an optional opener to use instead of using urllib2 directly
+    headers:
+        the headers to include in the request
+    data:
+        what to post at the URL
+        if None (default) then a GET request will be made
+    num_retries:
+        how many times to try downloading a URL when get an error
+    num_redirects:
+        how many times the URL is allowed to be redirected, to avoid infinite loop
+    force_html:
+        whether to download non-text data
+    force_ascii:
+        whether to only return ascii characters
+    max_size:
+        maximum number of bytes that will be downloaded, or None to disable
+    default:
+        what to return when no content can be downloaded
+    pattern:
+        a regular expression that the downloaded HTML has to match to be considered a valid download
+    """
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=1,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None):
-        """
-        `cache' is a pdict object to use for the cache
-        `cache_file' sets filename to store cached data
-        `read_cache' sets whether to read from the cache
-        `write_cache' sets whether to write to the cache
-        `use_network' sets whether to download content not in the cache
-        `user_agent' sets the User Agent to download content with
-        `timeout' is the maximum amount of time to wait for http response
-        `delay' is the minimum amount of time (in seconds) to wait after downloading content from a domain per proxy
-        `proxy_file' is a filename to read proxies from
-        `max_proxy_errors' is the maximum number of consecutive errors allowed per proxy before discarding
-            an error is only counted if another proxy is able to successfully download the URL
-            set to None to disable
-        `proxies' is a list of proxies to cycle through when downloading content
-        `opener' sets an optional opener to use instead of using urllib2 directly
-        `headers' are the headers to include in the request
-        `data' is what to post at the URL
-        `num_retries' sets how many times to try downloading a URL when get an error
-        `num_redirects' sets how many times the URL is allowed to be redirected, to avoid infinite loop
-        `force_html' sets whether to download non-text data
-        `force_ascii' sets whether to only return ascii characters
-        `max_size' determines maximum number of bytes that will be downloaded, or None to disable
-        `default' is what to return when no content can be downloaded
-        `pattern' is a regular expression that the downloaded HTML has to match to be considered a valid download
-        """
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
@@ -137,10 +155,13 @@ class Download(object):
 
     proxy_performance = ProxyPerformance()
     def get(self, url, **kwargs):
-        """Download this URL and return the HTML. Data is cached so only have to download once.
+        """Download this URL and return the HTML. 
+        By default HTML is cached so only have to download once.
 
-        `url' is what to download
-        `kwargs' can override any of the arguments passed to constructor
+        url:
+            what to download
+        kwargs:
+            override any of the arguments passed to constructor
         """
         self.reload_proxies()
         self.proxy = None # the current proxy
@@ -220,7 +241,7 @@ class Download(object):
                     # make relative links absolute so will still work after redirect
                     relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
                     html = relative_re.sub(lambda m: m.group(1) + urlparse.urljoin(url, m.group(2)), html)
-            html = self.clean_content(html=html, max_size=settings.max_size, force_html=settings.force_html, force_ascii=settings.force_ascii)
+            html = self._clean_content(html=html, max_size=settings.max_size, force_html=settings.force_html, force_ascii=settings.force_ascii)
 
         if self.cache and settings.write_cache:
             # cache results
@@ -234,7 +255,7 @@ class Download(object):
 
 
     def get_key(self, url, data=None):
-        """Create key for storing in database
+        """Create key for caching this request
         """
         key = url
         if data:
@@ -242,8 +263,17 @@ class Download(object):
         return key
 
 
-    def clean_content(self, html, max_size, force_html, force_ascii):
+    def _clean_content(self, html, max_size, force_html, force_ascii):
         """Clean up downloaded content
+
+        html:
+            the input to clean
+        max_size:
+            the maximum size of data allowed
+        force_html:
+            content must be HTML
+        force_ascii:
+            content must be ASCII
         """
         if max_size is not None and len(html) > max_size:
             common.logger.info('Too big: %s' % len(html))
@@ -325,28 +355,35 @@ class Download(object):
         return content
 
 
-    domains = adt.HashDict()
+    _domains = adt.HashDict()
     def throttle(self, url, delay, proxy=None, variance=0.5):
         """Delay a minimum time for each domain per proxy by storing last access time
 
-        `url' is what intend to download
-        `delay' is the minimum amount of time (in seconds) to wait after downloading content from this domain
-        `proxy' is the proxy to download through
-        `variance' is the amount of randomness in delay, 0-1
+        url
+            what intend to download
+        delay
+            the minimum amount of time (in seconds) to wait after downloading content from this domain
+        proxy
+            the proxy to download through
+        variance
+            the amount of randomness in delay, 0-1
         """
         if delay > 0:
             key = str(proxy) + ':' + common.get_domain(url)
-            if key in Download.domains:
-                while datetime.datetime.now() < Download.domains.get(key):
+            if key in Download._domains:
+                while datetime.datetime.now() < Download._domains.get(key):
                     time.sleep(SLEEP_TIME)
             # update domain timestamp to when can query next
-            Download.domains[key] = datetime.datetime.now() + datetime.timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
+            Download._domains[key] = datetime.datetime.now() + datetime.timedelta(seconds=delay * (1 + variance * (random.random() - 0.5)))
 
 
-    def reload_proxies(self):
-        """Check every 10 minutes for updated proxy file
+    def reload_proxies(self, timeout=600):
+        """Check periodically for updated proxy file
+
+        timeout:
+            the number of seconds before check for updated proxies
         """
-        if self.settings.proxy_file and time.time() - self.last_load_time > 10 * 60:
+        if self.settings.proxy_file and time.time() - self.last_load_time > timeout:
             self.last_load_time = time.time()
             if os.path.exists(self.settings.proxy_file):
                 if os.stat(self.settings.proxy_file).st_mtime != self.last_mtime:
@@ -357,6 +394,13 @@ class Download(object):
 
     def geocode(self, address, delay=5, read_cache=True):
         """Geocode address using Google's API and return dictionary of useful fields
+
+        address:
+            what to pass to geocode API
+        delay:
+            how long to delay between API requests
+        read_cache:
+            whether to load content from cache when exists
         """
         url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
         html = self.get(url, delay=delay, read_cache=read_cache)
@@ -406,9 +450,19 @@ class Download(object):
 
     def get_emails(self, website, max_depth=1, max_urls=10, max_emails=1):
         """Crawl this website and return all emails found
+
+        website:
+            the URL of website to crawl
+        max_depth:
+            how many links deep to follow before stop crawl
+        max_urls:
+            how many URL's to download before stop crawl
+        max_emails:
+            The maximum number of emails to extract before stop crawl.
+            If None then extract all emails found in crawl.
         """
         def score(link):
-            """Return how valuable this link is, for ordering crawling
+            """Return how valuable this link is for ordering crawling
             The lower the better"""
             link = link.lower()
             total = 0
@@ -452,13 +506,13 @@ class Download(object):
 
 
     def gcache_get(self, url, **kwargs):
-        """Get page from google cache
+        """Download webpage via google cache
         """
         return self.get('http://www.google.com/search?&q=cache%3A' + urllib.quote(url), **kwargs)
 
 
     def gtrans_get(self, url, **kwargs):
-        """Get page via Google Translation
+        """Download webpage via Google Translation
         """
         url = 'http://translate.google.com/translate?sl=nl&anno=2&u=%s' % urllib.quote(url)
         html = self.get(url, **kwargs)
@@ -475,10 +529,13 @@ class Download(object):
 
     
     def archive_get(self, url, timestamp=None, **kwargs):
-        """Get page via archive.org cache
+        """Download webpage via the archive.org cache
 
-        If `timestamp' is set then will return the page closest to this date,
-        else the most recent archived page
+        url:
+            The webpage to download
+        timestamp:
+            When passed a datetime object will download the cached webpage closest to this date,
+            Else when None (default) will download the most recent archived page.
         """
         if timestamp:
             formatted_ts = timestamp.strftime('%Y%m%d%H%M%S')
@@ -497,7 +554,7 @@ class Download(object):
 
 
     def whois(self, url, timeout=10):
-        """Query whois info
+        """Return text of this whois query
         """
         domain = common.get_domain(url)
         if domain:
@@ -541,33 +598,48 @@ class Download(object):
 
         
     def save_as(self, url, filename=None, save_dir='images'):
-        """Download url and save into disk.
+        """Download url and save to disk
+
+        url:
+            the webpage to download
+        filename:
+            Output file to save to. If not set then will save to file based on URL
         """
-        if url:
-            _bytes = self.get(url, num_redirects=0)
-            if _bytes:
-                if not os.path.exists(save_dir):
-                    os.makedirs(save_dir)
-                save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
-                open(save_path, 'wb').write(_bytes)
-                return save_path
+        _bytes = self.get(url, num_redirects=0)
+        if _bytes:
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
+            open(save_path, 'wb').write(_bytes)
+            return save_path
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=False, wait_finish=True, max_queue=100, cache_queue=None, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=100, **kwargs):
     """Download these urls in parallel
 
-    `url[s]' are the webpages to download
-    `num_threads' determines the number of threads to download urls with
-    `cb' is called after each download with the HTML of the download   
-        the arguments are the url and downloaded html
-        whatever URLs are returned are added to the crawl queue
-    `dl' is a function to call for downloading
-        takes the download object and url and should return the HTML
-        for example to perform a POST request instead of the default GET:
-            dl=lambda D, url: D.get(url, data=data)
-    `depth' sets to traverse depth first rather than the default breadth first
-    `wait_finish' sets whether this function should wait until all download threads have finished before returning
+    url:
+        the webpage to download
+    urls:
+        the webpages to download
+    num_threads:
+        the number of threads to download urls with
+    cb:
+        Called after each download with the HTML of the download. 
+        The arguments are the url and downloaded html.
+        Whatever URLs are returned are added to the crawl queue.
+    dl:
+        A callback for customizing the download.
+        Takes the download object and url and should return the HTML.
+    depth:
+        Deprecated - will be removed in later version
+    wait_finish:
+        whether to wait until all download threads have finished before returning
+    reuse_queue:
+        Whether to continue the queue from the previous run.
+    max_queue:
+        The maximum number of queued URLs to keep in memory.
+        The rest will be in the cache.
     """
     if kwargs.pop('cache', None):
         common.logger.debug('threaded_get does not support cache flag')
@@ -575,7 +647,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
 
     class DownloadThread(threading.Thread):
-        """Download data
+        """Thread for downloading webpages
         """
         processing = collections.deque() # to track whether are still downloading
         downloading = set() # the URL's that are currently being downloaded
@@ -644,8 +716,8 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
     
     queue = pdict.Queue(settings.queue_file)
-    if '--use-queue' in sys.argv:
-        # queue enabled
+    if reuse_queue or '--use-queue' in sys.argv:
+        # command line flag to enable queue
         queued_urls = queue.pull(limit=max_queue)
     else:
         queued_urls = []
@@ -686,11 +758,16 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=Fa
 
 
 class State:
-    """Save state to disk periodically
+    """Save state of crawl to disk
+
+    output_file:
+        where to save the state
+    timeout:
+        how many seconds to wait between saving the state
     """
-    def __init__(self, output_file=settings.status_file, timeout=10):
+    def __init__(self, output_file=None, timeout=10):
         # where to save state to
-        self.output_file = output_file
+        self.output_file = output_file or settings.status_file
         # how long to wait between saving state
         self.timeout = timeout
         # track the number of downloads and errors
@@ -706,7 +783,16 @@ class State:
         self.lock = threading.Lock()
 
     def update(self, num_downloads=0, num_errors=0, num_caches=0, queue_size=0):
-        """Update the state
+        """Update the state with these values
+
+        num_downloads:
+            the number of downloads completed successfully
+        num_errors:
+            the number of errors encountered while downloading
+        num_caches:
+            the number of webpages read from cache instead of downloading
+        queue_size:
+            the number of URL's in the queue
         """
         self.num_downloads += num_downloads
         self.num_errors += num_errors
@@ -746,19 +832,26 @@ class State:
 
 
 class CrawlerCallback:
-    """Example callback to crawl the website
+    """Example callback to crawl a website
     """
     found = adt.HashDict(int) # track depth of found URLs
 
     def __init__(self, output_file=None, max_links=100, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
         """
-        `output_file' is where to save scraped data
-        `max_links' is the maximum number of links to follow per page
-        `max_depth' is the maximum depth to follow links into website (use None for no limit)
-        `allowed_urls' is a regex for allowed urls, defaults to all urls
-        `banned_urls' is a regex for banned urls, defaults to no urls
-        `robots': RobotFileParser object to determine which urls allowed to crawl
-        `crawl_existing' sets whether to crawl content already downloaded previously in the cache
+        output_file:
+            where to save scraped data
+        max_links:
+            the maximum number of links to follow per page
+        max_depth:
+            the maximum depth to follow links into website (use None for no limit)
+        allowed_urls:
+            a regex for allowed urls, defaults to all urls
+        banned_urls:
+            a regex for banned urls, defaults to no urls
+        robots:
+            RobotFileParser object to determine which urls allowed to crawl
+        crawl_existing:
+            sets whether to crawl content already downloaded previously in the cache
         """
         if output_file:
             self.writer = common.UnicodeWriter(output_file) 

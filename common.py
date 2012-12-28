@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 __doc__ = 'Common web scraping related functions'
 
-
 import os
 import re
 import sys
@@ -71,7 +70,7 @@ def to_unicode(obj, encoding=settings.default_encoding):
 
 
 def html_to_unicode(html, charset=settings.default_encoding):
-    """Convert html to unicode, decoding by charset
+    """Convert html to unicode, decoding by specified charset when available
     """
     m = re.compile(r'''<meta\s+http-equiv=["']Content-Type["']\s+content=["'][^"']*?charset=([a-zA-z\d\-]+)["']''', re.IGNORECASE).search(html)
     if m:
@@ -81,7 +80,7 @@ def html_to_unicode(html, charset=settings.default_encoding):
     
     
 def is_html(html):
-    """Returns whether content is HTML
+    """Returns whether content is likely HTML based on search for common tags
     """
     try:
         result = re.search('html|head|body', html) is not None
@@ -180,8 +179,8 @@ def remove_tags(html, keep_children=True):
 def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
     """Interpret escape characters
 
-    >>> unescape('&lt;hello&nbsp;&amp;%20world&gt;\xc2\x85')
-    '<hello & world>...'
+    >>> unescape('&lt;hello&nbsp;&amp;%20world&gt;')
+    '<hello & world>'
     """
     if not text:
         return ''
@@ -255,15 +254,16 @@ def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
 
    
 def normalize(s, encoding=settings.default_encoding):
-    """Return normalized string
+    """Normalize the string by removing tags, unescaping, and removing surrounding whitespace
     
     >>> normalize('''<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>''')
     'Tel.: 029 - 12345678'
     """
     return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
 
+
 def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNORECASE):
-    """Extract data with regular expression
+    """Helper method to extract content from regular expression
     
     >>> regex_get('<div><span>Phone: 029&nbsp;01054609</span><span></span></div>', r'<span>Phone:([^<>]+)')
     '029 01054609'
@@ -280,7 +280,7 @@ def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNO
             return [normalize(item) if normalized else item for item in m.groups()]
 
 def safe(s):
-    """Return safe version of string for URLs
+    """Return characters in string that are safe for URLs
     
     >>> safe('U@#$_#^&*-2')
     'U_-2'
@@ -299,7 +299,7 @@ def pretty(s):
 
 
 def pretty_paragraph(s):
-    """Return pretty version of paragraph for display
+    """Return pretty version of text in paragraph for display
     """
     s = re.sub('<(br|hr|/li)[^>]*>', '\n', s, re.IGNORECASE)
     s = unescape(remove_tags(s))
@@ -417,11 +417,22 @@ def read_list(file):
     return l
 
 
-class UnicodeWriter(object):
-    """A CSV writer that produces Excel-compatibly CSV files from unicode data.
+class UnicodeWriter:
+    """A CSV writer that produces Excel-compatible CSV files from unicode data.
     
-    file can either be a filename or a file object
-
+    file: 
+        can either be a filename or a file object
+    encoding:
+        the encoding to use for output
+    mode:
+        the mode for writing to file
+    unique:
+        if True then will only write unique rows to output
+    quoting:
+        csv module quoting style to use
+    utf8_bom:
+        whether need to remove the BOM
+    
     >>> from StringIO import StringIO
     >>> fp = StringIO()
     >>> writer = UnicodeWriter(fp, quoting=csv.QUOTE_MINIMAL)
@@ -450,7 +461,9 @@ class UnicodeWriter(object):
                 self.rows[str(row)] = True
         self.writer = csv.writer(self.fp, quoting=quoting, **argv)
 
-    def cell(self, s):
+    def _cell(self, s):
+        """Normalize the content for this cell
+        """
         if isinstance(s, basestring):
             if isinstance(s, unicode):
                 s = s.encode(self.encoding, 'ignore')
@@ -462,7 +475,9 @@ class UnicodeWriter(object):
         return s
 
     def writerow(self, row):
-        row = [self.cell(col) for col in row]
+        """Write row to output
+        """
+        row = [self._cell(col) for col in row]
         if self.unique:
             if str(row) not in self.rows:
                 self.writer.writerow(row)
@@ -471,13 +486,19 @@ class UnicodeWriter(object):
             self.writer.writerow(row)
             
     def writerows(self, rows):
+        """Write multiple rows to output
+        """
         for row in rows:
             self.writerow(row)
 
     def flush(self):
+        """Flush output to disk
+        """
         self.fp.flush()
         
     def close(self):
+        """Close the output file pointer
+        """
         self.fp.close()
 
 
@@ -520,10 +541,10 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     return cookie_jar
 
 
-def start_threads(fun, num_threads=20, args=(), wait=True):
-    """Start up threads
+def start_threads(fn, num_threads=20, args=(), wait=True):
+    """Shortcut to start these threads with given args and wait for all to finish
     """
-    threads = [threading.Thread(target=fun, args=args) for i in range(num_threads)]
+    threads = [threading.Thread(target=fn, args=args) for i in range(num_threads)]
     # Start threads one by one         
     for thread in threads: 
         thread.start()
@@ -533,8 +554,15 @@ def start_threads(fun, num_threads=20, args=(), wait=True):
             thread.join()
 
 
-def get_logger(output_file=settings.log_file, stdout=True, level=settings.log_level):
+def get_logger(output_file, stdout=True, level=settings.log_level):
     """Create a logger instance
+
+    output_file:
+        file where to save the log
+    stdout:
+        whether to also print to standard out
+    level:
+        the minimum logging level to save
     """
     logger = logging.getLogger(output_file)
     # void duplicate handlers
@@ -550,4 +578,4 @@ def get_logger(output_file=settings.log_file, stdout=True, level=settings.log_le
             logger.addHandler(logging.StreamHandler(sys.stdout))
         logger.setLevel(level)
     return logger
-logger = get_logger()
+logger = get_logger(settings.log_file)

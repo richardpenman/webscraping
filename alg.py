@@ -1,4 +1,4 @@
-__doc__ = 'High level functions for extracting and storing data'
+__doc__ = 'High level functions for interpreting useful data from input'
 
 import os
 import re
@@ -11,10 +11,12 @@ import xpath
 
 
 def get_excerpt(html, try_meta=False, max_chars=255):
-    """Extract excerpt from this HTML by finding largest text block
+    """Extract excerpt from this HTML by finding the largest text block
 
-    try_meta indicates whether to try extracting from meta description tag
-    max_chars is the maximum number of characters for the excerpt
+    try_meta: 
+        indicates whether to try extracting from meta description tag
+    max_chars: 
+        the maximum number of characters for the excerpt
     """
     # try extracting meta description tag
     excerpt = ''
@@ -30,7 +32,7 @@ def get_excerpt(html, try_meta=False, max_chars=255):
 
 
 def extract_emails(html):
-    """Extract emails and look for common obfuscations
+    """Remove common obfuscations from HTML and then extract all emails
 
     >>> extract_emails('')
     []
@@ -80,7 +82,8 @@ def extract_phones(html):
 
 
 def parse_us_address(address):
-    """Parse usa address
+    """Parse USA address into address, city, state, and zip code
+
     >>> parse_us_address('6200 20th Street, Vero Beach, FL 32966')
     ('6200 20th Street', 'Vero Beach', 'FL', '32966')
     """
@@ -101,15 +104,23 @@ def parse_us_address(address):
     return address, city, state, zipcode
 
 
-def distance(p1, p2):
-    """Calculate distance between 2 (latitude, longitude) points
-    Multiply result by radius of earth (6373 km, 3960 miles)
+def distance(p1, p2, scale=None):
+    """Calculate distance between 2 (latitude, longitude) points.
+
+    scale:
+        By default the distance will be returned as a ratio of the earth's radius
+        Use 'km' to return distance in kilometres, 'miles' to return distance in miles
+
+    >>> melbourne = -37.7833, 144.9667
+    >>> san_francisco = 37.7750, -122.4183
+    >>> int(distance(melbourne, san_francisco, 'km'))
+    12659
     """
     lat1, long1 = p1
     lat2, long2 = p2
     # Convert latitude and longitude to 
     # spherical coordinates in radians.
-    degrees_to_radians = math.pi/180.0
+    degrees_to_radians = math.pi / 180.0
         
     # phi = 90 - latitude
     phi1 = (90.0 - lat1)*degrees_to_radians
@@ -130,6 +141,11 @@ def distance(p1, p2):
     cos = (math.sin(phi1)*math.sin(phi2)*math.cos(theta1 - theta2) + math.cos(phi1)*math.cos(phi2))
     arc = math.acos( cos )
 
-    # Remember to multiply arc by the radius of the earth 
-    # in your favorite set of units to get length.
-    return arc
+    if scale is None:
+        return arc
+    elif scale == 'km':
+        return arc * 6373
+    elif scale == 'miles':
+        return arc * 3960
+    else:
+        raise common.WebScrapingError('Invalid scale: %s' % str(scale))

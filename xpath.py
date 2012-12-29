@@ -437,12 +437,12 @@ def _get_doc(html, remove):
     return prev_doc
     
 def get(html, xpath, remove=('br', 'hr')):
-    """Return first element from search
+    """Return first element from XPath search of HTML
     """
     return _get_doc(html, remove).get(xpath)
 
 def search(html, xpath, remove=('br', 'hr')):
-    """Return all elements from search
+    """Return all elements from XPath search of HTML
     """
     return _get_doc(html, remove).search(xpath)
 

@@ -16,7 +16,7 @@ Some options to install the webscraping package:
 
 #. Checkout the repository: *hg clone https://code.google.com/p/webscraping/*
 #. Download the zip: http://webscraping.googlecode.com/files/webscraping.zip
-#. Install with pip: *sudo pip install -e hg+https://code.google.com/p/webscraping/#egg=webscraping*
+#. Install with pypi: *pip install webscraping*
 
 The only dependency is python 2.5 or higher.
 
@@ -30,4 +30,4 @@ This code is licensed under the `LGPL license <http://webscraping.com/blog/Open-
 Contact
 -------
 
-http://webscraping.com/contact
+richard@webscraping.com

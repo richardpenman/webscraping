@@ -19,7 +19,7 @@ except ImportError:
     import pickle
 
 DEFAULT_LIMIT = 1000
-DEFAULT_TIMEOUT = 5000
+DEFAULT_TIMEOUT = 10000
 
 
 

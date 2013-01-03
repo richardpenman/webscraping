@@ -693,7 +693,9 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                                         keys, priorities = cb_urls.keys(), cb_urls
                                     else:
                                         keys, priorities = cb_urls, {}
+                                    lock.acquire()
                                     queue.push(keys, priorities)
+                                    lock.release()
                                     queue_size = len(queue)
                                 if not seed_urls:
                                     lock.acquire()

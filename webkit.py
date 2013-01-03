@@ -341,39 +341,31 @@ class WebkitBrowser(QWebView):
         """
         t1 = time()
         self.base_url = self.base_url or url # set base URL if not set
-        #html = self.cache.get(key, {}).get('value')
-        #if html:
-        #    self.debug('Load cache ' + key)
-        #    self.setHtml(html, QUrl(self.base_url))
-        #else:
-        if 1:
-            loop = QEventLoop()
-            timer = QTimer()
-            timer.setSingleShot(True)
-            timer.timeout.connect(loop.quit)
-            self.loadFinished.connect(loop.quit)
-            if url:
-                self.load(QUrl(url))
-            elif script:
-                self.js(script)
-            timer.start(self.timeout * 1000)
-            loop.exec_() # delay here until download finished or timeout
-        
-            if timer.isActive():
-                # downloaded successfully
-                timer.stop()
-                parsed_html = self.current_html()
-                #if key:
-                #    self.cache[key] = html
-                self.wait(self.delay - (time() - t1))
+        loop = QEventLoop()
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        self.loadFinished.connect(loop.quit)
+        if url:
+            self.load(QUrl(url))
+        elif script:
+            self.js(script)
+        timer.start(self.timeout * 1000)
+        loop.exec_() # delay here until download finished or timeout
+    
+        if timer.isActive():
+            # downloaded successfully
+            timer.stop()
+            parsed_html = self.current_html()
+            self.wait(self.delay - (time() - t1))
+        else:
+            # did not download in time
+            if num_retries > 0:
+                common.logger.debug('Timeout - retrying')
+                parsed_html = self.get(url, script=script, num_retries=num_retries-1, jquery=jquery)
             else:
-                # didn't download in time
-                if num_retries > 0:
-                    common.logger.debug('Timeout - retrying')
-                    parsed_html = self.get(url, script=script, num_retries=num_retries-1, jquery=jquery)
-                else:
-                    common.logger.debug('Timed out')
-                    parsed_html = ''
+                common.logger.debug('Timed out')
+                parsed_html = ''
         return parsed_html
 
 
@@ -384,10 +376,6 @@ class WebkitBrowser(QWebView):
         while time() < deadline:
             sleep(0)
             self.app.processEvents()
-            #print 'wait', wait_secs
-        # randomize the delay so less suspicious
-        #wait_secs += 0.5 * self.delay * (random.random() - 0.5)
-        #time.sleep(max(0, wait_secs))
 
 
     def jsget(self, script, num_retries=1, jquery=True):

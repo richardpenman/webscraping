@@ -7,19 +7,26 @@ import urllib2
 import random
 from time import time, sleep
 from datetime import datetime
+
+# for using native Python strings
+import sip
+sip.setapi('QString', 2)
 from PyQt4.QtGui import QApplication, QDesktopServices, QImage, QPainter
-from PyQt4.QtCore import QByteArray, QString, QUrl, QTimer, QEventLoop, QIODevice, QObject, QVariant
+from PyQt4.QtCore import QByteArray, QUrl, QTimer, QEventLoop, QIODevice, QObject
 from PyQt4.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
+"""
+# XXX some seg faults with subclassing QNetworkAccessManager
+from PySide.QtGui import QApplication, QDesktopServices, QImage, QPainter
+from PySide.QtCore import QByteArray, QUrl, QTimer, QEventLoop, QIODevice, QObject
+from PySide.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
+from PySide.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
+"""
 import common
 import settings
-import xpath
 
 """
 TODO
-right click find xpath:
-    http://doc.qt.nokia.com/4.6/webkit-domtraversal.html
-    http://doc.qt.nokia.com/4.6/webkit-simpleselector.html
 textbox for jquery input
     http://www.rkblog.rk.edu.pl/w/p/webkit-pyqt-rendering-web-pages/
 threaded multiple URLs
@@ -30,20 +37,12 @@ add progress bar for loading page
 implement watir API?
 """
 
-def qstring_to_unicode(qstr):
-    """Convert QString to python unicode string
-    """
-    if isinstance(qstr, unicode):
-        return qstr
-    else:
-        return common.to_unicode(qstr.toUtf8().data(), 'utf-8')
-
 
 class NetworkAccessManager(QNetworkAccessManager):
     """Subclass QNetworkAccessManager for finer control network operations
     """
 
-    def __init__(self, proxy, allowed_media, allowed_regex, cache_size=100, cache_dir='.webkit_cache'):
+    def __init__(self, proxy, forbidden_extensions, allowed_regex, cache_size=100, cache_dir='.webkit_cache'):
         """
         See WebkitBrowser for details of arguments
     
@@ -51,20 +50,16 @@ class NetworkAccessManager(QNetworkAccessManager):
             the maximum size of the webkit cache (MB)
         """
         QNetworkAccessManager.__init__(self)
+        # and proxy
+        self.setProxy(proxy)
         # initialize the manager cache
-        #QDesktopServices.storageLocation(QDesktopServices.CacheLocation)
+        QDesktopServices.storageLocation(QDesktopServices.CacheLocation)
         cache = QNetworkDiskCache()
         cache.setCacheDirectory(cache_dir)
         cache.setMaximumCacheSize(cache_size * 1024 * 1024) # need to convert cache value to bytes
         self.setCache(cache)
         self.allowed_regex = allowed_regex
-        # allowed content extensions
-        self.banned_extensions = common.MEDIA_EXTENSIONS
-        for ext in allowed_media:
-            if ext in self.banned_extensions:
-                self.banned_extensions.remove(ext)
-        # and proxy
-        self.setProxy(proxy)
+        self.forbidden_extensions = forbidden_extensions
 
 
     def setProxy(self, proxy):
@@ -92,16 +87,16 @@ class NetworkAccessManager(QNetworkAccessManager):
             if self.is_forbidden(request):
                 # deny GET request for banned media type by setting dummy URL
                 # XXX abort properly
-                request.setUrl(QUrl(QString('forbidden://localhost/')))
+                request.setUrl(QUrl('forbidden://localhost/'))
             else:
-                common.logger.debug(common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8'))
+                common.logger.debug(common.to_unicode(request.url().toString()).encode('utf-8'))
         
         #print request.url().toString(), operation
         request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.PreferCache)
         reply = QNetworkAccessManager.createRequest(self, operation, request, data)
         reply.error.connect(self.catch_error)
         
-        #add Base-Url header, then we can get it from QWebView
+        # add Base-Url header, then we can get it from QWebView
         if isinstance(request.originatingObject(), QWebFrame):
             try:
                 reply.setRawHeader(QByteArray('Base-Url'), QByteArray('').append(request.originatingObject().page().mainFrame().baseUrl().toString()))
@@ -109,14 +104,14 @@ class NetworkAccessManager(QNetworkAccessManager):
                 common.logger.debug(e)
         return reply
 
-
     def is_forbidden(self, request):
         """Returns whether this request is permitted by checking URL extension and regex
         XXX head request for mime?
         """
         forbidden = False
-        url = common.to_unicode(request.url().toString().toUtf8().data()).encode('utf-8')
-        if common.get_extension(url) in self.banned_extensions:
+        url = common.to_unicode(request.url().toString()).encode('utf-8')
+        #url = common.to_unicode(request.url().toString()).encode('utf-8')
+        if self.forbidden_extensions and common.get_extension(url) in self.forbidden_extensions:
             forbidden = True
         elif re.match(self.allowed_regex, url) is None:
             forbidden = True
@@ -244,6 +239,7 @@ class WebPage(QWebPage):
     """
 
     def __init__(self, user_agent, confirm=True):
+        #super(WebPage, self).__init__()
         QWebPage.__init__(self)
         self.user_agent = user_agent
         self.confirm = confirm
@@ -290,21 +286,23 @@ class WebkitBrowser(QWebView):
         the user-agent when downloading content
     proxy:
         a QNetworkProxy to download through
-    allowed_media:
-        the media extensions to allow
+    load_images:
+        whether to download images
+    forbidden_extensions
+        a list of extensions to prevent downloading
     allowed_regex:
-        a regular expressions of URLS to allow
+        a regular expressions of URLs to allow
     timeout:
         the maximum amount of seconds to wait for a request
     delay:
         the minimum amount of seconds to wait between requests
     """
 
-    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5, enable_plugins=True):
+    def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, load_images=False, forbidden_extensions=None, allowed_regex='.*?', timeout=20, delay=5, enable_plugins=False):
         self.app = QApplication(sys.argv) # must instantiate first
         QWebView.__init__(self)
-        allowed_media = allowed_media or ['css', 'js']
-        manager = NetworkAccessManager(proxy, allowed_media, allowed_regex)
+        #super(WebkitBrowser, self).__init__()
+        manager = NetworkAccessManager(proxy, forbidden_extensions, allowed_regex)
         manager.finished.connect(self.finished)
         webpage = WebPage(user_agent or random.choice(settings.user_agents))
         webpage.setNetworkAccessManager(manager)
@@ -312,12 +310,13 @@ class WebkitBrowser(QWebView):
         self.setHtml('<html><head></head><body>No content loaded</body></html>', QUrl('http://localhost'))
         self.timeout = timeout
         self.delay = delay
-        #self.cache = pdict.PersistentDict(cache_file or settings.cache_file) # cache to store webpages
         self.base_url = base_url
         self.jquery_lib = None
         #enable flash plugin etc.
         self.settings().setAttribute(QWebSettings.PluginsEnabled, enable_plugins)
-        #XXXQTimer.singleShot(0, self.run) # start crawling when all events processed
+        self.settings().setAttribute(QWebSettings.JavaEnabled, enable_plugins)
+        self.settings().setAttribute(QWebSettings.AutoLoadImages, load_images)
+        self.settings().setAttribute(QWebSettings.DeveloperExtrasEnabled, True)
         if gui: self.show() 
    
     
@@ -345,7 +344,7 @@ class WebkitBrowser(QWebView):
         url:
             the URL to load
         html: 
-            optional HTML to set
+            optional HTML to set instead of downloading
         script:
             some javasript to exexute that will change the loaded page (eg form submission)
         num_retries:
@@ -362,7 +361,7 @@ class WebkitBrowser(QWebView):
         self.loadFinished.connect(loop.quit)
         if url:
             if html:
-                self.setHtml(QString(html), QUrl(url))
+                self.setHtml(html, QUrl(url))
             else: 
                 self.load(QUrl(url))
         elif script:
@@ -404,7 +403,7 @@ class WebkitBrowser(QWebView):
         """Shortcut to execute javascript on current document and return result
         """
         self.app.processEvents()
-        return qstring_to_unicode(self.page().mainFrame().evaluateJavaScript(script).toString())
+        return self.page().mainFrame().evaluateJavaScript(script).toString()
 
     def inject_jquery(self):
         """Inject jquery library into this webpage for easier manipulation
@@ -445,7 +444,7 @@ class WebkitBrowser(QWebView):
                 e.setPlainText(value)
         
     def find(self, pattern):
-        """Returns whether element matching xpath pattern exists
+        """Returns whether element matching css pattern exists
         """
         return self.page().mainFrame().findAllElements(pattern).toList()
 

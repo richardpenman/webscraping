@@ -236,6 +236,11 @@ class NetworkReply(QNetworkReply):
 
 class WebPage(QWebPage):
     """Override QWebPage to set User-Agent and JavaScript messages
+
+    user_agent: 
+        the User Agent to submit
+    confirm:
+        default response to confirm dialog boxes
     """
 
     def __init__(self, user_agent, confirm=True):
@@ -298,10 +303,10 @@ class WebkitBrowser(QWebView):
     def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, allowed_media=None, allowed_regex='.*?', timeout=20, delay=5, enable_plugins=True):
         self.app = QApplication(sys.argv) # must instantiate first
         QWebView.__init__(self)
-        webpage = WebPage(user_agent or random.choice(settings.user_agents))
         allowed_media = allowed_media or ['css', 'js']
         manager = NetworkAccessManager(proxy, allowed_media, allowed_regex)
         manager.finished.connect(self.finished)
+        webpage = WebPage(user_agent or random.choice(settings.user_agents))
         webpage.setNetworkAccessManager(manager)
         self.setPage(webpage)
         self.setHtml('<html><head></head><body>No content loaded</body></html>', QUrl('http://localhost'))
@@ -314,7 +319,12 @@ class WebkitBrowser(QWebView):
         self.settings().setAttribute(QWebSettings.PluginsEnabled, enable_plugins)
         #XXXQTimer.singleShot(0, self.run) # start crawling when all events processed
         if gui: self.show() 
+   
     
+    def __del__(self):
+        # not sure why, but to avoid seg fault need to release the QWebPage manually
+        self.setPage(None)
+
     def set_proxy(self, proxy):
         self.page().networkAccessManager().setProxy(proxy)
 
@@ -329,9 +339,13 @@ class WebkitBrowser(QWebView):
         return unicode(self.page().mainFrame().toHtml())
 
 
-    def get(self, url=None, script=None, num_retries=1, jquery=False):
+    def get(self, url=None, html=None, script=None, num_retries=1, jquery=False):
         """Load given url in webkit and return html when loaded
 
+        url:
+            the URL to load
+        html: 
+            optional HTML to set
         script:
             some javasript to exexute that will change the loaded page (eg form submission)
         num_retries:
@@ -347,7 +361,10 @@ class WebkitBrowser(QWebView):
         timer.timeout.connect(loop.quit)
         self.loadFinished.connect(loop.quit)
         if url:
-            self.load(QUrl(url))
+            if html:
+                self.setHtml(QString(html), QUrl(url))
+            else: 
+                self.load(QUrl(url))
         elif script:
             self.js(script)
         timer.start(self.timeout * 1000)
@@ -461,6 +478,7 @@ class WebkitBrowser(QWebView):
         """Take screenshot of current webpage and save results
         """
         frame = self.page().mainFrame()
+        self.page().setViewportSize(frame.contentsSize())
         image = QImage(self.page().viewportSize(), QImage.Format_ARGB32)
         painter = QPainter(image)
         frame.render(painter)

@@ -542,7 +542,8 @@ class Download:
         else:
             formatted_ts = '2' # will return most recent archive
         html = self.get('http://wayback.archive.org/web/%s/%s' % (formatted_ts, url), **kwargs)
-        if not html:
+        if not html and timestamp is None:
+            # not cached, so get live version
             html = self.get('http://liveweb.archive.org/' + url)
 
         if html:

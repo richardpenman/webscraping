@@ -616,7 +616,7 @@ class Download:
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, use_queue=False, max_queue=1000, **kwargs):
     """Download these urls in parallel
 
     url:
@@ -636,7 +636,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         Deprecated - will be removed in later version
     wait_finish:
         whether to wait until all download threads have finished before returning
-    reuse_queue:
+    use_queue:
         Whether to continue the queue from the previous run.
     max_queue:
         The maximum number of queued URLs to keep in memory.
@@ -718,7 +718,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
 
     
     queue = pdict.Queue(settings.queue_file)
-    if reuse_queue or '--use-queue' in sys.argv:
+    if use_queue or '--use-queue' in sys.argv:
         # command line flag to enable queue
         queued_urls = queue.pull(limit=max_queue)
     else:

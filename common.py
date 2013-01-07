@@ -262,7 +262,7 @@ def normalize(s, encoding=settings.default_encoding):
     return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
 
 
-def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNORECASE):
+def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNORECASE, default=''):
     """Helper method to extract content from regular expression
     
     >>> regex_get('<div><span>Phone: 029&nbsp;01054609</span><span></span></div>', r'<span>Phone:([^<>]+)')
@@ -278,6 +278,7 @@ def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNO
             return normalize(m.groups()[index]) if normalized else m.groups()[index]
         else:
             return [normalize(item) if normalized else item for item in m.groups()]
+    return default
 
 def safe(s):
     """Return characters in string that are safe for URLs

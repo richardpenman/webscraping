@@ -244,36 +244,6 @@ class PersistentDict:
                 self[key] = db[key]
 
 
-    def shrink(self):
-        """Shrink the cache by writing values to disk
-        """
-        if not self.fscache:
-            print 'fscache disabled'
-            return
-
-        limit = 998 # SQLITE_MAX_VARIABLE_NUMBER = 999
-        num_updates = 0
-        
-        #num_outstanding = c.execute("SELECT count(*) from config WHERE length(value) > 0;").fetchone()[0]
-        while True:
-            keys = []
-            for record in self._conn.execute("SELECT key, value from config WHERE length(value) > 0 LIMIT ?;", (limit, )):
-                num_updates += 1
-                key, value = record
-                self.fscache[key] = value
-                keys.append(key)
-            print num_updates
-            if keys:
-                self._conn.execute("UPDATE config SET value=? WHERE key IN (%s)" % ','.join('?' * len(keys)), [None] + keys)
-                #c.executemany("UPDATE config SET value=? WHERE key=?", [(None, key) for key in keys])
-            else:
-                break
-        if num_updates > 0:
-            # reduce size of database after values removed
-            self._conn.execute('VACUUM')
-        return num_updates
-
-
 
 class Queue:
     """Stores queue of outstanding URL's on disk
@@ -314,32 +284,30 @@ class Queue:
         return row[0]
 
 
+    def push(self, key_map):
+        """Add these keys to the queue
+        Will not insert if key already exists.
+
+        key_map:
+            a dict of key to priority
+        """
+        c = self._conn.cursor()
+        c.execute("BEGIN TRANSACTION")
+        c.executemany("INSERT OR IGNORE INTO queue (key, priority, status) VALUES(?, ?, ?);", [(key, priority, False) for key, priority in key_map])
+        c.execute("END TRANSACTION")
+
+
     def pull(self, limit=DEFAULT_LIMIT):
         """Get queued keys up to limit
         """
         c = self._conn.cursor()
         rows = c.execute("SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?;", (False, limit)).fetchall()
         keys = [row[0] for row in rows]
+        # set status to True
         c.execute("BEGIN TRANSACTION")
         c.executemany("UPDATE queue SET status=? WHERE key=?;", [(True, key) for key in keys])
         c.execute("END TRANSACTION")
         return keys
-
-
-    def push(self, keys, priorities=None, default=0):
-        """Add these keys to the queue.
-        Will not insert if key already exists.
-
-        priorities:
-            a map of the priority for each key
-        default:
-            used if key is not in priorities
-        """
-        priorities = priorities or {}
-        c = self._conn.cursor()
-        c.execute("BEGIN TRANSACTION")
-        c.executemany("INSERT OR IGNORE INTO queue (key, priority, status) VALUES(?, ?, ?);", [(key, priorities.get(key, default), False) for key in keys])
-        c.execute("END TRANSACTION")
 
 
     def clear(self, keys=None):
@@ -358,7 +326,10 @@ class Queue:
 
 
 class FSCache:
-    """Cache files in the file system
+    """
+    Dictionary interface that stores cached 
+    values in the file system rather than in memory.
+    The file path is formed from an md5 hash of the key.
 
     folder:
         the root level folder for the cache
@@ -462,7 +433,6 @@ if __name__ == '__main__':
     parser.add_option('-k', '--key', dest='key', help='The key to use')
     parser.add_option('-v', '--value', dest='value', help='The value to store')
     parser.add_option('-b', '--browser', action='store_true', dest='browser', default=False, help='View content of this key in a web browser')
-    parser.add_option('-s', '--shrink', action='store_true', dest='shrink', default=False, help='Shrink the cache by saving to disk')
     parser.add_option('-c', '--clear', action='store_true', dest='clear', default=False, help='Clear all data for this cache')
     options, args = parser.parse_args()
     if not args:
@@ -487,9 +457,6 @@ if __name__ == '__main__':
             parser.error('Must specify the key')
     elif options.key:
         print cache[options.key]
-    elif options.shrink:
-        cache.shrink()
-        print 'shrunk'
     elif options.clear:
         if raw_input('Really? Clear the cache? (y/n) ') == 'y':
             cache.clear()

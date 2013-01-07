@@ -616,7 +616,7 @@ class Download:
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=100, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
     """Download these urls in parallel
 
     url:

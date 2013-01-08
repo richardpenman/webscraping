@@ -651,7 +651,6 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         """Thread for downloading webpages
         """
         processing = collections.deque() # to track whether are still downloading
-        downloaded = set() # the URL's that have been downloaded
         discovered = {} # the URL's that have been discovered
         queue_size = 0 # the number of URL's still in the queue
 
@@ -662,7 +661,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
             D = Download(**kwargs)
             queue = pdict.Queue(settings.queue_file)
 
-            while seed_urls or DownloadThread.processing:
+            while seed_urls or DownloadThread.processing or DownloadThread.queue_size > 0:
                 # keep track that are processing url
                 DownloadThread.processing.append(1) 
                 try:
@@ -675,7 +674,6 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                     time.sleep(SLEEP_TIME)
 
                 else:
-                    DownloadThread.downloaded.add(url)
                     try:
                         # download this url
                         html = dl(D, url, **kwargs) if dl else D.get(url, **kwargs)
@@ -701,10 +699,11 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                                         if lock.acquire(False):
                                             # no other thread is downloading
                                             common.logger.debug('Loading from queue: %d' % len(seed_urls))
-                                            discovered = [DownloadThread.discovered.popitem() for _ in range(len(DownloadThread.discovered))]
+                                            discovered = []
+                                            while DownloadThread.discovered:
+                                                discovered.append(DownloadThread.discovered.popitem())
                                             queue.push(discovered)
                                             DownloadThread.queue_size = len(queue)
-                                            print 'queue size', DownloadThread.queue_size
                                             # get next batch of URLs from cache
                                             for queued_url in queue.pull(limit=max_queue):
                                                 seed_urls.append(queued_url)
@@ -712,7 +711,6 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                     finally:
                         # have finished processing
                         # make sure this is called even on exception to avoid eternal loop
-                        DownloadThread.downloaded.discard(url)
                         DownloadThread.processing.pop()
                     # update the crawler state
                     # no download or error so must have read from cache

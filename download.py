@@ -694,18 +694,21 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                                     if not isinstance(cb_urls, dict):
                                         cb_urls = dict((cb_url, 1) for cb_url in cb_urls)
                                     DownloadThread.discovered.update(cb_urls)
-                                if len(seed_urls) < max_queue / 4 and DownloadThread.queue_size > 0:
-                                    # few seed urls left and outstanding queue
-                                    if lock.acquire(False):
-                                        # no other thread is downloading
-                                        common.logger.debug('Loading from queue: %d' % len(seed_urls))
-                                        discovered = [DownloadThread.discovered.popitem() for _ in range(len(DownloadThread.discovered))]
-                                        queue.push(discovered)
-                                        DownloadThread.queue_size = len(queue)
-                                        # get next batch of URLs from cache
-                                        for queued_url in queue.pull(limit=max_queue):
-                                            seed_urls.append(queued_url)
-                                        lock.release()
+                                if len(seed_urls) < max_queue / 4:
+                                    # need to request more queue
+                                    if DownloadThread.discovered or DownloadThread.queue_size > 0:
+                                        # there are outstanding in the queue
+                                        if lock.acquire(False):
+                                            # no other thread is downloading
+                                            common.logger.debug('Loading from queue: %d' % len(seed_urls))
+                                            discovered = [DownloadThread.discovered.popitem() for _ in range(len(DownloadThread.discovered))]
+                                            queue.push(discovered)
+                                            DownloadThread.queue_size = len(queue)
+                                            print 'queue size', DownloadThread.queue_size
+                                            # get next batch of URLs from cache
+                                            for queued_url in queue.pull(limit=max_queue):
+                                                seed_urls.append(queued_url)
+                                            lock.release()
                     finally:
                         # have finished processing
                         # make sure this is called even on exception to avoid eternal loop

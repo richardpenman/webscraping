@@ -417,34 +417,15 @@ class Doc:
         #    index = self.html.rfind('<', start=0, end=index)
 
 
-prev_doc = None
-def _get_doc(html, remove):
-    """Return previous doc object if same HTML, else create new one
-
-    >>> html = '<div>1</div><div>2</div>'
-    >>> get(html, '/div', None)
-    '1'
-    >>> search(html, '//div', None)
-    ['1', '2']
-    >>> _get_doc(html, None).num_searches
-    2
-    """
-    global prev_doc
-    if prev_doc == html and prev_doc.remove == remove:
-        pass # can reuse current doc
-    else:
-        prev_doc = Doc(html, remove)
-    return prev_doc
-    
 def get(html, xpath, remove=('br', 'hr')):
     """Return first element from XPath search of HTML
     """
-    return _get_doc(html, remove).get(xpath)
+    return Doc(html, remove).get(xpath)
 
 def search(html, xpath, remove=('br', 'hr')):
     """Return all elements from XPath search of HTML
     """
-    return _get_doc(html, remove).search(xpath)
+    return Doc(html, remove).search(xpath)
 
 
 

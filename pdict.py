@@ -261,6 +261,7 @@ class Queue:
     3
     >>> os.remove(filename)
     """
+    size = None
 
     def __init__(self, filename, timeout=DEFAULT_TIMEOUT, isolation_level=None):
         self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
@@ -280,8 +281,10 @@ class Queue:
     def __len__(self):
         """Get number of records queued
         """
-        row = self._conn.execute("SELECT count(*) FROM queue WHERE status=?;", (False,)).fetchone()
-        return row[0]
+        if Queue.size is None:
+            row = self._conn.execute("SELECT count(*) FROM queue WHERE status=?;", (False,)).fetchone()
+            Queue.size = row[0]
+        return Queue.size
 
 
     def push(self, key_map):
@@ -295,6 +298,7 @@ class Queue:
         c.execute("BEGIN TRANSACTION")
         c.executemany("INSERT OR IGNORE INTO queue (key, priority, status) VALUES(?, ?, ?);", [(key, priority, False) for key, priority in key_map])
         c.execute("END TRANSACTION")
+        Queue.size = None
 
 
     def pull(self, limit=DEFAULT_LIMIT):
@@ -307,6 +311,7 @@ class Queue:
         c.execute("BEGIN TRANSACTION")
         c.executemany("UPDATE queue SET status=? WHERE key=?;", [(True, key) for key in keys])
         c.execute("END TRANSACTION")
+        Queue.size = None
         return keys
 
 
@@ -321,6 +326,7 @@ class Queue:
             c.execute("END TRANSACTION")
         else:
             c.execute("DELETE FROM queue;")
+        Queue.size = None
         return c.rowcount
 
 

@@ -349,7 +349,10 @@ class Download:
             if hasattr(e, 'code'):
                 self.response_code = e.code
             if hasattr(e, 'read'):
-                self.error_content = e.read()
+                try:
+                    self.error_content = e.read()
+                except Exception, e:
+                    self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
             common.logger.info('Download error: %s %s' % (url, e))
             content, self.final_url = None, url

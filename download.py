@@ -620,7 +620,7 @@ class Download:
 
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, use_queue=False, max_queue=1000, **kwargs):
+def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, use_queue=False, save_state=True, max_queue=1000, **kwargs):
     """Download these urls in parallel
 
     url:
@@ -642,6 +642,8 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         whether to wait until all download threads have finished before returning
     use_queue:
         Whether to continue the queue from the previous run.
+    save_state:
+        Whether to save state of crawl to disk.
     max_queue:
         The maximum number of queued URLs to keep in memory.
         The rest will be in the cache.
@@ -719,7 +721,8 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                     # update the crawler state
                     # no download or error so must have read from cache
                     num_caches = 0 if D.num_downloads or D.num_errors else 1
-                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=len(queue))
+                    if save_state:
+                        state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=len(queue))
 
     
     queue = pdict.Queue(settings.queue_file)
@@ -744,9 +747,11 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         common.logger.debug('Start new crawl')
 
     # initiate the state file with the number of URL's already in the queue
-    state = State()
-    queue_size = len(queue) or len(seed_urls)
-    state.update(queue_size=queue_size)
+    if save_state:
+        state = State()
+    queue_size = len(queue) or len(seed_urls)    
+    if save_state:
+        state.update(queue_size=queue_size)
 
     # start the download threads
     threads = [DownloadThread() for i in range(num_threads)]
@@ -761,7 +766,8 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                 threads.remove(thread)
         time.sleep(SLEEP_TIME)
     # save the final state after threads finish
-    state.save()
+    if save_state:
+        state.save()
 
 
 

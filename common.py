@@ -474,19 +474,20 @@ class UnicodeWriter:
     def _remove_invalid_rows(self, file, **argv):
         """Remove invalid csv rows e.g. newline inside string
         """
-        file_obj = open(file)
-        tmp_file = file + '.tmp'
-        tmp_file_obj = open(tmp_file, 'w')
-        writer = csv.writer(tmp_file_obj, **argv)
-        try:
-            for row in csv.reader(file_obj):
-                writer.writerow(row)
-        except Exception, e:
-            pass
-        file_obj.close()
-        tmp_file_obj.close()
-        os.remove(file)
-        os.rename(tmp_file, file)
+        if os.path.exists(file):
+            file_obj = open(file)
+            tmp_file = file + '.tmp'
+            tmp_file_obj = open(tmp_file, 'w')
+            writer = csv.writer(tmp_file_obj, **argv)
+            try:
+                for row in csv.reader(file_obj):
+                    writer.writerow(row)
+            except Exception, e:
+                pass
+            file_obj.close()
+            tmp_file_obj.close()
+            os.remove(file)
+            os.rename(tmp_file, file)
 
     def _cell(self, s):
         """Normalize the content for this cell

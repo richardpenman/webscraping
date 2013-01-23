@@ -1,9 +1,9 @@
 __doc__ = """
 This module implements a subset of the XPath standard:
- - tags
- - indices
- - attributes
- - descendants
+- tags
+- indices
+- attributes
+- descendants
 
 This was created because I needed a pure Python XPath parser.
 
@@ -19,16 +19,11 @@ However this module tries to navigate the HTML structure directly without normal
 import re
 import sys
 import urllib2
-from urlparse import urljoin, urlsplit
+import urlparse
 from optparse import OptionParser
-try:
-    from lxml import html as lxmlhtml
-except ImportError:
-    lxmlhtml = None
 import adt
 import common
 import settings
-
 
 
 class Doc:
@@ -79,14 +74,8 @@ class Doc:
 
 
     def __init__(self, html, remove=None):
-        self.orig_html = html
-        self.html = self._clean(remove)
-        self.splits = adt.HashDict()
+        self.html = self._clean(html, remove)
         self.num_searches = 0
-
-    def __eq__(self, html):
-        return self.orig_html is html
-
 
     def get(self, xpath):
         """Return the first result from this XPath selection
@@ -157,11 +146,11 @@ class Doc:
 
 
 
-    def _clean(self, remove):
+    def _clean(self, html, remove):
         """Remove specified unhelpful tags and comments
         """
         self.remove = remove
-        html = re.compile('<!--.*?-->', re.DOTALL).sub('', self.orig_html) # remove comments
+        html = re.compile('<!--.*?-->', re.DOTALL).sub('', html) # remove comments
         if remove:
             # XXX combine tag list into single regex, if can match same at start and end
             for tag in remove:
@@ -374,26 +363,22 @@ class Doc:
         >>> # test efficiency of splits
         >>> a = [doc._split_tag('<div>abc<div>def</div>abc</span>') for i in range(10000)]
         """
-        if html in self.splits:
-            i, tag = self.splits[html]
-        else:
-            i = None
-            tag = self._get_tag(html)
-            depth = 0 # how far nested
-            for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
-                if html[match.start() + 1] == '/':
-                    depth -= 1 # found closing tag
-                elif tag in common.EMPTY_TAGS:
-                    pass # this tag type does not close
-                elif html[match.end() - 2] == '/':
-                    pass # tag starts and ends (eg <br />)
-                else:
-                    depth += 1 # found opening tag
-                if depth == 0:
-                    # found top level match
-                    i = match.end()
-                    break
-            self.splits[html] = i, tag
+        i = None
+        tag = self._get_tag(html)
+        depth = 0 # how far nested
+        for match in re.compile('</?%s.*?>' % tag, re.DOTALL | re.IGNORECASE).finditer(html):
+            if html[match.start() + 1] == '/':
+                depth -= 1 # found closing tag
+            elif tag in common.EMPTY_TAGS:
+                pass # this tag type does not close
+            elif html[match.end() - 2] == '/':
+                pass # tag starts and ends (eg <br />)
+            else:
+                depth += 1 # found opening tag
+            if depth == 0:
+                # found top level match
+                i = match.end()
+                break
         if i is None:
             # all html is within this tag
             return html + '</%s>' % tag, ''
@@ -417,15 +402,70 @@ class Doc:
         #    index = self.html.rfind('<', start=0, end=index)
 
 
+try:
+    from lxml import html as lxmlhtml
+except ImportError:
+    LxmlDoc = None
+else:
+    # is lxml is supported create wrapper
+    class LxmlDoc:
+        def __init__(self, html, **kwargs):
+            self.doc = lxmlhtml.fromstring(html)
+
+        def __eq__(self, html):
+            return self.orig_html is html
+
+        def get(self, path):
+            es = self.doc.xpath(path)
+            if es:
+                return self.tostring(es[0])
+            return ''
+
+        def search(self, path):
+            return [self.tostring(e) for e in self.doc.xpath(path)]
+
+        def tostring(self, node):
+            try:
+                return ''.join(filter(None, 
+                    [node.text] + [lxmlhtml.tostring(e) for e in node] + [node.tail] 
+                ))
+            except AttributeError:
+                return node
+
+
+
+prev_doc = {}
+def _get_doc(html, remove):
+    """Return previous doc object if same HTML, else create new one
+
+    >>> html = '<div>1</div><div>2</div>'
+    >>> get(html, '/div', None)
+    '1'
+    >>> search(html, '//div', None)
+    ['1', '2']
+    >>> _get_doc(html, None).num_searches
+    2
+    """
+    global prev_doc
+    key = html, remove
+    doc = prev_doc.get(key)
+    if doc:
+        pass # can reuse current doc
+    else:
+        doc = Doc(html, remove=remove)
+        prev_doc = {key: doc}
+    return doc
+
+
 def get(html, xpath, remove=('br', 'hr')):
     """Return first element from XPath search of HTML
     """
-    return Doc(html, remove).get(xpath)
+    return _get_doc(html, remove=remove).get(xpath)
 
 def search(html, xpath, remove=('br', 'hr')):
     """Return all elements from XPath search of HTML
     """
-    return Doc(html, remove).search(xpath)
+    return _get_doc(html, remove=remove).search(xpath)
 
 
 
@@ -443,11 +483,11 @@ def get_links(html, url=None, local=True, external=True):
         whether to include linkes from other domains
     """
     def normalize_link(link):
-        if urlsplit(link).scheme in ('http', 'https', ''):
+        if urlparse.urlsplit(link).scheme in ('http', 'https', ''):
             if '#' in link:
                 link = link[:link.index('#')]
             if url:
-                link = urljoin(url, link)
+                link = urlparse.urljoin(url, link)
                 if not local and common.same_domain(url, link):
                     # local links not included
                     link = None

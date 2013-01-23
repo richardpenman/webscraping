@@ -250,15 +250,17 @@ class Queue:
 
     >>> filename = 'queue.db'
     >>> queue = Queue(filename)
-    >>> keys = ['a', 'b', 'c']
-    >>> queue.push(keys=keys) # add new keys
+    >>> keys = [('a', 1), ('b', 1), ('c', 1)]
+    >>> queue.push(keys) # add new keys
     >>> len(queue)
     3
-    >>> queue.push(keys=keys) # trying adding duplicate keys
+    >>> queue.push(keys) # trying adding duplicate keys
     >>> len(queue)
     3
+    >>> queue.clear(keys=['a'])
+    1
     >>> queue.clear() # remove all queue
-    3
+    2
     >>> os.remove(filename)
     """
     size = None
@@ -276,15 +278,20 @@ class Queue:
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS priorities ON queue (priority);")
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON queue (key);")
+        if Queue.size is None:
+            self._update_size()
 
 
     def __len__(self):
         """Get number of records queued
         """
-        if Queue.size is None:
-            row = self._conn.execute("SELECT count(*) FROM queue WHERE status=?;", (False,)).fetchone()
-            Queue.size = row[0]
         return Queue.size
+            
+    def _update_size(self):
+        """Calculate the number of records queued
+        """
+        row = self._conn.execute("SELECT count(*) FROM queue WHERE status=?;", (False,)).fetchone()
+        Queue.size = row[0]
 
 
     def push(self, key_map):
@@ -292,18 +299,20 @@ class Queue:
         Will not insert if key already exists.
 
         key_map:
-            a dict of key to priority
+            a list of (key, priority) tuples
         """
-        c = self._conn.cursor()
-        c.execute("BEGIN TRANSACTION")
-        c.executemany("INSERT OR IGNORE INTO queue (key, priority, status) VALUES(?, ?, ?);", [(key, priority, False) for key, priority in key_map])
-        c.execute("END TRANSACTION")
-        Queue.size = None
+        if key_map:
+            c = self._conn.cursor()
+            c.execute("BEGIN TRANSACTION")
+            c.executemany("INSERT OR IGNORE INTO queue (key, priority, status) VALUES(?, ?, ?);", [(key, priority, False) for key, priority in key_map])
+            c.execute("END TRANSACTION")
+            self._update_size()
 
 
     def pull(self, limit=DEFAULT_LIMIT):
         """Get queued keys up to limit
         """
+        # XXX how to do this in a single transaction, and remove key index
         c = self._conn.cursor()
         rows = c.execute("SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?;", (False, limit)).fetchall()
         keys = [row[0] for row in rows]
@@ -311,23 +320,27 @@ class Queue:
         c.execute("BEGIN TRANSACTION")
         c.executemany("UPDATE queue SET status=? WHERE key=?;", [(True, key) for key in keys])
         c.execute("END TRANSACTION")
-        Queue.size = None
+        Queue.size -= len(keys)
         return keys
 
 
     def clear(self, keys=None):
         """Remove keys from queue.
         If keys is None remove all.
+
+        Returns the number of keys removed
         """
+        prev_size = len(self)
         c = self._conn.cursor()
         if keys:
             c.execute("BEGIN TRANSACTION")
             c.executemany("DELETE FROM queue WHERE key=?;", [(key,) for key in keys])
             c.execute("END TRANSACTION")
+            self._update_size()
         else:
             c.execute("DELETE FROM queue;")
-        Queue.size = None
-        return c.rowcount
+            Queue.size = 0
+        return prev_size - len(self)
 
 
 

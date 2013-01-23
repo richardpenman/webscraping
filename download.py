@@ -116,12 +116,14 @@ class Download:
         what to return when no content can be downloaded
     pattern:
         a regular expression that the downloaded HTML has to match to be considered a valid download
+    acceptable_errors:
+        a list contains all acceptable HTTP codes, don't try downloading for them e.g. no need to retry for 404 error
     """
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=1,
-            force_html=False, force_ascii=False, max_size=None, default='', pattern=None):
+            force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
@@ -150,7 +152,8 @@ class Download:
             force_ascii = force_ascii,
             max_size = max_size,
             default = default,
-            pattern = pattern
+            pattern = pattern,
+            acceptable_errors = acceptable_errors
         )
         self.last_load_time = self.last_mtime = time.time()
         self.num_downloads = self.num_errors = 0
@@ -349,7 +352,7 @@ class Download:
                 self.response_headers = dict(response.headers)
         except Exception, e:
             if hasattr(e, 'code'):
-                self.response_code = e.code
+                self.response_code = str(e.code)
             if hasattr(e, 'read'):
                 try:
                     self.error_content = e.read()
@@ -357,7 +360,10 @@ class Download:
                     self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
             common.logger.info('Download error: %s %s' % (url, e))
-            content, self.final_url = None, url
+            if not self.settings.acceptable_errors or self.response_code not in self.settings.acceptable_errors:
+                content, self.final_url = None, url
+            else:
+                content, self.final_url = self.response_code, url
         return content
 
 

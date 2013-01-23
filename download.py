@@ -363,7 +363,7 @@ class Download:
             if not self.settings.acceptable_errors or self.response_code not in self.settings.acceptable_errors:
                 content, self.final_url = None, url
             else:
-                content, self.final_url = self.response_code, url
+                content, self.final_url = self.settings.default, url
         return content
 
 

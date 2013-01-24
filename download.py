@@ -835,7 +835,7 @@ class State:
         self.data['duration_secs'] = int(self.last_time - self.start_time)
         self.flush = False
         text = json.dumps(self.data)
-        tmp_file = self.output_file + '.tmp'
+        tmp_file = '%s.%d' % (self.output_file, os.getpid())
         fp = open(tmp_file, 'wb')
         fp.write(text)
         # ensure all content is written to disk

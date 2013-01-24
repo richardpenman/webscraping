@@ -835,12 +835,15 @@ class State:
         # ensure all content is written to disk
         fp.flush()
         fp.close()
-        if os.name == 'nt': 
-            # on wineows can not rename if file exists
-            if os.path.exists(self.output_file):
-                os.remove(self.output_file)
-        # atomic copy to new location so state file is never partially written
-        os.rename(tmp_file, self.output_file)
+        try:
+            if os.name == 'nt': 
+                # on wineows can not rename if file exists
+                if os.path.exists(self.output_file):
+                    os.remove(self.output_file)
+            # atomic copy to new location so state file is never partially written
+            os.rename(tmp_file, self.output_file)
+        except OSError:
+            pass
 
 
 

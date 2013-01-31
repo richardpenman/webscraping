@@ -477,7 +477,7 @@ class UnicodeWriter:
         if os.path.exists(file):
             file_obj = open(file)
             tmp_file = file + '.tmp'
-            tmp_file_obj = open(tmp_file, 'w')
+            tmp_file_obj = open(tmp_file, 'wb')
             writer = csv.writer(tmp_file_obj, **argv)
             try:
                 for row in csv.reader(file_obj):

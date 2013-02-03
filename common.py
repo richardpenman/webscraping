@@ -538,7 +538,6 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     >>> url = 'http://code.google.com/p/webscraping'
     >>> html = opener.open(url).read()
     """
-    # XXX remove temporary files
     if file is None:
         try:
             file = glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default/cookies.sqlite'))[0]
@@ -561,11 +560,14 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     for item in cur.fetchall():
         row = '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (item[0], ftstr[item[0].startswith('.')], item[1], ftstr[item[2]], item[3], item[4], item[5])
         fp.write(row)
-        #print row
     fp.close()
 
     cookie_jar = cookielib.MozillaCookieJar()
     cookie_jar.load(tmp_cookie_file)
+
+    # remove temporary files
+    os.remove(tmp_sqlite_file)
+    os.remove(tmp_cookie_file)
     return cookie_jar
 
 

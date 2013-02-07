@@ -886,6 +886,9 @@ class CrawlerCallback:
         self.robots = robots
         self.crawl_existing = crawl_existing
 
+    def __call__(self, D, url, html):
+        # add scraping code here ...
+       return self.crawl(D, url, html)                                                                                                          
 
     def crawl(self, D, url, html): 
         """Crawl website html and return list of URLs crawled

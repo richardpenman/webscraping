@@ -7,8 +7,10 @@ Multithreading is supported
 import os
 import sys
 import datetime
+import time
 import sqlite3
 import zlib
+import itertools
 import threading
 import md5
 import shutil
@@ -265,7 +267,8 @@ class Queue:
     1
     >>> os.remove(filename)
     """
-    size = None
+    size = None # track the size of the queue
+    counter = itertools.count().next # counter gives a unique status for each pull()
 
     def __init__(self, filename, timeout=DEFAULT_TIMEOUT, isolation_level=None):
         self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
@@ -313,20 +316,11 @@ class Queue:
     def pull(self, limit=DEFAULT_LIMIT):
         """Get queued keys up to limit
         """
-        # XXX how to do this in a single transaction, and remove key index
-        ts = int(datetime.datetime.now().strftime('%s%f'))
-        self._conn.execute('UPDATE queue SET status=? WHERE key in (SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?);', (ts, False, limit))
-        rows = self._conn.execute('SELECT key FROM queue WHERE status=?', (ts,))
+        status = Queue.counter()
+        self._conn.execute('UPDATE queue SET status=? WHERE key in (SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?);', (status, False, limit))
+        rows = self._conn.execute('SELECT key FROM queue WHERE status=?', (status,))
         keys = [row[0] for row in rows]
         Queue.size -= len(keys)
-        """
-        c = self._conn.cursor()
-        rows = c.execute("SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?;", (False, limit)).fetchall()
-        keys = [row[0] for row in rows]
-        # set status to True
-        c.execute("BEGIN TRANSACTION")
-        c.executemany("UPDATE queue SET status=? WHERE key=?;", [(True, key) for key in keys])
-        c.execute("END TRANSACTION")"""
         return keys
 
 

@@ -540,13 +540,20 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     """
     if file is None:
         try:
-            file = glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default/cookies.sqlite'))[0]
+            # add Windows version support
+            file = (glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default/cookies.sqlite')) or \
+                    glob.glob(os.path.expanduser(r'~\AppData\Roaming\Mozilla\Firefox\Profiles\*.default\cookies.sqlite')))[0]
         except IndexError:
             raise WebScrapingError('Can not find filefox cookie file')
 
-    import sqlite3 
+    try:
+        # should use pysqlite2 to read the cookies.sqlite on Windows
+        # otherwise will raise the "sqlite3.DatabaseError: file is encrypted or is not a database" exception
+        from pysqlite2 import dbapi2 as sqlite3
+    except ImportError:
+        import sqlite3 
     # copy firefox cookie file locally to avoid locking problems
-    open(tmp_sqlite_file, 'w').write(open(file).read())
+    open(tmp_sqlite_file, 'wb').write(open(file, 'rb').read())
     con = sqlite3.connect(tmp_sqlite_file)
     cur = con.cursor()
     cur.execute('select host, path, isSecure, expiry, name, value from moz_cookies')
@@ -561,7 +568,9 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
         row = '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (item[0], ftstr[item[0].startswith('.')], item[1], ftstr[item[2]], item[3], item[4], item[5])
         fp.write(row)
     fp.close()
-
+    # close the connection before delete the sqlite file
+    con.close()
+    
     cookie_jar = cookielib.MozillaCookieJar()
     cookie_jar.load(tmp_cookie_file)
 

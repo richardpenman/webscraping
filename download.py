@@ -122,7 +122,7 @@ class Download:
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
-            opener=None, headers=None, data=None, num_retries=0, num_redirects=1,
+            opener=None, headers=None, data=None, num_retries=0, num_redirects=0,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache

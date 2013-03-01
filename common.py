@@ -435,6 +435,8 @@ class UnicodeWriter:
         csv module quoting style to use
     utf8_bom:
         whether need to add the BOM
+    auto_repair:
+        whether need to remove the invalid rows automatically
     
     >>> from StringIO import StringIO
     >>> fp = StringIO()
@@ -445,14 +447,15 @@ class UnicodeWriter:
     >>> fp.read().strip()
     'a,1'
     """
-    def __init__(self, file, encoding=settings.default_encoding, mode='wb', unique=False, unique_by=[], quoting=csv.QUOTE_ALL, utf8_bom=False, **argv):
+    def __init__(self, file, encoding=settings.default_encoding, mode='wb', unique=False, unique_by=[], quoting=csv.QUOTE_ALL, utf8_bom=False, auto_repair=False, **argv):
         self.encoding = encoding
         self.unique = unique
         self.unique_by = unique_by
         if hasattr(file, 'write'):
             self.fp = file
         else:
-            self._remove_invalid_rows(file=file, quoting=quoting, **argv)
+            if auto_repair:
+                self._remove_invalid_rows(file=file, quoting=quoting, **argv)
             if utf8_bom:
                 self.fp = open(file, 'wb')
                 self.fp.write('\xef\xbb\xbf')

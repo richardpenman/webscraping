@@ -498,7 +498,6 @@ class UnicodeWriter:
         if isinstance(s, basestring):
             if isinstance(s, unicode):
                 s = s.encode(self.encoding, 'ignore')
-            #s = unescape(s, self.encoding)
         elif s is None:
             s = ''
         else:
@@ -526,6 +525,7 @@ class UnicodeWriter:
         """Flush output to disk
         """
         self.fp.flush()
+        os.fsync(self.fp.fileno())
         
     def close(self):
         """Close the output file pointer

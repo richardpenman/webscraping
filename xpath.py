@@ -467,7 +467,10 @@ def search(html, xpath, remove=('br', 'hr')):
     """
     return _get_doc(html, remove=remove).search(xpath)
 
-
+def find_children(html, tag, remove=None):
+    """Find children with this tag type
+    """
+    return _get_doc(html, remove=remove)._find_children(html, tag)
 
 js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')
 def get_links(html, url=None, local=True, external=True):

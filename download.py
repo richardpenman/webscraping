@@ -425,7 +425,7 @@ class Download:
                 return {}
             for result in geo_data.get('results', []):
                 for e in result['address_components']:
-                    types, value = e['types'], e['long_name']
+                    types, value, abbrev = e['types'], e['long_name'], e['short_name']
                     if 'street_number' in types:
                         results['number'] = value
                     elif 'route' in types:
@@ -436,12 +436,14 @@ class Download:
                         results['suburb'] = value
                     elif 'administrative_area_level_1' in types:
                         results['state'] = value
+                        results['state_code'] = abbrev
                     elif 'administrative_area_level_2' in types:
                         results['county'] = value
                     elif 'administrative_area_level_3' in types:
                         results['district'] = value
                     elif 'country' in types:
                         results['country'] = value
+                        results['country_code'] = value
                 results['full_address'] = result['formatted_address']
                 m = re.compile(r'"location" : {\s*"lat" : ([\d\-\.]+),\s*"lng" : ([\d\-\.]+)').search(html)
                 if m:

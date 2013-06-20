@@ -260,6 +260,27 @@ class Download:
         return html or settings.default 
 
 
+    def exists(self, url):
+        """Do a HEAD request to check whether webpage exists
+        """
+        key = self.get_key(url, 'head')
+        if self.cache:
+            try:
+                success = self.cache[key]
+            except KeyError:
+                # have not downloaded yet
+                request = urllib2.Request(url)
+                request.get_method = lambda : 'HEAD'
+                try:
+                    response = urllib2.urlopen(request)
+                except:
+                    success = False
+                else:
+                    success = True
+                self.cache[key] = success
+        return success
+
+
     def get_key(self, url, data=None):
         """Create key for caching this request
         """

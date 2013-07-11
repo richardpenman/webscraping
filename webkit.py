@@ -60,6 +60,7 @@ class NetworkAccessManager(QNetworkAccessManager):
         self.setCache(cache)
         self.allowed_regex = allowed_regex
         self.forbidden_extensions = forbidden_extensions
+        #self.sslErrors.connect(sslErrorHandler)
 
 
     def setProxy(self, proxy):
@@ -117,7 +118,6 @@ class NetworkAccessManager(QNetworkAccessManager):
             forbidden = True
         return forbidden
 
-
     def catch_error(self, eid):
         """Interpret the HTTP error ID received
         """
@@ -150,6 +150,10 @@ class NetworkAccessManager(QNetworkAccessManager):
             }
             common.logger.debug('Error %d: %s (%s)' % (eid, errors.get(eid, 'unknown error'), self.sender().url().toString()))
 
+def sslErrorHandler(reply, errors): 
+    print errors
+    reply.ignoreSslErrors() 
+
 
 class NetworkReply(QNetworkReply):
     """Override QNetworkReply so can save the original data
@@ -168,6 +172,7 @@ class NetworkReply(QNetworkReply):
         reply.finished.connect(self.finished)
         reply.uploadProgress.connect(self.uploadProgress)
         reply.downloadProgress.connect(self.downloadProgress)
+        self.ignoreSslErrors()
 
     
     def __getattribute__(self, attr):

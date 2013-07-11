@@ -318,7 +318,7 @@ class Queue:
         """
         status = Queue.counter()
         self._conn.execute('UPDATE queue SET status=? WHERE key in (SELECT key FROM queue WHERE status=? ORDER BY priority DESC LIMIT ?);', (status, False, limit))
-        rows = self._conn.execute('SELECT key FROM queue WHERE status=?', (status,))
+        rows = self._conn.execute('SELECT key FROM queue WHERE status=? LIMIT ?', (status, limit))
         keys = [row[0] for row in rows]
         Queue.size -= len(keys)
         return keys

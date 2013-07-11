@@ -525,7 +525,9 @@ class UnicodeWriter:
         """Flush output to disk
         """
         self.fp.flush()
-        os.fsync(self.fp.fileno())
+        if hasattr(self.fp, 'fileno'):
+            # this is a real file
+            os.fsync(self.fp.fileno())
         
     def close(self):
         """Close the output file pointer

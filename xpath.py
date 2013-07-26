@@ -200,6 +200,7 @@ class Doc:
         >>> doc = Doc('')
         >>> doc._get_attributes('<div id="ID" name="MY NAME" max-width="20" class=abc>content <span class="inner name">SPAN</span></div>')
         {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
+        >>> doc._get_attributes('<td width=200 valign=top class=textelien>')
         """
 
         for i, c in enumerate(html):

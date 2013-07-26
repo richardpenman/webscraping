@@ -425,7 +425,7 @@ class Download:
                     common.logger.debug('Reloaded proxies from updated file.')
 
 
-    def geocode(self, address, delay=5, read_cache=True):
+    def geocode(self, address, delay=5, read_cache=True, num_retries=1):
         """Geocode address using Google's API and return dictionary of useful fields
 
         address:
@@ -436,7 +436,7 @@ class Download:
             whether to load content from cache when exists
         """
         url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
-        html = self.get(url, delay=delay, read_cache=read_cache)
+        html = self.get(url, delay=delay, read_cache=read_cache, num_retries=num_retries)
         results = collections.defaultdict(str)
         if html:
             try:
@@ -479,7 +479,7 @@ class Download:
             # error geocoding - try again later
             common.logger.debug('delete invalid geocode')
             if self.cache:
-                del self.cache[url]
+                self.cache[url] = ''
         return results
 
 
@@ -671,7 +671,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         Deprecated - will be removed in later version
     wait_finish:
         whether to wait until all download threads have finished before returning
-    use_queue:
+    reuse_queue:
         Whether to continue the queue from the previous run.
     max_queue:
         The maximum number of queued URLs to keep in memory.

@@ -263,20 +263,25 @@ class Download:
     def exists(self, url):
         """Do a HEAD request to check whether webpage exists
         """
+        success = False
         key = self.get_key(url, 'head')
-        if self.cache:
-            try:
+        try:
+            if self.cache:
                 success = self.cache[key]
-            except KeyError:
-                # have not downloaded yet
-                request = urllib2.Request(url)
-                request.get_method = lambda : 'HEAD'
-                try:
-                    response = urllib2.urlopen(request)
-                except:
-                    success = False
-                else:
-                    success = True
+            else:
+                raise KeyError('No cache')
+        except KeyError:
+            # have not downloaded yet
+            request = urllib2.Request(url)
+            request.get_method = lambda : 'HEAD'
+            try:
+                response = urllib2.urlopen(request)
+            except:
+                common.logger.info('HEAD check miss: %s' % url)
+            else:
+                success = True
+                common.logger.info('HEAD check hit: %s' % url)
+            if self.cache:
                 self.cache[key] = success
         return success
 

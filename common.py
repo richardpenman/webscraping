@@ -55,9 +55,24 @@ def to_int(s):
 
 def to_float(s):
     """Return float from this string
+
+    >>> to_float('90.45')
+    90.45
+    >>> to_float('')
+    0
+    >>> to_float('90')
+    90.0
+    >>> to_float('..9')
+    0
+    >>> to_float('.9')
+    0.9
     """
     valid = string.digits + '.-'
-    return float(''.join(c for c in s if c in valid) or 0)
+    try:
+        result = float(''.join(c for c in s if c in valid))
+    except ValueError:
+        result = 0
+    return result
 
     
 def to_unicode(obj, encoding=settings.default_encoding):

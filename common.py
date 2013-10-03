@@ -39,7 +39,7 @@ def to_ascii(html):
     """
     return ''.join(c for c in html if ord(c) < 128)
 
-def to_int(s):
+def to_int(s, default=0):
     """Return integer from this string
 
     >>> to_int('90')
@@ -50,28 +50,34 @@ def to_int(s):
     90
     >>> to_int('a')
     0
+    >>> to_int('a', 90)
+    90
     """
-    return int(to_float(s))
+    return int(to_float(s, default))
 
-def to_float(s):
+def to_float(s, default=0.0):
     """Return float from this string
 
     >>> to_float('90.45')
     90.45
     >>> to_float('')
-    0
+    0.0
     >>> to_float('90')
     90.0
     >>> to_float('..9')
-    0
+    0.0
     >>> to_float('.9')
     0.9
+    >>> to_float(None)
+    0.0
     """
-    valid = string.digits + '.-'
-    try:
-        result = float(''.join(c for c in s if c in valid))
-    except ValueError:
-        result = 0
+    result = default
+    if s:
+        valid = string.digits + '.-'
+        try:
+            result = float(''.join(c for c in s if c in valid))
+        except ValueError:
+            pass # input does not contain a number
     return result
 
     

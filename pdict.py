@@ -25,19 +25,6 @@ DEFAULT_TIMEOUT = 10000
 
 
 
-class _PersistentDictPool:
-    def __init__(self, filename, max_size=2):
-        """Splits cache over multiple sqlite instances to avoid each exceeding the limit
-
-        `filename' of the cache
-        `max_size' in GB of the cache before splitting
-        """
-        #caches = glob.glob(filename + '*')
-        #print len(caches)
-        #os.path.getsize(f) for f in caches
-
-
-
 class PersistentDict:
     """Stores and retrieves persistent data through a dict-like interface
     Data is stored compressed on disk using sqlite3 
@@ -268,7 +255,7 @@ class Queue:
     >>> os.remove(filename)
     """
     size = None # track the size of the queue
-    counter = itertools.count().next # counter gives a unique status for each pull()
+    counter = itertools.count(1).next # counter gives a unique status for each pull()
 
     def __init__(self, filename, timeout=DEFAULT_TIMEOUT, isolation_level=None):
         self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)

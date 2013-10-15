@@ -132,7 +132,7 @@ class Download:
         else:
             self.cache = None
             if need_cache:
-                common.logger.info('Cache disabled because could not import pdict')
+                common.logger.warning('Cache disabled because could not import pdict')
 
         self.settings = adt.Bag(
             read_cache = read_cache,
@@ -227,7 +227,7 @@ class Download:
                     for proxy in failed_proxies:
                         if Download.proxy_performance.error(self.proxy) > settings.max_proxy_errors:
                             # this proxy has had too many errors so remove
-                            common.logger.info('Removing unstable proxy from list after %d consecutive errors: %s' % (settings.max_proxy_errors, self.proxy))
+                            common.logger.warning('Removing unstable proxy from list after %d consecutive errors: %s' % (settings.max_proxy_errors, self.proxy))
                             settings.proxies.remove(self.proxy)
             else:
                 # download failed - try again
@@ -241,7 +241,7 @@ class Download:
                 redirect_url = self.get_redirect(url=url, html=html)
                 if redirect_url:
                     # found a redirection
-                    common.logger.info('%s redirecting to %s' % (url, redirect_url))
+                    common.logger.debug('%s redirecting to %s' % (url, redirect_url))
                     settings.num_redirects -= 1
                     html = self.get(redirect_url, **settings) or ''
                     # make relative links absolute so will still work after redirect
@@ -266,7 +266,7 @@ class Download:
         success = False
         key = self.get_key(url, 'head')
         try:
-            if self.cache:
+            if self.cache and self.settings.read_cache:
                 success = self.cache[key]
             else:
                 raise KeyError('No cache')
@@ -276,8 +276,8 @@ class Download:
             request.get_method = lambda : 'HEAD'
             try:
                 response = urllib2.urlopen(request)
-            except:
-                common.logger.info('HEAD check miss: %s' % url)
+            except Exception, e:
+                common.logger.error('HEAD check miss: %s %s' % (url, e))
             else:
                 success = True
                 common.logger.info('HEAD check hit: %s' % url)
@@ -308,10 +308,10 @@ class Download:
             content must be ASCII
         """
         if max_size is not None and len(html) > max_size:
-            common.logger.info('Too big: %s' % len(html))
+            common.logger.info('Webpage is too big: %s' % len(html))
             html = '' # too big to store
         elif force_html and not common.is_html(html):
-            common.logger.info('Not html')
+            common.logger.info('Webpage is not html')
             html = '' # non-html content
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
@@ -373,7 +373,7 @@ class Download:
                 if pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(content):
                     # invalid result from download
                     content = None
-                    common.logger.info('Content did not match expected pattern - %s' % url)
+                    common.logger.warning('Content did not match expected pattern - %s' % url)
                 self.response_code = '200'
                 self.response_headers = dict(response.headers)
         except Exception, e:
@@ -385,7 +385,7 @@ class Download:
                 except Exception, e:
                     self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
-            common.logger.info('Download error: %s %s' % (url, e))
+            common.logger.error('Download error: %s %s' % (url, e))
             if not self.settings.acceptable_errors or self.response_code not in self.settings.acceptable_errors:
                 content, self.final_url = None, url
             else:
@@ -482,7 +482,7 @@ class Download:
                 results['address'] = (results['number'] + ' ' + results['street']).strip()
         if not results:
             # error geocoding - try again later
-            common.logger.debug('delete invalid geocode')
+            common.logger.debug('Delete invalid geocode')
             if self.cache:
                 self.cache[url] = ''
         return results
@@ -747,12 +747,6 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                                             # get next batch of URLs from cache
                                             seed_urls.extend(queue.pull(limit=max_queue))
                                             lock.release()
-                                """
-                                for cb_url in cb_urls or []:
-                                    if cb_url not in DownloadThread.discovered:
-                                        DownloadThread.discovered[cb_url] = 1
-                                        seed_urls.append(cb_url)
-                                """
                     finally:
                         # have finished processing
                         # make sure this is called even on exception to avoid eternal loop

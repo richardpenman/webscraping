@@ -619,19 +619,33 @@ def start_threads(fn, num_threads=20, args=(), wait=True):
             thread.join()
 
 
-def get_logger(output_file, stdout=True, level=settings.log_level):
+class ConsoleHandler(logging.StreamHandler):
+    """Log to stderr for errors else stdout
+    """
+    def __init__(self):
+        logging.StreamHandler.__init__(self)
+        self.stream = None
+
+    def emit(self, record):
+        if record.levelno >= logging.ERROR:
+            self.stream = sys.stderr
+        else:
+            self.stream = sys.stdout
+        logging.StreamHandler.emit(self, record)
+
+
+def get_logger(output_file, level=settings.log_level):
     """Create a logger instance
 
     output_file:
         file where to save the log
-    stdout:
-        whether to also print to standard out
     level:
         the minimum logging level to save
     """
     logger = logging.getLogger(output_file)
-    # void duplicate handlers
+    # avoid duplicate handlers
     if not logger.handlers:
+        logger.setLevel(logging.DEBUG)
         try:
             file_handler = logging.FileHandler(output_file)
         except IOError:
@@ -639,8 +653,9 @@ def get_logger(output_file, stdout=True, level=settings.log_level):
         else:
             file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
             logger.addHandler(file_handler)
-        if stdout:
-            logger.addHandler(logging.StreamHandler(sys.stdout))
-        logger.setLevel(level)
+
+        console_handler = ConsoleHandler()
+        console_handler.setLevel(level)
+        logger.addHandler(console_handler)
     return logger
 logger = get_logger(settings.log_file)

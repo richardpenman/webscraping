@@ -174,6 +174,7 @@ class Download:
         self.final_url = None # for tracking redirects
         self.response_code = '' # keep response code
         self.response_headers = {} # keep response headers
+        self.downloading_error = None # keep downloading error
         self.num_downloads = self.num_errors = 0 # track the number of downloads made
                 
         # update settings with any local overrides
@@ -377,6 +378,7 @@ class Download:
                 self.response_code = '200'
                 self.response_headers = dict(response.headers)
         except Exception, e:
+            self.downloading_error = str(e)
             if hasattr(e, 'code'):
                 self.response_code = str(e.code)
             if hasattr(e, 'read'):

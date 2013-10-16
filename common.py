@@ -22,6 +22,11 @@ from datetime import datetime, timedelta
 import adt
 import settings
 
+try:
+    import json
+except ImportError:
+    import simplejson as json
+
 
 class WebScrapingError(Exception):
     pass
@@ -93,7 +98,7 @@ def to_unicode(obj, encoding=settings.default_encoding):
 def html_to_unicode(html, charset=settings.default_encoding):
     """Convert html to unicode, decoding by specified charset when available
     """
-    m = re.compile(r'''<meta\s+http-equiv=["']Content-Type["']\s+content=["'][^"']*?charset=([a-zA-z\d\-]+)["']''', re.IGNORECASE).search(html)
+    m = re.compile(r'<meta[^<>]*charset=\s*([a-z\d\-]+)', re.IGNORECASE).search(html)
     if m:
         charset = m.groups()[0].strip().lower()
         
@@ -593,6 +598,24 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     for item in cur.fetchall():
         row = '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (item[0], ftstr[item[0].startswith('.')], item[1], ftstr[item[2]], item[3], item[4], item[5])
         fp.write(row)
+
+    # session cookies are saved into sessionstore.js
+    session_cookie_path = os.path.join(os.path.dirname(file), 'sessionstore.js')  
+    if os.path.exists(session_cookie_path):  
+        try:  
+            json_data = json.loads(open(session_cookie_path, 'rb').read())  
+        except Exception, e:  
+            print str(e)
+        else:
+            ftstr = ['FALSE', 'TRUE']
+            if 'windows' in json_data:  
+                for window in json_data['windows']:  
+                    for cookie in window['cookies']:
+                        row = "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (cookie.get('host', ''), ftstr[cookie.get('host', '').startswith('.')], \
+                                                                cookie.get('path', ''), False, str(int(time.time()) + 3600 * 24 * 7), \
+                                                                cookie.get('name', ''), cookie.get('value', ''))
+                        fp.write(row)
+
     fp.close()
     # close the connection before delete the sqlite file
     con.close()

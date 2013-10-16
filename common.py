@@ -70,12 +70,14 @@ def to_float(s, default=0.0):
     0.9
     >>> to_float(None)
     0.0
+    >>> to_float(1)
+    1.0
     """
     result = default
     if s:
         valid = string.digits + '.-'
         try:
-            result = float(''.join(c for c in s if c in valid))
+            result = float(''.join(c for c in str(s) if c in valid))
         except ValueError:
             pass # input does not contain a number
     return result

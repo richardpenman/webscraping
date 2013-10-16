@@ -123,7 +123,7 @@ class Download:
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0,
-            force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None):
+            force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, **kwargs):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
@@ -174,6 +174,7 @@ class Download:
         self.final_url = None # for tracking redirects
         self.response_code = '' # keep response code
         self.response_headers = {} # keep response headers
+        self.downloading_error = None # keep downloading error
         self.num_downloads = self.num_errors = 0 # track the number of downloads made
                 
         # update settings with any local overrides
@@ -377,6 +378,7 @@ class Download:
                 self.response_code = '200'
                 self.response_headers = dict(response.headers)
         except Exception, e:
+            self.downloading_error = str(e)
             if hasattr(e, 'code'):
                 self.response_code = str(e.code)
             if hasattr(e, 'read'):
@@ -909,7 +911,7 @@ class CrawlerCallback:
         self.crawl_existing = crawl_existing
 
     def __call__(self, D, url, html):
-        # add scraping code here ...
+       # add scraping code here ...
        return self.crawl(D, url, html)                                                                                                          
 
     def crawl(self, D, url, html): 

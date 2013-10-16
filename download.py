@@ -123,7 +123,7 @@ class Download:
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0,
-            force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None):
+            force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, **kwargs):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
@@ -909,7 +909,7 @@ class CrawlerCallback:
         self.crawl_existing = crawl_existing
 
     def __call__(self, D, url, html):
-        # add scraping code here ...
+       # add scraping code here ...
        return self.crawl(D, url, html)                                                                                                          
 
     def crawl(self, D, url, html): 

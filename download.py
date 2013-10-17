@@ -278,7 +278,7 @@ class Download:
             try:
                 response = urllib2.urlopen(request)
             except Exception, e:
-                common.logger.error('HEAD check miss: %s %s' % (url, e))
+                common.logger.warning('HEAD check miss: %s %s' % (url, e))
             else:
                 success = True
                 common.logger.info('HEAD check hit: %s' % url)
@@ -387,7 +387,7 @@ class Download:
                 except Exception, e:
                     self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
-            common.logger.error('Download error: %s %s' % (url, e))
+            common.logger.warning('Download error: %s %s' % (url, e))
             if not self.settings.acceptable_errors or self.response_code not in self.settings.acceptable_errors:
                 content, self.final_url = None, url
             else:
@@ -725,7 +725,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
 
                             except Exception, e:
                                 # catch any callback error to avoid losing thread
-                                common.logger.error('in callback for: ' + str(url) + '\n' + traceback.format_exc())
+                                common.logger.exception('\nIn callback for: ' + str(url))
 
                             else:
                                 # add these URL's to crawl queue

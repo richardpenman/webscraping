@@ -375,7 +375,7 @@ class Download:
                     # invalid result from download
                     content = None
                     common.logger.warning('Content did not match expected pattern - %s' % url)
-                self.response_code = '200'
+                self.response_code = str(response.code)
                 self.response_headers = dict(response.headers)
         except Exception, e:
             self.downloading_error = str(e)

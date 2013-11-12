@@ -207,14 +207,7 @@ class Download:
         # attempt downloading content at URL
         while settings.num_retries >= 0 and html is None:
             settings.num_retries -= 1
-            if settings.proxy:
-                self.proxy = settings.proxy
-            else:
-                if settings.proxies:
-                    # select next available proxy
-                    self.proxy = random.choice(settings.proxies)
-                else:
-                    self.proxy = None
+            self.proxy = settings.proxy or self.get_proxy()
             # crawl slowly for each domain to reduce risk of being blocked
             self.throttle(url, delay=settings.delay, proxy=self.proxy) 
             html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
@@ -327,8 +320,32 @@ class Download:
             return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
+    def get_proxy(self):
+        """Return random proxy if available
+        """
+        if self.settings.proxies:
+            # select next available proxy
+            proxy = random.choice(self.settings.proxies)
+        else:
+            proxy = None
+        return proxy
+
+
     # cache the user agent used for each proxy
     proxy_agents = {}
+    def get_user_agent(self, proxy):
+        """Get user agent for this proxy
+        """
+        if proxy in Download.proxy_agents:
+            # have used this proxy before so return same user agent
+            user_agent = Download.proxy_agents[proxy]
+        else:
+            # assign random user agent to this proxy
+            user_agent = random.choice(settings.user_agents)
+            Download.proxy_agents[proxy] = user_agent
+        return user_agent
+
+
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):
         """Simply download the url and return the content
         """
@@ -348,16 +365,7 @@ class Download:
                 if k == 'Referer':
                     v = url
                 headers[k] = v
-
-        if not user_agent:
-            # get user agent for this proxy
-            if proxy in Download.proxy_agents:
-                user_agent = Download.proxy_agents[proxy]
-            else:
-                # assign random user agent to this proxy
-                user_agent = random.choice(settings.user_agents)
-                Download.proxy_agents[proxy] = user_agent
-        headers['User-agent'] = user_agent
+        headers['User-agent'] = user_agent or self.get_user_agent(proxy)
         
         if isinstance(data, dict):
             # encode data for POST
@@ -709,7 +717,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                     url = seed_urls.pop()
 
                 except IndexError:
-                    # currently no urls to processa
+                    # currently no urls to process
                     DownloadThread.processing.popleft()
                     # so check again later
                     time.sleep(SLEEP_TIME)

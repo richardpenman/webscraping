@@ -66,21 +66,17 @@ class NetworkAccessManager(QNetworkAccessManager):
     def setProxy(self, proxy):
         """Allow setting string as proxy
         """
-        if isinstance(proxy, basestring):
-            match = re.match('((?P<username>\w+):(?P<password>\w+)@)?(?P<host>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})(:(?P<port>\d+))?', proxy)
-            if match:
-                groups = match.groupdict()
-                username = groups.get('username') or ''
-                password = groups.get('password') or ''
-                host = groups.get('host')
-                port = groups.get('port')
-                #print host, port, username, password
-                proxy = QNetworkProxy(QNetworkProxy.HttpProxy, host, int(port), username, password)
-            else:
-                common.logger.info('Invalid proxy:' + proxy)
-                proxy = None
-        if proxy:
-            QNetworkAccessManager.setProxy(self, proxy)
+        fragments = common.parse_proxy(proxy)
+        if fragments.host:
+            QNetworkAccessManager.setProxy(self, 
+                QNetworkProxy(QNetworkProxy.HttpProxy, 
+                  fragments.host, int(fragments.port), 
+                  fragments.username, fragments.password
+                )
+            )
+        else:
+            common.logger.info('Invalid proxy:' + proxy)
+            proxy = None
 
 
     def createRequest(self, operation, request, data):

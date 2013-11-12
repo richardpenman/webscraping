@@ -2,6 +2,7 @@ __doc__ = 'Helper methods to download and crawl web content using threads'
 
 from cookielib import CookieJar
 import base64
+import signal
 from twisted.internet import reactor, defer
 from twisted.internet.protocol import Protocol
 from twisted.internet.endpoints import TCP4ClientEndpoint
@@ -11,11 +12,13 @@ from twisted.web.http_headers import Headers
 import adt, common, download, settings
 
 
-
 def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwargs):
     """Download using asynchronous single threaded twisted callbacks
     """
-    state = download.State()
+    RUNNING = True
+    def interrupt_handler(signum, stackframe):
+        RUNNING = False
+    signal.signal(signal.SIGINT, interrupt_handler)
 
     settings = adt.Bag(
         read_cache = True,
@@ -31,23 +34,15 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwa
     pool = HTTPConnectionPool(reactor, persistent=True)
     # 1 connection for each proxy or thread
     pool.maxPersistentPerHost = len(D.settings.proxies) or num_threads
-    pool.retryAutomatically = settings.num_retries > 0
     pool.cachedConnectionTimeout = 240
 
-    agent = Agent(reactor, connectTimeout=settings.timeout, pool=pool)
-    agent = ContentDecoderAgent(agent, [('gzip', GzipDecoder)])
-    agent = RedirectAgent(agent, settings.num_redirects)
-    #cookieJar = CookieJar()
-    #agent = CookieAgent(agent, cookieJar)
-    # XXX 
+    # TODO
     # efficient write caching in separate thread
+
     # list of urls to crawl
-    # XXX compressed dict data type for large in memory
-    outstanding = urls or []
-    if url:
-        outstanding.append(url)
+    outstanding = urls or [url] # XXX compressed dict data type for large in memory
     # list of URL's currently processing
-    processing = set() 
+    processing = {}
     found = adt.HashDict()
 
     def build_agent(proxy, headers):
@@ -66,15 +61,17 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwa
 
         agent = ContentDecoderAgent(agent, [('gzip', GzipDecoder)])
         agent = RedirectAgent(agent, settings.num_redirects)
+        #cookieJar = CookieJar()
+        #agent = CookieAgent(agent, cookieJar)
         return agent
 
 
     def crawl():
         """Crawl another URL if available
         """
-        while outstanding and len(processing) < num_threads:
+        while RUNNING and outstanding and len(processing) < num_threads:
             url = outstanding.pop() if depth else outstanding.pop(0)
-            processing.add(url)
+            processing[url] = 0
             downloaded = False
             if D.cache and settings.read_cache:
                 key = D.get_key(url, settings.data)
@@ -95,12 +92,8 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwa
                 download_start(url)
             state.update(queue_size=len(outstanding))
         
-        if outstanding or processing:
-            # try crawling again a little later
-            pass
-        else:
+        if not outstanding and not processing or not RUNNING:
             # save the final state and exit
-            state.save()
             reactor.stop()
         
 
@@ -113,18 +106,16 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwa
         agent = build_agent(proxy, headers)
         data = None
         d = agent.request('GET', url, Headers(headers), data) 
-        #d.addCallback(download_headers, url)
         #print 'download start', url, len(processing), len(outstanding)
-        #d.addCallbacks(download_headers, download_error, callbackArgs=[url], errbackArgs=[url])
         d.addCallback(download_headers, url)
         d.addErrback(download_error, url) #XXX
 
+        # timeout to stop download if hangs
         timeout_call = reactor.callLater(settings.timeout, download_timeout, d, url)
         def completed(ignore):
             if timeout_call.active():
                 timeout_call.cancel()
         d.addBoth(completed)
-        #d.setTimeout(settings.timeout, download_timeout, url)
         
     def download_headers(response, url):
         """Headers have been returned from download
@@ -136,9 +127,9 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwa
             # XXX how to ignore processing body?
             raise Exception('Download error: %s %s' % (url, response.phrase))
         else:
-            finished.addCallback(download_complete, url)
-            finished.addErrback(download_error, url)
-            #finished.addCallbacks(download_complete, download_error, callbackArgs=[url], errbackArgs=[url])
+            #finished.addCallback(download_complete, url)
+            #finished.addErrback(download_error, url)
+            finished.addCallbacks(download_complete, download_error, callbackArgs=[url], errbackArgs=[url])
 
     def download_complete(html, url):
         """Body has completed downloading
@@ -157,11 +148,19 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwa
     def download_error(reason, url):
         """Error received during download
         """
-        processing.remove(url)
-        print 'Error:', url, reason.getErrorMessage()
-        state.update(num_errors=1)
-        if D.cache and settings.write_cache:
-            D.cache[url] = ''
+        # XXX only retry certain kinds of errors
+        print 'retries:', processing[url], url
+        if processing[url] >= settings.num_retries or reason.getErrorMessage().startswith('Download error:'):
+            # failure - can not retry
+            del processing[url]
+            print reason.getErrorMessage()
+            state.update(num_errors=1)
+            if D.cache and settings.write_cache:
+                D.cache[url] = ''
+        else:
+            print 'Retrying:', url
+            processing[url] += 1
+            download_start(url)
         crawl()
 
     def scrape(html, url):
@@ -174,11 +173,13 @@ def threaded_get(url=None, urls=None, num_threads=10, cb=None, depth=True, **kwa
                     if cb_url not in found:
                         found[cb_url] = True
                         outstanding.append(cb_url)
-        processing.remove(url)
+        del processing[url]
         crawl()
 
+    state = download.State()
     reactor.callWhenRunning(crawl)
     reactor.run()
+    state.save()
 
 
 class DownloadPrinter(Protocol):

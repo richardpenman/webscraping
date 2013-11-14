@@ -41,7 +41,7 @@ class TwistedCrawler:
         # queue of html to be written to cache
         self.cache_queue = []
         # URL's that are waiting to download
-        self.download_queue = urls[:] or [url] # XXX create compressed dict data type for large in memory?
+        self.download_queue = (urls or [url])[:] # XXX create compressed dict data type for large in memory?
         # URL's currently downloading with the number of retry attempts
         self.retries = {}
         # URL's that have been found before
@@ -64,9 +64,10 @@ class TwistedCrawler:
     def stop(self, *ignore):
         """Stop the twisted event loop
         """
-        self.running = False
-        self.state.save()
-        reactor.stop()
+        if self.running:
+            self.running = False
+            self.state.save()
+            reactor.stop()
 
 
     def cache_html(self):
@@ -250,7 +251,7 @@ class DownloadPrinter(Protocol):
         self.data.append(page)
 
     def connectionLost(self, reason):
-        if str(reason.value) != 'Response body fully received':
-            common.logger.info('Download body error: ' + reason.value)
+        if str(reason.value) not in ('', 'Response body fully received'):
+            common.logger.info('Download body error: ' + str(reason.value))
         html = ''.join(self.data)
         self.finished.callback(html)

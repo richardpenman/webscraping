@@ -41,20 +41,21 @@ class TwistedCrawler:
         # queue of html to be written to cache
         self.cache_queue = []
         # URL's that are waiting to download
-        self.download_queue = urls or [url] # XXX compressed dict data type for large in memory
-        # list of URL's currently downloading and the number of retry attempts
+        self.download_queue = urls[:] or [url] # XXX create compressed dict data type for large in memory?
+        # URL's currently downloading with the number of retry attempts
         self.retries = {}
         # URL's that have been found before
         self.found = adt.HashDict()
         for url in self.download_queue:
             self.found[url] = True
         self.state = download.State()
-        signal.signal(signal.SIGINT, self.stop)
 
 
     def start(self):
         """Start the twisted event loop
         """
+        # catch ctrl-c keyboard event and stop twisted
+        signal.signal(signal.SIGINT, self.stop)
         self.running = True
         reactor.callWhenRunning(self.crawl)
         reactor.callInThread(self.cache_html)
@@ -123,7 +124,7 @@ class TwistedCrawler:
         d = agent.request('GET', url, Headers(headers), data) 
         d.addCallback(self.download_headers, url)
         d.addErrback(self.download_error, url)
-        #d.addErrback(log.err)
+        d.addErrback(log.err)
 
         # timeout to stop download if hangs
         timeout_call = reactor.callLater(self.settings.timeout, self.download_timeout, d, url)
@@ -150,7 +151,7 @@ class TwistedCrawler:
             #finished.addCallback(download_complete, url)
             #finished.addErrback(download_error, url)
             finished.addCallbacks(self.download_complete, self.download_error, callbackArgs=[url], errbackArgs=[url])
-            #finished.addErrback(log.err)
+            finished.addErrback(log.err)
 
 
     def download_retry(self, url):

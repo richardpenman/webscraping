@@ -6,13 +6,13 @@ def read(filename):
 
 setup(
     name='webscraping', 
-    version='1.0',
+    version='1.2',
     packages=['webscraping'],
     package_dir={'webscraping':'.'}, # look for package contents in current directory
     author='Richard Penman',
     author_email='richard@webscraping.com',
     description='Pure python library aimed to make web scraping easier',
-    long_description=read('README.rst'),
+    long_description='See here for more information: http://code.google.com/p/webscraping/',
     url='http://code.google.com/p/webscraping',
     classifiers = [
         'Environment :: Web Environment',

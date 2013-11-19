@@ -63,9 +63,15 @@ class PersistentDict:
     >>> del cache[url]
     >>> url in cache
     False
+    >>> key, value = 'language', 'python'
+    >>> cache.update([(url, value), (key, value)])
+    >>> cache[url] == value
+    True
+    >>> cache[key] == value
+    True
     >>> os.remove(filename)
     """
-    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None, disk=False):
+    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None):
         """initialize a new PersistentDict with the specified database file.
         """
         self.filename = filename
@@ -85,10 +91,6 @@ class PersistentDict:
         """
         self._conn.execute(sql)
         self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
-        if disk:
-            self.fscache = FSCache(os.path.dirname(filename))
-        else:
-            self.fscache = None
 
 
     def __copy__(self):
@@ -119,14 +121,7 @@ class PersistentDict:
         row = self._conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
         if row:
             if self.is_fresh(row[1]):
-                try:
-                    if self.fscache:
-                        value = self.fscache[key]
-                    else:
-                        # XXX remove this when migrated
-                        raise KeyError()
-                except KeyError:
-                    value = row[0]
+                value = row[0]
                 return self.deserialize(value)
             else:
                 raise KeyError("Key `%s' is stale" % key)
@@ -138,23 +133,15 @@ class PersistentDict:
         """remove the specifed value from the database
         """
         self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
-        if self.fscache:
-            del self.fscache[key]
 
 
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
         updated = datetime.datetime.now()
-        if self.fscache:
-            self._conn.execute("INSERT OR REPLACE INTO config (key, meta, updated) VALUES(?, ?, ?, ?);", (
-                key, self.serialize({}), updated)
-            )
-            self.fscache[key] = self.serialize(value)
-        else:
-            self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (
-                key, self.serialize(value), self.serialize({}), updated)
-            )
+        self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (
+            key, self.serialize(value), self.serialize({}), updated)
+        )
 
 
     def serialize(self, value):
@@ -182,14 +169,7 @@ class PersistentDict:
         if key:
             row = self._conn.execute("SELECT value, meta, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
-                try:
-                    if self.fscache:
-                        value = self.fscache[key]
-                    else:
-                        # XXX remove after migrated
-                        raise KeyError()
-                except KeyError:
-                    value = row[0] 
+                value = row[0] 
                 data = dict(
                     value=self.deserialize(value),
                     meta=self.deserialize(row[1]),
@@ -216,12 +196,23 @@ class PersistentDict:
             self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
+    def update(self, key_values):
+        """Add this list of (key, value) tuples in single transaction to database
+        """
+        meta = self.serialize({})
+        updated = datetime.datetime.now()
+        c = self._conn.cursor()
+        c.execute("BEGIN TRANSACTION")
+        c.executemany("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", 
+            [(key, self.serialize(value), meta, updated) for key, value in key_values]
+        )
+        c.execute("END TRANSACTION")
+
+
     def clear(self):
         """Clear all cached data
         """
         self._conn.execute("DELETE FROM config;")
-        if self.fscache:
-            self.fscache.clear()
 
 
     def merge(self, db, override=False):

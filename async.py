@@ -5,6 +5,7 @@ import time
 import cookielib
 import base64
 import signal
+import urlparse
 
 from twisted.internet import reactor, defer
 from twisted.internet.protocol import Protocol
@@ -60,7 +61,6 @@ class TwistedCrawler:
         signal.signal(signal.SIGINT, self.kill)
         self.running = True
         reactor.callWhenRunning(self.crawl)
-        reactor.callInThread(self.cache_html)
         reactor.run()
 
 
@@ -82,22 +82,20 @@ class TwistedCrawler:
 
 
     def cache_html(self):
-        """Separate thread to manage the caching
+        """Cache the downloaded HTML
         """
-        D = download.Download(**self.kwargs)
-        while self.running:
-            if self.cache_queue:
-                url, html = self.cache_queue.pop()
-                if D.cache and self.settings.write_cache:
-                    D.cache[url] = html
-                    common.logger.debug('Cached: %d %s' % (len(self.cache_queue), url))
-            time.sleep(download.SLEEP_TIME)
+        if self.cache_queue:
+            cache_queue, self.cache_queue = self.cache_queue, []
+            if self.D.cache and self.settings.write_cache:
+                common.logger.debug('Cached: %d' % len(cache_queue))
+                self.D.cache.update(cache_queue)
 
 
     def crawl(self):
         """Crawl more URLs if available
         """
         if self.download_queue or self.retries or self.cache_queue:
+            #print len(self.download_queue), len(self.cache_queue), self.retries
             while self.running and self.download_queue and len(self.retries) < self.settings.num_threads:
                 url = self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0)
                 self.retries[url] = 0
@@ -115,12 +113,16 @@ class TwistedCrawler:
                             downloaded = True
 
                 if downloaded:
+                    # record cache load
                     self.state.update(num_caches=1)
                 else:
+                    # need to download this new URL
                     self.download_start(url)
                 self.state.update(queue_size=len(self.download_queue))
-        
-            reactor.callLater(0, self.crawl)
+      
+            if self.running:
+                reactor.callLater(0, self.cache_html)
+                reactor.callLater(0, self.crawl)
         else:
             # save the final state and exit
             self.stop()
@@ -157,10 +159,10 @@ class TwistedCrawler:
         response.deliverBody(DownloadPrinter(finished))
         if 400 <= response.code < 500:
             # XXX pass that don't want to retry
-            raise Exception('%s: %s' % (url, response.phrase))
+            raise Exception(response.phrase)
         elif 500 <= response.code < 600:
             # server error so try again
-            raise Exception('%s: %s' % (url, response.phrase))
+            raise Exception(response.phrase)
         else:
             # handle download
             #finished.addCallback(download_complete, url)
@@ -180,14 +182,13 @@ class TwistedCrawler:
     def download_timeout(self, d, url):
         """Catch timeout error and cancel request
         """
-        common.logger.warning('Download timeout:' + url)
+        common.logger.warning('Download timeout: ' + url)
         d.cancel()
 
 
     def download_error(self, reason, url):
         """Error received during download
         """
-        common.logger.warning('Download error: %s: %s' % (reason.getErrorMessage(), url))
         self.state.update(num_errors=1)
 
         num_retries = self.retries[url]
@@ -198,6 +199,7 @@ class TwistedCrawler:
             reactor.callLater(0, self.download_start, url)
         else:
             # out of retries
+            common.logger.warning('Download error: %s: %s' % (reason.getErrorMessage(), url))
             if num_retries > 0:
                 common.logger.debug('Retry failure')
             del self.retries[url]
@@ -211,11 +213,12 @@ class TwistedCrawler:
         del self.retries[url]
         if html and self.settings.cb:
             try:
-                cb_urls = self.settings.cb(self.D, url, html) or []
+                links = self.settings.cb(self.D, url, html) or []
             except Exception as e:
                 common.logger.exception(e)
             else:
-                for cb_url in cb_urls:
+                for link in links:
+                    cb_url = urlparse.urljoin(url, link)
                     if cb_url not in self.found:
                         self.found[cb_url] = True
                         self.download_queue.append(cb_url)

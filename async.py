@@ -230,7 +230,7 @@ class TwistedCrawler:
         # XXX connections take too much memory?
         pool = HTTPConnectionPool(reactor, persistent=True)
         # 1 connection for each proxy or thread
-        pool.maxPersistentPerHost = len(self.D.settings.proxies) or self.num_threads
+        pool.maxPersistentPerHost = len(self.D.settings.proxies) or self.settings.num_threads
         pool.cachedConnectionTimeout = 240
         return pool
 

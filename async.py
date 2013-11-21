@@ -68,7 +68,7 @@ class TwistedCrawler:
         """Stop the twisted event loop
         """
         if self.running:
-            print 'Shutting down'
+            common.logger.info('Twisted eventloop shutting down')
             self.running = False
             self.state.save()
             reactor.stop()
@@ -134,6 +134,11 @@ class TwistedCrawler:
         proxy = self.D.get_proxy()
         headers = dict(self.settings.headers)
         headers['User-Agent'] = [self.D.get_user_agent(proxy)]
+        for name, value in settings.default_headers.items():
+            if name not in headers:
+                if name == 'Referer':
+                    value = url
+                headers[name] = [value]
         agent = self.build_agent(proxy, headers)
         data = None
         d = agent.request('GET', url, Headers(headers), data) 

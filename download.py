@@ -440,7 +440,7 @@ class Download:
                     common.logger.debug('Reloaded proxies from updated file.')
 
 
-    def geocode(self, address, delay=5, read_cache=True, num_retries=1):
+    def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None):
         """Geocode address using Google's API and return dictionary of useful fields
 
         address:
@@ -450,7 +450,7 @@ class Download:
         read_cache:
             whether to load content from cache when exists
         """
-        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
+        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (urllib.quote_plus(address), '&language=' + language if language else '')
         html = self.get(url, delay=delay, read_cache=read_cache, num_retries=num_retries)
         results = collections.defaultdict(str)
         if html:

@@ -360,12 +360,12 @@ class Download:
                 opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
         
         headers = headers or {}
-        for k, v in settings.default_headers.items():
-            if k not in headers:
-                if k == 'Referer':
-                    v = url
-                headers[k] = v
         headers['User-agent'] = user_agent or self.get_user_agent(proxy)
+        for name, value in settings.default_headers.items():
+            if name not in headers:
+                if name == 'Referer':
+                    value = url
+                headers[name] = value
         
         if isinstance(data, dict):
             # encode data for POST

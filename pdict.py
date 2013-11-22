@@ -308,6 +308,8 @@ class Queue:
         rows = self._conn.execute('SELECT key FROM queue WHERE status=? LIMIT ?', (status, limit))
         keys = [row[0] for row in rows]
         Queue.size -= len(keys)
+        if Queue.size < 0:
+            Queue.size = 0
         return keys
 
 

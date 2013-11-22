@@ -360,12 +360,12 @@ class Download:
                 opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
         
         headers = headers or {}
-        for k, v in settings.default_headers.items():
-            if k not in headers:
-                if k == 'Referer':
-                    v = url
-                headers[k] = v
         headers['User-agent'] = user_agent or self.get_user_agent(proxy)
+        for name, value in settings.default_headers.items():
+            if name not in headers:
+                if name == 'Referer':
+                    value = url
+                headers[name] = value
         
         if isinstance(data, dict):
             # encode data for POST
@@ -440,7 +440,7 @@ class Download:
                     common.logger.debug('Reloaded proxies from updated file.')
 
 
-    def geocode(self, address, delay=5, read_cache=True, num_retries=1):
+    def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None):
         """Geocode address using Google's API and return dictionary of useful fields
 
         address:
@@ -450,7 +450,7 @@ class Download:
         read_cache:
             whether to load content from cache when exists
         """
-        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false' % urllib.quote_plus(address)
+        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (urllib.quote_plus(address), '&language=' + language if language else '')
         html = self.get(url, delay=delay, read_cache=read_cache, num_retries=num_retries)
         results = collections.defaultdict(str)
         if html:
@@ -729,7 +729,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                         if cb:
                             try:
                                 # use callback to process downloaded HTML
-                                cb_urls = cb(D, url, html)
+                                result = cb(D, url, html)
 
                             except Exception, e:
                                 # catch any callback error to avoid losing thread
@@ -737,9 +737,10 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
 
                             else:
                                 # add these URL's to crawl queue
-                                for cb_url in cb_urls or []:
-                                    if isinstance(cb_urls, dict):
-                                        DownloadThread.discovered[cb_url] = cb_urls[cb_url]
+                                for link in result or []:
+                                    cb_url = urlparse.urljoin(url, link)
+                                    if isinstance(result, dict):
+                                        DownloadThread.discovered[cb_url] = result[link]
                                     else:
                                         DownloadThread.discovered[cb_url] = DEFAULT_PRIORITY
                                             

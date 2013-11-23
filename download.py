@@ -207,7 +207,7 @@ class Download:
         # attempt downloading content at URL
         while settings.num_retries >= 0 and html is None:
             settings.num_retries -= 1
-            self.proxy = settings.proxy or self.get_proxy()
+            self.proxy = self.get_proxy(settings.proxies)
             # crawl slowly for each domain to reduce risk of being blocked
             self.throttle(url, delay=settings.delay, proxy=self.proxy) 
             html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
@@ -320,10 +320,12 @@ class Download:
             return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
-    def get_proxy(self):
+    def get_proxy(self, proxies=None):
         """Return random proxy if available
         """
-        if self.settings.proxies:
+        if proxies:
+            proxy = random.choice(proxies)
+        elif self.settings.proxies:
             # select next available proxy
             proxy = random.choice(self.settings.proxies)
         else:
@@ -449,6 +451,10 @@ class Download:
             how long to delay between API requests
         read_cache:
             whether to load content from cache when exists
+        num_retries:
+            the number of times to try downloading
+        language:
+            the language to set
         """
         url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (urllib.quote_plus(address), '&language=' + language if language else '')
         html = self.get(url, delay=delay, read_cache=read_cache, num_retries=num_retries)

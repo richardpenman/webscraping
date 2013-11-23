@@ -12,7 +12,7 @@ setup(
     author='Richard Penman',
     author_email='richard@webscraping.com',
     description='Pure python library aimed to make web scraping easier',
-    long_description='See here for more information: http://code.google.com/p/webscraping/',
+    long_description=read('README.rst'),
     url='http://code.google.com/p/webscraping',
     classifiers = [
         'Environment :: Web Environment',
@@ -22,5 +22,5 @@ setup(
         'Programming Language :: Python',
         'Topic :: Internet :: WWW/HTTP'
     ],
-    license='lgpl',
+    license='lgpl'
 )

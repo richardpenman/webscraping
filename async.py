@@ -7,15 +7,18 @@ import base64
 import signal
 import urlparse
 
-from twisted.internet import reactor, defer
-from twisted.internet.protocol import Protocol
-from twisted.internet.endpoints import TCP4ClientEndpoint
-from twisted.web.client import Agent, RedirectAgent, HTTPConnectionPool, CookieAgent, ContentDecoderAgent, GzipDecoder, ProxyAgent
-from twisted.web.http_headers import Headers
+from twisted.internet import reactor, defer, protocol, endpoints
+from twisted.web import client, error, http, http_headers
 from twisted.python import log
 
 import adt, common, download, settings
 
+
+"""
+TODO
+- support for POST
+- clean killing of outstanding requests
+"""
 
 
 def threaded_get(**kwargs):
@@ -45,8 +48,8 @@ class TwistedCrawler:
         self.cache_queue = []
         # URL's that are waiting to download
         self.download_queue = (urls or [url])[:] # XXX create compressed dict data type for large in memory?
-        # URL's currently downloading with the number of retry attempts
-        self.retries = {}
+        # URL's currently downloading 
+        self.processing = set()
         # URL's that have been found before
         self.found = adt.HashDict()
         for url in self.download_queue:
@@ -81,24 +84,14 @@ class TwistedCrawler:
         sys.exit()
 
 
-    def cache_html(self):
-        """Cache the downloaded HTML
-        """
-        if self.cache_queue:
-            cache_queue, self.cache_queue = self.cache_queue, []
-            if self.D.cache and self.settings.write_cache:
-                common.logger.debug('Cached: %d' % len(cache_queue))
-                self.D.cache.update(cache_queue)
-
-
     def crawl(self):
         """Crawl more URLs if available
         """
-        if self.download_queue or self.retries or self.cache_queue:
-            #print len(self.download_queue), len(self.cache_queue), self.retries
-            while self.running and self.download_queue and len(self.retries) < self.settings.num_threads:
+        if self.download_queue or self.processing or self.cache_queue:
+            #print len(self.download_queue), len(self.cache_queue), self.processing
+            while self.running and self.download_queue and len(self.processing) < self.settings.num_threads:
                 url = self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0)
-                self.retries[url] = 0
+                self.processing.add(url)
                 downloaded = False
                 if self.D.cache and self.settings.read_cache:
                     key = self.D.get_key(url, self.settings.data)
@@ -121,16 +114,17 @@ class TwistedCrawler:
                 self.state.update(queue_size=len(self.download_queue))
       
             if self.running:
-                reactor.callLater(0, self.cache_html)
+                reactor.callLater(0, self.cache_downloads)
                 reactor.callLater(0, self.crawl)
         else:
             # save the final state and exit
             self.stop()
         
 
-    def download_start(self, url):
+    def download_start(self, url, num_retries=0, redirects=None):
         """Start url download
         """
+        redirects = redirects or []
         proxy = self.D.get_proxy()
         headers = dict(self.settings.headers)
         headers['User-Agent'] = [self.D.get_user_agent(proxy)]
@@ -141,8 +135,8 @@ class TwistedCrawler:
                 headers[name] = [value]
         agent = self.build_agent(proxy, headers)
         data = None
-        d = agent.request('GET', url, Headers(headers), data) 
-        d.addCallback(self.download_headers, url)
+        d = agent.request('GET', url, http_headers.Headers(headers), data) 
+        d.addCallback(self.download_headers, url, num_retries, redirects)
         d.addErrback(self.download_error, url)
         d.addErrback(log.err)
 
@@ -155,32 +149,38 @@ class TwistedCrawler:
         d.addBoth(completed)
        
 
-    def download_headers(self, response, url):
+    def download_headers(self, response, url, num_retries, redirects):
         """Headers have been returned from download
         """
         common.logger.info('Downloading ' + url)
         finished = defer.Deferred()
         # XXX how to ignore processing body for errors?
         response.deliverBody(DownloadPrinter(finished))
-        if 400 <= response.code < 500:
+        if response.code in (301, 302, 303, 307):
+            # handle the redirect header
+            self.handle_redirect(url, response, num_retries, redirects)
+        elif 400 <= response.code < 500:
             # XXX pass that don't want to retry
-            raise Exception(response.phrase)
+            raise TwistedError(response.phrase)
         elif 500 <= response.code < 600:
             # server error so try again
-            raise Exception(response.phrase)
+            self.handle_retry(url, response, num_retries, redirects)
         else:
             # handle download
             #finished.addCallback(download_complete, url)
             #finished.addErrback(download_error, url)
-            finished.addCallbacks(self.download_complete, self.download_error, callbackArgs=[url], errbackArgs=[url])
+            finished.addCallbacks(self.download_complete, self.download_error, 
+                callbackArgs=[url, redirects], errbackArgs=[url]
+            )
             finished.addErrback(log.err)
 
 
-    def download_complete(self, html, url):
+    def download_complete(self, html, url, redirects):
         """Body has completed downloading
         """
-        self.cache_queue.append((url, html))
         self.state.update(num_downloads=1)
+        if self.D.cache and self.settings.write_cache:
+            self.cache_queue.append((redirects + [url], html))
         reactor.callLater(0, self.scrape, url, html)
 
 
@@ -194,34 +194,60 @@ class TwistedCrawler:
     def download_error(self, reason, url):
         """Error received during download
         """
+        common.logger.warning('Download error: %s: %s' % (reason.getErrorMessage(), url))
         self.state.update(num_errors=1)
+        if self.D.cache and self.settings.write_cache:
+            self.cache_queue.append((url, ''))
+        self.processing.remove(url)
 
-        num_retries = self.retries[url]
-        if self.retries[url] < self.settings.num_retries:
+
+    def handle_retry(self, url, response, num_retries, redirects):
+        """Handle retrying a download error
+        """
+        if num_retries < self.settings.num_retries:
             # retry the download
             common.logger.debug('Download retry: %d: %s' % (num_retries, url))
-            self.retries[url] += 1
-            reactor.callLater(0, self.download_start, url)
+            reactor.callLater(0, self.download_start, url, num_retries+1, num_redirects)
         else:
             # out of retries
-            common.logger.warning('Download error: %s: %s' % (reason.getErrorMessage(), url))
-            if num_retries > 0:
-                common.logger.debug('Retry failure')
-            del self.retries[url]
-            self.cache_queue.append((url, ''))
+            raise TwistedError('Retry failure: ' + response.phrase)
 
+
+    def handle_redirect(self, url, response, num_retries, redirects):
+        """Handle redirects - the builtin RedirectAgent does not handle relative redirects
+        """
+        locations = response.headers.getRawHeaders('location', [])
+        if locations:
+            if len(redirects) < self.settings.num_redirects:
+                # a new redirect url
+                redirect_url = urlparse.urljoin(url, locations[0])
+                self.processing.remove(url)
+                if redirect_url not in self.found:
+                    # have not seen this redirect URL before
+                    self.processing.add(redirect_url)
+                    reactor.callLater(0, self.download_start, redirect_url, num_retries, redirects + [url])
+            else: 
+                # too many redirects
+                err = error.InfiniteRedirection(response.code, 'Too many redirects', location=url)
+                raise TwistedError([failure.Failure(err)], response)
+        else:
+            # no location header given to redirect to
+            err = error.RedirectWithNoLocation(response.code, 'No location header field', url)
+            raise TwistedError([failure.Failure(err)], response)
 
 
     def scrape(self, url, html):
         """Pass completed body to callback for scraping
         """
-        del self.retries[url]
+        self.processing.remove(url)
         if html and self.settings.cb:
             try:
+                # get links crawled from webpage
                 links = self.settings.cb(self.D, url, html) or []
             except Exception as e:
                 common.logger.exception(e)
             else:
+                # add new links to queue
                 for link in links:
                     cb_url = urlparse.urljoin(url, link)
                     if cb_url not in self.found:
@@ -233,7 +259,7 @@ class TwistedCrawler:
         """Create connection pool
         """
         # XXX connections take too much memory?
-        pool = HTTPConnectionPool(reactor, persistent=True)
+        pool = client.HTTPConnectionPool(reactor, persistent=True)
         # 1 connection for each proxy or thread
         pool.maxPersistentPerHost = len(self.D.settings.proxies) or self.settings.num_threads
         pool.cachedConnectionTimeout = 240
@@ -250,20 +276,44 @@ class TwistedCrawler:
             auth = base64.b64encode("%s:%s" % (fragments.username, fragments.password))
             headers['Proxy-Authorization'] = ["Basic " + auth.strip()]
             # generate the agent
-            endpoint = TCP4ClientEndpoint(reactor, fragments.host, int(fragments.port))
-            agent = ProxyAgent(endpoint, reactor=reactor, pool=pool)
+            endpoint = endpoints.TCP4ClientEndpoint(reactor, fragments.host, int(fragments.port))
+            agent = client.ProxyAgent(endpoint, reactor=reactor, pool=pool)
         else:
-            agent = Agent(reactor, connectTimeout=self.settings.timeout, pool=pool)
+            agent = client.Agent(reactor, connectTimeout=self.settings.timeout, pool=pool)
 
-        agent = ContentDecoderAgent(agent, [('gzip', GzipDecoder)])
-        agent = RedirectAgent(agent, self.settings.num_redirects)
+        agent = client.ContentDecoderAgent(agent, [('gzip', client.GzipDecoder)])
+        #agent = client.RedirectAgent(agent, self.settings.num_redirects)
         #cookieJar = cookielib.CookieJar()
         #agent = CookieAgent(agent, cookieJar)
         return agent
 
 
+    def cache_downloads(self):
+        """Cache the downloaded HTML
+        """
+        if self.cache_queue:
+            url_htmls = []
+            redirect_map = {}
+            while self.cache_queue:
+                redirects, html = self.cache_queue.pop()
+                common.logger.debug('Cached: %d' % len(self.cache_queue))
+                url = redirects[0]
+                url_htmls.append((url, html))
+                redirect_map[url] = redirects[-1]
+ 
+            self.D.cache.update(url_htmls)
+            # store the redirect map
+            for start_url, final_url in redirect_map.items():
+                if start_url != final_url:
+                    self.D.cache.meta(start_url, dict(url=final_url))
 
-class DownloadPrinter(Protocol):
+
+
+class TwistedError(Exception):
+    pass
+
+
+class DownloadPrinter(protocol.Protocol):
     """Collect together body requests
     """
     def __init__(self, finished):

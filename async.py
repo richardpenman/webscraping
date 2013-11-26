@@ -160,7 +160,6 @@ class TwistedCrawler:
             # handle the redirect header
             self.handle_redirect(url, response, num_retries, redirects)
         elif 400 <= response.code < 500:
-            # XXX pass that don't want to retry
             raise TwistedError(response.phrase)
         elif 500 <= response.code < 600:
             # server error so try again
@@ -170,18 +169,18 @@ class TwistedCrawler:
             #finished.addCallback(download_complete, url)
             #finished.addErrback(download_error, url)
             finished.addCallbacks(self.download_complete, self.download_error, 
-                callbackArgs=[url, redirects], errbackArgs=[url]
+                callbackArgs=[redirects + [url]], errbackArgs=[url]
             )
             finished.addErrback(log.err)
 
 
-    def download_complete(self, html, url, redirects):
+    def download_complete(self, html, redirects):
         """Body has completed downloading
         """
         self.state.update(num_downloads=1)
         if self.D.cache and self.settings.write_cache:
-            self.cache_queue.append((redirects + [url], html))
-        reactor.callLater(0, self.scrape, url, html)
+            self.cache_queue.append((redirects, html))
+        reactor.callLater(0, self.scrape, redirects[0], html)
 
 
     def download_timeout(self, d, url):
@@ -221,11 +220,8 @@ class TwistedCrawler:
             if len(redirects) < self.settings.num_redirects:
                 # a new redirect url
                 redirect_url = urlparse.urljoin(url, locations[0])
-                self.processing.remove(url)
-                if redirect_url not in self.found:
-                    # have not seen this redirect URL before
-                    self.processing.add(redirect_url)
-                    reactor.callLater(0, self.download_start, redirect_url, num_retries, redirects + [url])
+                redirects.append(url)
+                reactor.callLater(0, self.download_start, redirect_url, num_retries, redirects)
             else: 
                 # too many redirects
                 err = error.InfiniteRedirection(response.code, 'Too many redirects', location=url)
@@ -245,7 +241,7 @@ class TwistedCrawler:
                 # get links crawled from webpage
                 links = self.settings.cb(self.D, url, html) or []
             except Exception as e:
-                common.logger.exception(e)
+                common.logger.exception('\nIn callback for: ' + str(url))
             else:
                 # add new links to queue
                 for link in links:

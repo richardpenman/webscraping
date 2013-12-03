@@ -9,7 +9,7 @@ import urlparse
 
 from twisted.internet import reactor, defer, protocol, endpoints
 from twisted.web import client, error, http, http_headers
-from twisted.python import log
+from twisted.python import failure, log
 
 import adt, common, download, settings
 

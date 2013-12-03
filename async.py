@@ -156,9 +156,9 @@ class TwistedCrawler:
         finished = defer.Deferred()
         # XXX how to ignore processing body for errors?
         response.deliverBody(DownloadPrinter(finished))
-        if response.code in (301, 302, 303, 307):
-            # handle the redirect header
-            self.handle_redirect(url, response, num_retries, redirects)
+        if response.code in (301, 302, 303, 307) and self.handle_redirect(url, response, num_retries, redirects):
+            # redirect handled
+            pass
         elif 400 <= response.code < 500:
             raise TwistedError(response.phrase)
         elif 500 <= response.code < 600:
@@ -222,10 +222,10 @@ class TwistedCrawler:
                 redirect_url = urlparse.urljoin(url, locations[0])
                 redirects.append(url)
                 reactor.callLater(0, self.download_start, redirect_url, num_retries, redirects)
+                return True
             else: 
                 # too many redirects
-                err = error.InfiniteRedirection(response.code, 'Too many redirects', location=url)
-                raise TwistedError([failure.Failure(err)], response)
+                return False
         else:
             # no location header given to redirect to
             err = error.RedirectWithNoLocation(response.code, 'No location header field', url)

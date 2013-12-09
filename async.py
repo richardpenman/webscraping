@@ -126,7 +126,7 @@ class TwistedCrawler:
         """
         redirects = redirects or []
         proxy = self.D.get_proxy()
-        headers = dict(self.settings.headers)
+        headers = dict(self.settings.headers or {})
         headers['User-Agent'] = [self.D.get_user_agent(proxy)]
         for name, value in settings.default_headers.items():
             if name not in headers:
@@ -206,7 +206,7 @@ class TwistedCrawler:
         if num_retries < self.settings.num_retries:
             # retry the download
             common.logger.debug('Download retry: %d: %s' % (num_retries, url))
-            reactor.callLater(0, self.download_start, url, num_retries+1, num_redirects)
+            reactor.callLater(0, self.download_start, url, num_retries+1, redirects)
         else:
             # out of retries
             raise TwistedError('Retry failure: ' + response.phrase)
@@ -254,9 +254,9 @@ class TwistedCrawler:
     def build_pool(self):
         """Create connection pool
         """
-        # XXX connections take too much memory?
         pool = client.HTTPConnectionPool(reactor, persistent=True)
         # 1 connection for each proxy or thread
+        # XXX will this take too much memory?
         pool.maxPersistentPerHost = len(self.D.settings.proxies) or self.settings.num_threads
         pool.cachedConnectionTimeout = 240
         return pool

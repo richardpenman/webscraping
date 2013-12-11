@@ -22,6 +22,7 @@ from PySide.QtCore import QByteArray, QUrl, QTimer, QEventLoop, QIODevice, QObje
 from PySide.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
 from PySide.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
 """
+import alg
 import common
 import settings
 
@@ -305,7 +306,7 @@ class WebkitBrowser(QWebView):
         #super(WebkitBrowser, self).__init__()
         manager = NetworkAccessManager(proxy, forbidden_extensions, allowed_regex)
         manager.finished.connect(self.finished)
-        webpage = WebPage(user_agent or random.choice(settings.user_agents))
+        webpage = WebPage(user_agent or alg.rand_agent())
         webpage.setNetworkAccessManager(manager)
         self.setPage(webpage)
         self.setHtml('<html><head></head><body>No content loaded</body></html>', QUrl('http://localhost'))

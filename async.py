@@ -112,17 +112,31 @@ class TwistedCrawler:
                     # need to download this new URL
                     self.download_start(url)
                 self.state.update(queue_size=len(self.download_queue))
-      
+
+                # XXX test inactive
+                try:
+                    self.inactive_call.cancel()
+                except AttributeError:
+                    pass # not defined yet
+                self.inactive_call = reactor.callLater(5*60, self.inactive)
+
             if self.running:
                 reactor.callLater(0, self.cache_downloads)
                 reactor.callLater(0, self.crawl)
         else:
             # save the final state and exit
             self.stop()
-        
+
+
+    def inactive(self):
+        common.logger.error('crawler inactive')
+        common.logger.error('queue (%d): %s' % (len(self.download_queue), ', '.join(self.download_queue)))
+        common.logger.error('processing (%d): %s' % (len(self.processing), ', '.join(self.processing)))
+        self.stop()
+
 
     def download_start(self, url, num_retries=0, redirects=None):
-        """Start url download
+        """Start URL download
         """
         redirects = redirects or []
         proxy = self.D.get_proxy()
@@ -147,7 +161,7 @@ class TwistedCrawler:
             if timeout_call.active():
                 timeout_call.cancel()
         d.addBoth(completed)
-       
+
 
     def download_headers(self, response, url, num_retries, redirects):
         """Headers have been returned from download
@@ -197,7 +211,7 @@ class TwistedCrawler:
         self.state.update(num_errors=1)
         if self.D.cache and self.settings.write_cache:
             self.cache_queue.append((url, ''))
-        self.processing.remove(url)
+        self.processing.discard(url)
 
 
     def handle_retry(self, url, response, num_retries, redirects):
@@ -235,7 +249,7 @@ class TwistedCrawler:
     def scrape(self, url, html):
         """Pass completed body to callback for scraping
         """
-        self.processing.remove(url)
+        self.processing.discard(url)
         if html and self.settings.cb:
             try:
                 # get links crawled from webpage

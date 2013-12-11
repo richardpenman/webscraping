@@ -343,7 +343,7 @@ class Download:
             user_agent = Download.proxy_agents[proxy]
         else:
             # assign random user agent to this proxy
-            user_agent = random.choice(settings.user_agents)
+            user_agent = alg.rand_agent()
             Download.proxy_agents[proxy] = user_agent
         return user_agent
 

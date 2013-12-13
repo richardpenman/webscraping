@@ -17,6 +17,7 @@ import cookielib
 import itertools
 import htmlentitydefs
 import logging
+import logging.handlers
 import threading
 import collections
 from datetime import datetime, timedelta
@@ -692,20 +693,25 @@ class ConsoleHandler(logging.StreamHandler):
         logging.StreamHandler.emit(self, record)
 
 
-def get_logger(output_file, level=settings.log_level):
+def get_logger(output_file, level=settings.log_level, maxbytes=0):
     """Create a logger instance
 
     output_file:
         file where to save the log
     level:
         the minimum logging level to save
+    maxbytes:
+        the maxbytes allowed for the log file size. 0 means no limit.
     """
     logger = logging.getLogger(output_file)
     # avoid duplicate handlers
     if not logger.handlers:
         logger.setLevel(logging.DEBUG)
         try:
-            file_handler = logging.FileHandler(output_file)
+            if not maxbytes:
+                file_handler = logging.FileHandler(output_file)
+            else:
+                file_handler = logging.handlers.RotatingFileHandler(output_file, maxBytes=maxbytes)
         except IOError:
             pass # can not write file
         else:
@@ -716,4 +722,4 @@ def get_logger(output_file, level=settings.log_level):
         console_handler.setLevel(level)
         logger.addHandler(console_handler)
     return logger
-logger = get_logger(settings.log_file)
+logger = get_logger(settings.log_file, maxbytes=2*1024*1024*1024)

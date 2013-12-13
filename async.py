@@ -29,13 +29,13 @@ def threaded_get(**kwargs):
 
 
 class TwistedCrawler:
-    def __init__(self, url=None, urls=None, num_threads=20, cb=None, depth=True, **kwargs):
+    def __init__(self, url=None, urls=None, num_threads=20, cb=None, depth=True, max_errors=None, **kwargs):
         self.settings = adt.Bag(
             read_cache = True,
             write_cache = True,
             num_redirects = 5,
-            num_retries = 3,
-            timeout = 30,
+            num_retries = 2,
+            timeout = 20,
             headers = {},
             num_threads = num_threads,
             cb = cb,
@@ -55,6 +55,8 @@ class TwistedCrawler:
         for url in self.download_queue:
             self.found[url] = True
         self.state = download.State()
+        self.max_errors = max_errors
+        self.num_errors = 0 # counter for the number of subsequent errors
 
 
     def start(self):
@@ -119,6 +121,7 @@ class TwistedCrawler:
                 except AttributeError:
                     pass # not defined yet
                 self.inactive_call = reactor.callLater(5*60, self.inactive)
+                # XXX
 
             if self.running:
                 reactor.callLater(0, self.cache_downloads)
@@ -195,6 +198,7 @@ class TwistedCrawler:
         if self.D.cache and self.settings.write_cache:
             self.cache_queue.append((redirects, html))
         reactor.callLater(0, self.scrape, redirects[0], html)
+        self.num_errors = 0
 
 
     def download_timeout(self, d, url):
@@ -212,6 +216,12 @@ class TwistedCrawler:
         if self.D.cache and self.settings.write_cache:
             self.cache_queue.append((url, ''))
         self.processing.discard(url)
+        self.num_errors += 1
+        if self.max_errors is not None:
+            common.logger.info('Errors: %d / %d' % (self.num_errors, self.max_errors))
+            if self.num_errors > self.max_errors:
+                common.logger.error('Too many download errors, shutting down')
+                self.stop()
 
 
     def handle_retry(self, url, response, num_retries, redirects):

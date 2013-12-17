@@ -352,7 +352,6 @@ class Download:
         """Simply download the url and return the content
         """
         self.error_content = None
-        common.logger.info('Downloading %s' % url)
         # create opener with headers
         opener = opener or urllib2.build_opener()
         if proxy:
@@ -372,6 +371,7 @@ class Download:
         if isinstance(data, dict):
             # encode data for POST
             data = urllib.urlencode(data) 
+        common.logger.info('Downloading %s %s' % (url, data or ''))
 
         try:
             request = urllib2.Request(url, data, headers)
@@ -882,7 +882,7 @@ class State:
         fp.close()
         try:
             if os.name == 'nt': 
-                # on wineows can not rename if file exists
+                # on windows can not rename if file exists
                 if os.path.exists(self.output_file):
                     os.remove(self.output_file)
             # atomic copy to new location so state file is never partially written

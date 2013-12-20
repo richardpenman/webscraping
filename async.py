@@ -90,7 +90,7 @@ class TwistedCrawler:
         """Crawl more URLs if available
         """
         if self.download_queue or self.processing or self.cache_queue:
-            #print len(self.download_queue), len(self.cache_queue), self.processing
+            #print self.running, self.download_queue, len(self.cache_queue), self.processing, self.settings.num_threads
             while self.running and self.download_queue and len(self.processing) < self.settings.num_threads:
                 url = self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0)
                 self.processing.add(url)
@@ -143,12 +143,14 @@ class TwistedCrawler:
         """
         redirects = redirects or []
         proxy = self.D.get_proxy()
-        headers = dict(self.settings.headers or {})
-        headers['User-Agent'] = [self.D.get_user_agent(proxy)]
-        for name, value in settings.default_headers.items():
+        headers = {}
+        for name, value in self.settings.headers.items() + settings.default_headers.items():
             if name not in headers:
-                if name == 'Referer':
-                    value = url
+                if not value:
+                    if name == 'Referer':
+                        value = url
+                    elif name == 'User-Agent':
+                        value = self.D.get_user_agent(proxy)
                 headers[name] = [value]
         agent = self.build_agent(proxy, headers)
         data = None
@@ -218,7 +220,7 @@ class TwistedCrawler:
         self.processing.discard(url)
         self.num_errors += 1
         if self.max_errors is not None:
-            common.logger.info('Errors: %d / %d' % (self.num_errors, self.max_errors))
+            common.logger.debug('Errors: %d / %d' % (self.num_errors, self.max_errors))
             if self.num_errors > self.max_errors:
                 common.logger.error('Too many download errors, shutting down')
                 self.stop()
@@ -240,13 +242,17 @@ class TwistedCrawler:
         """Handle redirects - the builtin RedirectAgent does not handle relative redirects
         """
         locations = response.headers.getRawHeaders('location', [])
+        print 'redirect:', locations
         if locations:
             if len(redirects) < self.settings.num_redirects:
                 # a new redirect url
                 redirect_url = urlparse.urljoin(url, locations[0])
-                redirects.append(url)
-                reactor.callLater(0, self.download_start, redirect_url, num_retries, redirects)
-                return True
+                if redirect_url != url:
+                    redirects.append(url)
+                    reactor.callLater(0, self.download_start, redirect_url, num_retries, redirects)
+                    return True
+                else:
+                    return False
             else: 
                 # too many redirects
                 return False
@@ -260,7 +266,7 @@ class TwistedCrawler:
         """Pass completed body to callback for scraping
         """
         self.processing.discard(url)
-        if html and self.settings.cb:
+        if self.settings.cb:
             try:
                 # get links crawled from webpage
                 links = self.settings.cb(self.D, url, html) or []
@@ -298,6 +304,7 @@ class TwistedCrawler:
             # generate the agent
             endpoint = endpoints.TCP4ClientEndpoint(reactor, fragments.host, int(fragments.port))
             agent = client.ProxyAgent(endpoint, reactor=reactor, pool=pool)
+            # XXX need to add timeout here
         else:
             agent = client.Agent(reactor, connectTimeout=self.settings.timeout, pool=pool)
 

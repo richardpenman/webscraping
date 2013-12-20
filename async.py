@@ -144,13 +144,12 @@ class TwistedCrawler:
         redirects = redirects or []
         proxy = self.D.get_proxy()
         headers = {}
+        headers['User-Agent'] = [self.settings.get('user_agent', self.D.get_user_agent(proxy))]
         for name, value in self.settings.headers.items() + settings.default_headers.items():
             if name not in headers:
                 if not value:
                     if name == 'Referer':
                         value = url
-                    elif name == 'User-Agent':
-                        value = self.D.get_user_agent(proxy)
                 headers[name] = [value]
         agent = self.build_agent(proxy, headers)
         data = None
@@ -242,7 +241,6 @@ class TwistedCrawler:
         """Handle redirects - the builtin RedirectAgent does not handle relative redirects
         """
         locations = response.headers.getRawHeaders('location', [])
-        print 'redirect:', locations
         if locations:
             if len(redirects) < self.settings.num_redirects:
                 # a new redirect url

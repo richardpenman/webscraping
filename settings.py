@@ -21,4 +21,4 @@ log_file    = os.path.join(state_dir, 'webscraping.log') # default logging file
 
 log_level = logging.INFO # logging level
 default_encoding = 'utf-8'
-default_headers =  {'Accept-encoding': 'gzip', 'Referer': '', 'Accept-Language': 'en-us,en;q=0.5', 'User-Agent': ''}
+default_headers =  {'Accept-encoding': 'gzip', 'Referer': '', 'Accept-Language': 'en-us,en;q=0.5'}

@@ -303,7 +303,6 @@ class WebkitBrowser(QWebView):
     def __init__(self, base_url=None, gui=False, user_agent=None, proxy=None, load_images=False, forbidden_extensions=None, allowed_regex='.*?', timeout=20, delay=5, enable_plugins=False):
         self.app = QApplication(sys.argv) # must instantiate first
         QWebView.__init__(self)
-        #super(WebkitBrowser, self).__init__()
         manager = NetworkAccessManager(proxy, forbidden_extensions, allowed_regex)
         manager.finished.connect(self.finished)
         webpage = WebPage(user_agent or alg.rand_agent())
@@ -314,7 +313,7 @@ class WebkitBrowser(QWebView):
         self.delay = delay
         self.base_url = base_url
         self.jquery_lib = None
-        #enable flash plugin etc.
+        # enable flash plugin etc.
         self.settings().setAttribute(QWebSettings.PluginsEnabled, enable_plugins)
         self.settings().setAttribute(QWebSettings.JavaEnabled, enable_plugins)
         self.settings().setAttribute(QWebSettings.AutoLoadImages, load_images)

@@ -17,7 +17,6 @@ import adt, common, download, settings
 """
 TODO
 - support for POST
-- clean killing of outstanding requests
 """
 
 
@@ -50,6 +49,8 @@ class TwistedCrawler:
         self.download_queue = (urls or [url])[:] # XXX create compressed dict data type for large in memory?
         # URL's currently downloading 
         self.processing = set()
+        # defereds that are downloading
+        self.downloading = []
         # URL's that have been found before
         self.found = adt.HashDict()
         for url in self.download_queue:
@@ -82,8 +83,10 @@ class TwistedCrawler:
     def kill(self, *ignore):
         """Exit the script
         """
+        for d in self.downloading:
+            d.cancel()
         self.stop()
-        sys.exit()
+        #sys.exit()
 
 
     def crawl(self):
@@ -160,10 +163,13 @@ class TwistedCrawler:
 
         # timeout to stop download if hangs
         timeout_call = reactor.callLater(self.settings.timeout, self.download_timeout, d, url)
+        self.downloading.append(d)
+
         def completed(ignore):
             # remove timeout callback on completion
             if timeout_call.active():
                 timeout_call.cancel()
+                self.downloading.remove(d)
         d.addBoth(completed)
 
 
@@ -182,7 +188,7 @@ class TwistedCrawler:
         elif 500 <= response.code < 600:
             # server error so try again
             self.handle_retry(url, response, num_retries, redirects)
-        else:
+        elif self.running:
             # handle download
             #finished.addCallback(download_complete, url)
             #finished.addErrback(download_error, url)
@@ -206,6 +212,7 @@ class TwistedCrawler:
         """Catch timeout error and cancel request
         """
         common.logger.warning('Download timeout: ' + url)
+        self.downloading.remove(d)
         d.cancel()
 
 
@@ -264,7 +271,7 @@ class TwistedCrawler:
         """Pass completed body to callback for scraping
         """
         self.processing.discard(url)
-        if self.settings.cb:
+        if self.settings.cb and self.running:
             try:
                 # get links crawled from webpage
                 links = self.settings.cb(self.D, url, html) or []

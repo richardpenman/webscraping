@@ -15,6 +15,7 @@ However this module tries to navigate the HTML structure directly without normal
 # - parent
 # - search by text: text() == '...'
 # - return xpath for most similar to text
+# - multiple filters for a tag
 
 import re
 import sys
@@ -407,10 +408,10 @@ class Doc:
 try:
     from lxml import html as lxmlhtml
 except ImportError:
-    LxmlDoc = None
+    Tree = None
 else:
-    # is lxml is supported create wrapper
-    class LxmlDoc:
+    # if lxml is supported create wrapper
+    class Tree:
         def __init__(self, html, **kwargs):
             self.doc = lxmlhtml.fromstring(html)
 
@@ -435,44 +436,20 @@ else:
                 return node
 
 
-
-prev_doc = {}
-def _get_doc(html, remove):
-    """Return previous doc object if same HTML, else create new one
-
-    >>> html = '<div>1</div><div>2</div>'
-    >>> get(html, '/div', None)
-    '1'
-    >>> search(html, '//div', None)
-    ['1', '2']
-    >>> _get_doc(html, None).num_searches
-    2
-    """
-    global prev_doc
-    key = html, remove
-    doc = prev_doc.get(key)
-    if doc:
-        pass # can reuse current doc
-    else:
-        doc = Doc(html, remove=remove)
-        prev_doc = {key: doc}
-    return doc
-
-
 def get(html, xpath, remove=('br', 'hr')):
     """Return first element from XPath search of HTML
     """
-    return _get_doc(html, remove=remove).get(xpath)
+    return Doc(html, remove=remove).get(xpath)
 
 def search(html, xpath, remove=('br', 'hr')):
     """Return all elements from XPath search of HTML
     """
-    return _get_doc(html, remove=remove).search(xpath)
+    return Doc(html, remove=remove).search(xpath)
 
 def find_children(html, tag, remove=None):
     """Find children with this tag type
     """
-    return _get_doc(html, remove=remove)._find_children(html, tag)
+    return Doc(html, remove=remove)._find_children(html, tag)
 
 js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')
 def get_links(html, url=None, local=True, external=True):

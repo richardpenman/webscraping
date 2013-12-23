@@ -17,6 +17,7 @@ import adt, common, download, settings
 """
 TODO
 - support for POST
+- efficient get request callback
 """
 
 
@@ -86,7 +87,7 @@ class TwistedCrawler:
         for d in self.downloading:
             d.cancel()
         self.stop()
-        #sys.exit()
+        sys.exit()
 
 
     def crawl(self):

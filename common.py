@@ -44,7 +44,7 @@ EMPTY_TAGS = 'br', 'hr', 'meta', 'link', 'base', 'img', 'embed', 'param', 'area'
 def to_ascii(html):
     """Return ascii part of html
     """
-    return ''.join(c for c in html if ord(c) < 128)
+    return ''.join(c for c in (html or '') if ord(c) < 128)
 
 def to_int(s, default=0):
     """Return integer from this string

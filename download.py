@@ -362,6 +362,7 @@ class Download:
         
         headers = headers or {}
         headers['User-agent'] = user_agent or self.get_user_agent(proxy)
+        headers['Accept-encoding'] = 'gzip'
         for name, value in settings.default_headers.items():
             if name not in headers:
                 if name == 'Referer':

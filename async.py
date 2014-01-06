@@ -308,7 +308,7 @@ class TwistedCrawler:
             auth = base64.b64encode("%s:%s" % (fragments.username, fragments.password))
             headers['Proxy-Authorization'] = ["Basic " + auth.strip()]
             # generate the agent
-            endpoint = endpoints.TCP4ClientEndpoint(reactor, fragments.host, int(fragments.port))
+            endpoint = endpoints.TCP4ClientEndpoint(reactor, fragments.host, int(fragments.port), timeout=self.settings.timeout)
             agent = client.ProxyAgent(endpoint, reactor=reactor, pool=pool)
             # XXX need to add timeout here
         else:

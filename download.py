@@ -8,6 +8,7 @@ import collections
 import random
 import urllib
 import urllib2
+import cookielib
 import urlparse
 import StringIO
 import time
@@ -353,7 +354,9 @@ class Download:
         """
         self.error_content = None
         # create opener with headers
-        opener = opener or urllib2.build_opener()
+        if not opener:
+            cj = cookielib.CookieJar()
+            opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
         if proxy:
             if url.lower().startswith('https://'):
                 opener.add_handler(urllib2.ProxyHandler({'https' : proxy}))
@@ -399,10 +402,10 @@ class Download:
                     self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
             common.logger.warning('Download error: %s %s' % (url, e))
-            if not self.settings.acceptable_errors or self.response_code not in self.settings.acceptable_errors:
-                content, self.final_url = None, url
-            else:
+            if self.settings.acceptable_errors and self.response_code in self.settings.acceptable_errors:
                 content, self.final_url = self.settings.default, url
+            else:
+                content, self.final_url = None, url
         return content
 
 

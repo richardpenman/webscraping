@@ -310,14 +310,12 @@ class TwistedCrawler:
             # generate the agent
             endpoint = endpoints.TCP4ClientEndpoint(reactor, fragments.host, int(fragments.port), timeout=self.settings.timeout)
             agent = client.ProxyAgent(endpoint, reactor=reactor, pool=pool)
-            # XXX need to add timeout here
         else:
             agent = client.Agent(reactor, connectTimeout=self.settings.timeout, pool=pool)
 
         agent = client.ContentDecoderAgent(agent, [('gzip', client.GzipDecoder)])
-        #agent = client.RedirectAgent(agent, self.settings.num_redirects)
-        #cookieJar = cookielib.CookieJar()
-        #agent = CookieAgent(agent, cookieJar)
+        cj = cookielib.CookieJar()
+        agent = client.CookieAgent(agent, cj)
         return agent
 
 

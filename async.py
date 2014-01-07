@@ -146,6 +146,7 @@ class TwistedCrawler:
         """Start URL download
         """
         redirects = redirects or []
+        redirects.append(url)
         proxy = self.D.get_proxy()
         headers = {}
         headers['User-Agent'] = [self.settings.get('user_agent', self.D.get_user_agent(proxy))]
@@ -159,7 +160,7 @@ class TwistedCrawler:
         data = None
         d = agent.request('GET', url, http_headers.Headers(headers), data) 
         d.addCallback(self.download_headers, url, num_retries, redirects)
-        d.addErrback(self.download_error, url)
+        d.addErrback(self.download_error, redirects[0])
         d.addErrback(log.err)
 
         # timeout to stop download if hangs
@@ -194,7 +195,7 @@ class TwistedCrawler:
             #finished.addCallback(download_complete, url)
             #finished.addErrback(download_error, url)
             finished.addCallbacks(self.download_complete, self.download_error, 
-                callbackArgs=[redirects + [url]], errbackArgs=[url]
+                callbackArgs=[redirects], errbackArgs=[redirects[0]]
             )
             finished.addErrback(log.err)
 
@@ -212,7 +213,6 @@ class TwistedCrawler:
     def download_timeout(self, d, url):
         """Catch timeout error and cancel request
         """
-        common.logger.warning('Download timeout: ' + url)
         self.downloading.remove(d)
         d.cancel()
 
@@ -220,11 +220,14 @@ class TwistedCrawler:
     def download_error(self, reason, url):
         """Error received during download
         """
-        common.logger.warning('Download error: %s: %s' % (reason.getErrorMessage(), url))
+        # XXX how to properly pass error from download timeout cancel
+        error = reason.getErrorMessage() or 'Download timeout' 
+        common.logger.warning('Download error: %s: %s' % (error, url))
         self.state.update(num_errors=1)
         if self.D.cache and self.settings.write_cache:
             self.cache_queue.append((url, ''))
-        self.processing.discard(url)
+        self.processing.remove(url)
+        # check whether to give up the crawl
         self.num_errors += 1
         if self.max_errors is not None:
             common.logger.debug('Errors: %d / %d' % (self.num_errors, self.max_errors))
@@ -255,6 +258,8 @@ class TwistedCrawler:
                 redirect_url = urlparse.urljoin(url, locations[0])
                 if redirect_url != url:
                     redirects.append(url)
+                    #self.processing.remove(url)
+                    #self.processing.add(redirect_url)
                     reactor.callLater(0, self.download_start, redirect_url, num_retries, redirects)
                     return True
                 else:
@@ -271,7 +276,7 @@ class TwistedCrawler:
     def scrape(self, url, html):
         """Pass completed body to callback for scraping
         """
-        self.processing.discard(url)
+        self.processing.remove(url)
         if self.settings.cb and self.running:
             try:
                 # get links crawled from webpage

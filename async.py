@@ -96,7 +96,7 @@ class TwistedCrawler:
         if self.download_queue or self.processing or self.cache_queue:
             #print self.running, self.download_queue, len(self.cache_queue), self.processing, self.settings.num_threads
             while self.running and self.download_queue and len(self.processing) < self.settings.num_threads:
-                url = self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0)
+                url = str(self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0))
                 self.processing.add(url)
                 downloaded = False
                 if self.D.cache and self.settings.read_cache:
@@ -245,7 +245,8 @@ class TwistedCrawler:
             reactor.callLater(0, self.download_start, url, num_retries+1, redirects)
         else:
             # out of retries
-            raise TwistedError('Retry failure: ' + response.phrase)
+            print response.code, self.settings.num_retries, num_retries
+            raise TwistedError('Retry failure: %s (%d)' % (response.phrase, response.code))
 
 
     def handle_redirect(self, url, response, num_retries, redirects):

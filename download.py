@@ -233,7 +233,7 @@ class Download:
         if html:
             if settings.num_redirects > 0:
                 # allowed to redirect
-                redirect_url = self.get_redirect(url=url, html=html)
+                redirect_url = get_redirect(url=url, html=html)
                 if redirect_url:
                     # found a redirection
                     common.logger.debug('%s redirecting to %s' % (url, redirect_url))
@@ -241,7 +241,10 @@ class Download:
                     html = self.get(redirect_url, **settings) or ''
                     # make relative links absolute so will still work after redirect
                     relative_re = re.compile('(<\s*a[^>]+href\s*=\s*["\']?)(?!http)([^"\'>]+)', re.IGNORECASE)
-                    html = relative_re.sub(lambda m: m.group(1) + urlparse.urljoin(url, m.group(2)), html)
+                    try:
+                        html = relative_re.sub(lambda m: m.group(1) + urlparse.urljoin(url, m.group(2)), html)
+                    except UnicodeDecodeError:
+                        pass
             html = self._clean_content(html=html, max_size=settings.max_size, force_html=settings.force_html, force_ascii=settings.force_ascii)
 
         if self.cache and settings.write_cache:
@@ -311,14 +314,6 @@ class Download:
         elif force_ascii:
             html = common.to_ascii(html) # remove non-ascii characters
         return html
-
-
-    def get_redirect(self, url, html):
-        """Check for meta redirects and return redirect URL if found
-        """
-        match = re.compile('<meta[^>]*?url=(.*?)["\']', re.IGNORECASE).search(html)
-        if match:
-            return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
     def get_proxy(self, proxies=None):
@@ -673,6 +668,14 @@ class Download:
             save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
             open(save_path, 'wb').write(_bytes)
             return save_path
+
+
+def get_redirect(url, html):
+    """Check for meta redirects and return redirect URL if found
+    """
+    match = re.compile('<meta[^>]*?url=(.*?)["\']', re.IGNORECASE).search(html)
+    if match:
+        return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
 

@@ -198,11 +198,14 @@ def remove_tags(html, keep_children=True):
     'hello !'
     >>> remove_tags('hello <br>world<br />!', False)
     'hello world!'
+    >>> remove_tags('<span><b></b></span>test</span>', False)
+    'test'
     """
     html = re.sub('<(%s)[^>]*>' % '|'.join(EMPTY_TAGS), '', html)
     if not keep_children:
-        # XXX does not work for multiple nested tags
-        html = re.compile('<.*?>(.*?)</.*?>', re.DOTALL).sub('', html)
+        for tag in unique(re.findall('<(\w+?)\W', html)):
+            if tag not in EMPTY_TAGS:
+                html = re.compile('<\s*%s.*?>.*?</\s*%s\s*>' % (tag, tag), re.DOTALL).sub('', html)
     return re.compile('<[^<]*?>').sub('', html)
     
     

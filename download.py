@@ -622,31 +622,20 @@ class Download:
                 else:
                     raise KeyError()
             except KeyError:
-                # try online whois app
-                query_url = 'http://whois.chinaz.com/%s' % domain
-                html = self.get(query_url)
-                match = re.compile("<script src='(request.aspx\?domain=.*?)'></script>").search(html)
-                if match:
-                    script_url = urlparse.urljoin(query_url, match.groups()[0])
-                    text = self.get(script_url, read_cache=False)
-
-                if '@' not in text:
-                    if self.cache:
-                        del self.cache[query_url]
-                    # failed, so try local whois command
-                    r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
-                    start = time.time()
-                    while r.poll() is None:
-                        time.sleep(0.5)
-                        if time.time() - start > timeout:
-                            try:
-                                r.kill()
-                            except Exception, e:
-                                pass
-                            break
-                    if r.poll() != 1:
-                        text = r.communicate()[0]
-                
+                # try local whois command
+                r = subprocess.Popen(['whois', domain], stdout=subprocess.PIPE)
+                start = time.time()
+                while r.poll() is None:
+                    time.sleep(0.5)
+                    if time.time() - start > timeout:
+                        try:
+                            r.kill()
+                        except Exception, e:
+                            pass
+                        break
+                if r.poll() != 1:
+                    text = r.communicate()[0]
+            
                 if '@' in text:
                     if self.cache:
                         self.cache[key] = text

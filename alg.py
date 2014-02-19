@@ -42,22 +42,23 @@ def extract_emails(html):
     >>> extract_emails('hello contact AT webscraping DOT com world')
     ['contact@webscraping.com']
     """
-    email_re = re.compile('([\w\.-]{1,64})@(\w[\w\.-]{1,255})\.(\w+)')
-    # remove comments, which can obfuscate emails
-    html = re.compile('<!--.*?-->', re.DOTALL).sub('', html).replace('mailto:', '')
     emails = []
-    for user, domain, ext in email_re.findall(html):
-        if ext.lower() not in common.MEDIA_EXTENSIONS and len(ext)>=2 and not re.compile('\d').search(ext) and domain.count('.')<=3:
-            email = '%s@%s.%s' % (user, domain, ext)
-            if email not in emails:
-                emails.append(email)
+    if html:
+        email_re = re.compile('([\w\.-]{1,64})@(\w[\w\.-]{1,255})\.(\w+)')
+        # remove comments, which can obfuscate emails
+        html = re.compile('<!--.*?-->', re.DOTALL).sub('', html).replace('mailto:', '')
+        for user, domain, ext in email_re.findall(html):
+            if ext.lower() not in common.MEDIA_EXTENSIONS and len(ext)>=2 and not re.compile('\d').search(ext) and domain.count('.')<=3:
+                email = '%s@%s.%s' % (user, domain, ext)
+                if email not in emails:
+                    emails.append(email)
 
-    # look for obfuscated email
-    for user, domain, ext in re.compile('([\w\.-]{1,64})\s?.?AT.?\s?([\w\.-]{1,255})\s?.?DOT.?\s?(\w+)', re.IGNORECASE).findall(html):
-        if ext.lower() not in common.MEDIA_EXTENSIONS and len(ext)>=2 and not re.compile('\d').search(ext) and domain.count('.')<=3:
-            email = '%s@%s.%s' % (user, domain, ext)
-            if email not in emails:
-                emails.append(email)
+        # look for obfuscated email
+        for user, domain, ext in re.compile('([\w\.-]{1,64})\s?.?AT.?\s?([\w\.-]{1,255})\s?.?DOT.?\s?(\w+)', re.IGNORECASE).findall(html):
+            if ext.lower() not in common.MEDIA_EXTENSIONS and len(ext)>=2 and not re.compile('\d').search(ext) and domain.count('.')<=3:
+                email = '%s@%s.%s' % (user, domain, ext)
+                if email not in emails:
+                    emails.append(email)
     return emails
 
 
@@ -72,11 +73,17 @@ def extract_phones(html):
     ['+1-123-456-7890', '123 456 7890']
     """
     phones = []
-    for match in re.findall('[\d\-\+ \.\(\)]+', html):
-        digits = ''.join([c for c in match if c.isdigit()])
-        if len(digits) >= 9:
-            # phone should have atleast 9 digits
-            phones.append(match.strip())
+    try:
+        matches = re.findall('[\d\-\+ \.\(\)]+', html)
+    except TypeError:
+        matches = []
+    if html:
+        #for match in matches:
+        for match in re.findall('[\d\-\+ \.\(\)]+', html):
+            digits = ''.join([c for c in match if c.isdigit()])
+            if len(digits) >= 9:
+                # phone should have atleast 9 digits
+                phones.append(match.strip())
     return phones
 
 

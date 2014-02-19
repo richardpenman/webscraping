@@ -186,7 +186,7 @@ class Download:
         if self.cache and settings.read_cache:
             try:
                 html = self.cache[key]
-                if html and settings.pattern and not re.compile(settings.pattern, re.DOTALL | re.IGNORECASE).search(html):
+                if self.invalid_response(html, settings.pattern):
                     # invalid result from download
                     html = None
             except KeyError:
@@ -344,6 +344,12 @@ class Download:
         return user_agent
 
 
+    def invalid_response(self, html, pattern):
+        """Return whether the response contains a regex error pattern 
+        """
+        return html and pattern and re.compile(pattern, re.DOTALL | re.IGNORECASE).search(html)
+
+
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):
         """Simply download the url and return the content
         """
@@ -380,10 +386,10 @@ class Download:
                     # data came back gzip-compressed so decompress it          
                     content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()
                 self.final_url = response.url # store where redirected to
-                if pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(content):
+                if self.invalid_response(content, pattern):
                     # invalid result from download
                     content = None
-                    common.logger.warning('Content did not match expected pattern - %s' % url)
+                    common.logger.warning('Content did not match expected pattern: %s' % url)
                 self.response_code = str(response.code)
                 self.response_headers = dict(response.headers)
         except Exception, e:

@@ -29,7 +29,7 @@ def threaded_get(**kwargs):
 
 
 class TwistedCrawler:
-    def __init__(self, url=None, urls=None, num_threads=20, cb=None, depth=True, max_errors=None, **kwargs):
+    def __init__(self, url=None, urls=None, num_threads=20, cb=None, depth=True, max_errors=None, pattern=None, **kwargs):
         self.settings = adt.Bag(
             read_cache = True,
             write_cache = True,
@@ -39,7 +39,8 @@ class TwistedCrawler:
             headers = {},
             num_threads = num_threads,
             cb = cb,
-            depth = depth
+            depth = depth,
+            pattern = pattern
         )
         self.settings.update(**kwargs)
         self.D = download.Download(**kwargs)
@@ -107,6 +108,9 @@ class TwistedCrawler:
                         pass 
                     else:
                         # html is available so scrape this directly
+                        if self.D.invalid_response(html, self.settings.pattern):
+                            # invalid result from download
+                            html = ''
                         if html or self.settings.num_retries == 0:
                             reactor.callLater(0, self.scrape, url, html)
                             downloaded = True
@@ -192,27 +196,33 @@ class TwistedCrawler:
             raise TwistedError(response.phrase)
         elif 500 <= response.code < 600:
             # server error so try again
-            self.handle_retry(url, response, num_retries, redirects)
+            message = '%s (%d)' % (response.phrase, response.code)
+            self.handle_retry(url, message, num_retries, redirects)
         elif self.running:
             # handle download
-            #finished.addCallback(download_complete, url)
-            #finished.addErrback(download_error, url)
             finished.addCallbacks(self.download_complete, self.download_error, 
-                callbackArgs=[redirects], errbackArgs=[redirects[0]]
+                callbackArgs=[num_retries, redirects], errbackArgs=[redirects[0]]
             )
-            finished.addErrback(log.err)
+            finished.addErrback(self.download_error, redirects[0])
 
 
-    def download_complete(self, html, redirects):
+    def download_complete(self, html, num_retries, redirects):
         """Body has completed downloading
         """
-        self.num_errors = 0
-        self.state.update(num_downloads=1)
         redirect_url = download.get_redirect(redirects[0], html)
         if redirect_url:
+            # meta redirect
             proxy = self.processing[redirects[0]]
             reactor.callLater(0, self.download_start, redirect_url, 0, redirects, proxy)
+        elif self.D.invalid_response(html, self.settings.pattern):
+            # invalid result from download
+            message = 'Content did not match expected pattern'
+            self.handle_retry(redirects[0], message, num_retries, redirects)
+
         else:
+            # successful download
+            self.num_errors = 0
+            self.state.update(num_downloads=1)
             if self.D.cache and self.settings.write_cache:
                 self.cache_queue.append((redirects, html))
             reactor.callLater(0, self.scrape, redirects[0], html)
@@ -244,17 +254,16 @@ class TwistedCrawler:
                 self.stop()
 
 
-    def handle_retry(self, url, response, num_retries, redirects):
+    def handle_retry(self, url, message, num_retries, redirects):
         """Handle retrying a download error
         """
         if num_retries < self.settings.num_retries:
             # retry the download
-            common.logger.debug('Download retry: %d: %s' % (num_retries, url))
+            common.logger.info('Download retry: %d: %s' % (num_retries, url))
             reactor.callLater(0, self.download_start, url, num_retries+1, redirects)
         else:
             # out of retries
-            #print response.code, self.settings.num_retries, num_retries
-            raise TwistedError('Retry failure: %s (%d)' % (response.phrase, response.code))
+            raise TwistedError('Retry failure: %s' % message)
 
 
     def handle_redirect(self, url, response, num_retries, redirects):

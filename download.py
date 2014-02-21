@@ -347,7 +347,7 @@ class Download:
     def invalid_response(self, html, pattern):
         """Return whether the response contains a regex error pattern 
         """
-        return html and pattern and re.compile(pattern, re.DOTALL | re.IGNORECASE).search(html)
+        return html and pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(html)
 
 
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):

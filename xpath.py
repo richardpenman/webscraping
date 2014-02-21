@@ -169,6 +169,8 @@ class Doc:
         [(0, '', 'div', 1, []), (1, '/', 'span', None, [('class', 'text')])]
         >>> doc.parse('//li[-2]')
         [(0, '/', 'li', -2, [])]
+        >>> doc.parse('//option[@selected]')
+        [(0, '/', 'option', None, [('selected', None)])]
         >>> doc.parse('/div[@id="content"]//span[1][@class="text"][@title=""]/a')
         [(0, '', 'div', None, [('id', 'content')]), (1, '/', 'span', 1, [('class', 'text'), ('title', '')]), (2, '', 'a', None, [])]
         """
@@ -187,7 +189,11 @@ class Doc:
                             key, value = match.groups()
                             attributes.append((key.lower(), value.lower()))
                         else:
-                            raise common.WebScrapingError('Unknown format: ' + attribute)
+                            match = re.compile('@(.*?)$').search(attribute)
+                            if match:
+                                attributes.append((match.groups()[0].lower(), None))
+                            else:
+                                raise common.WebScrapingError('Unknown format: ' + attribute)
             else:
                 tag = token
             tokens.append((counter, separator, tag, index, attributes))
@@ -203,13 +209,19 @@ class Doc:
         {'max-width': '20', 'class': 'abc', 'id': 'ID', 'name': 'MY NAME'}
         >>> doc._get_attributes('<td width=200 valign=top class=textelien>')
         {'width': '200', 'class': 'textelien', 'valign': 'top'}
+        >>> doc._get_attributes('<option value="1" selected>')
+        {'selected': None, 'value': '1'}
         """
 
         for i, c in enumerate(html):
             if c == '>':
                 html = html[:i]
                 break
-        return dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in Doc._attributes_regex.findall(html))
+        attributes = dict((name.lower().strip(), value.strip('\'" ')) for (name, value) in Doc._attributes_regex.findall(html))
+        #for attribute in ('checked', 'selected', 'required', 'multiple', 'disabled'):
+        for attribute in re.findall('\s+(checked|selected|required|multiple|disabled)', html):
+            attributes[attribute] = None
+        return attributes
 
 
     def _match_attributes(self, desired_attributes, available_attributes):
@@ -235,9 +247,20 @@ class Doc:
         True
         >>> doc._match_attributes([('class', 'test\d')], {'id':'test2', 'class':'test'})
         False
+        >>> doc._match_attributes([('selected', None)], {'selected':None, 'class':'test'})
+        True
+        >>> doc._match_attributes([('selected', None)], {'class':'test'})
+        False
+        >>> doc._match_attributes([('class', 'test')], {'selected':None, 'class':'test'})
+        True
         """
         for name, value in desired_attributes:
-            if name not in available_attributes or not re.match(re.compile(value + '$', re.IGNORECASE), available_attributes[name]):
+            if name in available_attributes:
+                available_value = available_attributes[name]
+                if value != available_value:
+                    if value is None or not re.match(re.compile(value + '$', re.IGNORECASE), available_attributes[name]):
+                        return False
+            else:
                 return False
         return True
 

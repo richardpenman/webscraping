@@ -673,6 +673,35 @@ def get_redirect(url, html):
         return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
 
 
+class Form:
+    """Helper class for filling and submitting forms
+    """
+    def __init__(self, html, path):
+        form = xpath.get(html, path)
+        self.action = xpath.get(html, path + '/@action')
+
+        self.data = {}
+        for input_name, input_value in zip(xpath.search(form, '//input/@name'), xpath.search(form, '//input/@value')):
+            self.data[input_name] = input_value
+        for text_name, text_value in zip(xpath.search(form, '//textarea/@name'), xpath.search(form, '//textarea')):
+            self.data[text_name] = text_value
+        for select_name, select_contents in zip(xpath.search(form, '//select/@name'), xpath.search(form, '//select')):
+            self.data[select_name] = xpath.get(select_contents, '/option[@selected]/@value')
+
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __setitem__(self, key, value):
+        self.data[key] = value
+
+    def submit(self, D, action=''):
+        action = action or self.action
+        if not action:
+            raise common.WebScrapingError('URL action to submit form is unknown')
+        return D.get(url=action, data=self.data)
+
+
 
 def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
     """Download these urls in parallel

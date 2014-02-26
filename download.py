@@ -208,7 +208,10 @@ class Download:
         # attempt downloading content at URL
         while settings.num_retries >= 0 and html is None:
             settings.num_retries -= 1
-            self.proxy = self.get_proxy(settings.proxies)
+            if settings.proxy:
+                self.proxy = settings.proxy
+            else:
+                self.proxy = self.get_proxy(settings.proxies)
             # crawl slowly for each domain to reduce risk of being blocked
             self.throttle(url, delay=settings.delay, proxy=self.proxy) 
             html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
@@ -347,7 +350,7 @@ class Download:
     def invalid_response(self, html, pattern):
         """Return whether the response contains a regex error pattern 
         """
-        return html and pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(html)
+        return html is None or (pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(html))
 
 
     def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):

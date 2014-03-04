@@ -448,65 +448,12 @@ class Download:
 
 
     def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None):
-        """Geocode address using Google's API and return dictionary of useful fields
+        gm = GoogleMaps(self)
+        return gm.geocode(address, delay, read_cache, num_retries, language)
 
-        address:
-            what to pass to geocode API
-        delay:
-            how long to delay between API requests
-        read_cache:
-            whether to load content from cache when exists
-        num_retries:
-            the number of times to try downloading
-        language:
-            the language to set
-        """
-        url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (urllib.quote_plus(address), '&language=' + language if language else '')
-        html = self.get(url, delay=delay, read_cache=read_cache, num_retries=num_retries)
-        results = collections.defaultdict(str)
-        if html:
-            try:
-                geo_data = json.loads(html)
-            except Exception, e:
-                common.logger.debug(str(e))
-                return {}
-            for result in geo_data.get('results', []):
-                for e in result['address_components']:
-                    types, value, abbrev = e['types'], e['long_name'], e['short_name']
-                    if 'street_number' in types:
-                        results['number'] = value
-                    elif 'route' in types:
-                        results['street'] = value
-                    elif 'postal_code' in types:
-                        results['postcode'] = value
-                    elif 'locality' in types:
-                        results['suburb'] = value
-                    elif 'administrative_area_level_1' in types:
-                        results['state'] = value
-                        results['state_code'] = abbrev
-                    elif 'administrative_area_level_2' in types:
-                        results['county'] = value
-                    elif 'administrative_area_level_3' in types:
-                        results['district'] = value
-                    elif 'country' in types:
-                        results['country'] = value
-                        results['country_code'] = value
-                results['full_address'] = result['formatted_address']
-                m = re.compile(r'"location" : {\s*"lat" : ([\d\-\.]+),\s*"lng" : ([\d\-\.]+)').search(html)
-                if m:
-                    results['lat'] = m.groups()[0].strip()
-                    results['lng'] = m.groups()[1].strip()
-                else:
-                    results['lat'] = result['geometry']['location']['lat']
-                    results['lng'] = result['geometry']['location']['lng']
-            if 'street' in results:
-                results['address'] = (results['number'] + ' ' + results['street']).strip()
-        if not results:
-            # error geocoding - try again later
-            common.logger.debug('Delete invalid geocode')
-            if self.cache:
-                self.cache[url] = ''
-        return results
+    def places(self, api_key, keyword, latitude, longitude, radius=10000, delay=5, num_retries=1, language='en'):
+        gm = GoogleMaps(self)
+        return gm.places(api_key, keyword, latitude, longitude, radius, delay, num_retries, language)
 
 
     def get_emails(self, website, max_depth=1, max_urls=10, max_emails=1):
@@ -671,6 +618,139 @@ def get_redirect(url, html):
     match = re.compile('<meta[^>]*?url=(.*?)["\']', re.IGNORECASE).search(html)
     if match:
         return urlparse.urljoin(url, common.unescape(match.groups()[0].strip())) 
+
+
+class GoogleMaps:
+
+    def __init__(self, D):
+        self.D = D
+
+
+    def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None):
+        """Geocode address using Google's API and return dictionary of useful fields
+
+        address:
+            what to pass to geocode API
+        delay:
+            how long to delay between API requests
+        read_cache:
+            whether to load content from cache when exists
+        num_retries:
+            the number of times to try downloading
+        language:
+            the language to set
+        """
+        geocode_url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (urllib.quote_plus(address), '&language=' + language if language else '')
+        geocode_html = self.D.get(geocode_url, delay=delay, read_cache=read_cache, num_retries=num_retries)
+        geocode_data = self.load_result(geocode_url, geocode_html)
+        for result in geocode_data.get('results', []):
+            return self.parse_location(result)
+        return {}
+
+
+    def places(self, api_key, keyword, latitude, longitude, radius=10000, delay=5, num_retries=1, language='en'):
+        """Search the Google Place API for this keyword and location
+
+        api_key is the Google Places API key: https://developers.google.com/places/documentation/#Authentication
+        radius around the location can be a maximum 50000
+
+        Returns a list of up to 200 matching places
+        """
+        search_url_template = 'https://maps.googleapis.com/maps/api/place/radarsearch/json?key={0}&location={1},{2}&radius={3}&keyword={4}&sensor=false'
+        place_url_template = 'https://maps.googleapis.com/maps/api/place/details/json?key={0}&reference={1}&language={2}&sensor=false'
+
+        search_url = search_url_template.format(api_key, latitude, longitude, radius, keyword).replace(' ', '+')
+        search_html = self.D.get(search_url, delay=delay, num_retries=num_retries)
+        search_results = self.load_result(search_url, search_html)
+
+        place_results = []
+        # iterate search results
+        for search_result in search_results.get('results', []):
+            reference = search_result['reference']
+            # found a new place
+            place_url = place_url_template.format(api_key, reference, language)
+            place_html = self.D.get(place_url, delay=delay, num_retries=num_retries)
+
+            place = self.load_result(place_url, place_html)
+            if place:
+                place = place['result']
+                result = self.parse_location(place)
+                result['name'] = place['name']
+                result['categories'] = place['types']
+                result['phone'] = place.get('formatted_phone_number', '')
+                result['website'] = place.get('website', '')
+                place_results.append(result)
+        return place_results
+
+
+    def load_result(self, url, html):
+        """Parse the result from API
+
+        If JSON is well formed and status is OK then will return result
+        Else will return an empty dict
+        """
+        if html:
+            try:
+                search_data = json.loads(html)
+            except ValueError as e:
+                common.logger.debug(str(e))
+            else:
+                status = search_data['status']
+                if status == 'OK':
+                    return search_data
+                elif status == 'ZERO_RESULTS':
+                    pass
+                elif status == 'OVER_QUERY_LIMIT':
+                    # error geocoding - try again later
+                    self.D.cache[url] = ''
+                elif status in ('REQUEST_DENIED', 'INVALID_REQUEST'):
+                    common.logger.info('{0}: {1}'.format(status, url))
+        return {}
+
+
+    def parse_location(self, result):
+        """Parse address data from Google's geocoding response into a more usable flat structure
+        
+        Example: https://developers.google.com/maps/documentation/geocoding/#JSON
+        """
+        results = collections.defaultdict(str)
+        for e in result['address_components']:
+            # parse address compenents into flat layer
+            types, value, abbrev = e['types'], e['long_name'], e['short_name']
+            if 'street_number' in types:
+                results['number'] = value
+            elif 'route' in types:
+                results['street'] = value
+            elif 'postal_code' in types:
+                results['postcode'] = value
+            elif 'locality' in types:
+                results['suburb'] = value
+            elif 'administrative_area_level_1' in types:
+                results['state'] = value
+                results['state_code'] = abbrev
+            elif 'administrative_area_level_2' in types:
+                results['county'] = value
+            elif 'administrative_area_level_3' in types:
+                results['district'] = value
+            elif 'country' in types:
+                results['country'] = value
+                results['country_code'] = abbrev
+       
+        # extract addresses 
+        results['full_address'] = result['formatted_address']
+        if 'street' in results:
+            results['address'] = (results['number'] + ' ' + results['street']).strip()
+
+        # extract latitude longitude
+        #m = re.compile(r'"location" : {\s*"lat" : ([\d\-\.]+),\s*"lng" : ([\d\-\.]+)').search(html)
+        #if m:
+        #    results['lat'] = m.groups()[0].strip()
+        #    results['lng'] = m.groups()[1].strip()
+        #else:
+        results['lat'] = result['geometry']['location']['lat']
+        results['lng'] = result['geometry']['location']['lng']
+        return results
+
 
 
 class Form:

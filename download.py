@@ -786,6 +786,12 @@ class Form:
 
 
 
+class StopCrawl(Exception):
+    """Raise this exception to interrupt crawl
+    """
+    pass
+
+
 def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
     """Download these urls in parallel
 
@@ -822,6 +828,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         """
         processing = collections.deque() # to track whether are still downloading
         discovered = {} # the URL's that have been discovered
+        running = True
 
         def __init__(self):
             threading.Thread.__init__(self)
@@ -830,7 +837,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
             D = Download(**kwargs)
             queue = pdict.Queue(settings.queue_file)
 
-            while seed_urls or DownloadThread.processing:
+            while DownloadThread.running and (seed_urls or DownloadThread.processing):
                 # keep track that are processing url
                 DownloadThread.processing.append(1) 
                 try:
@@ -851,7 +858,11 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                                 # use callback to process downloaded HTML
                                 result = cb(D, url, html)
 
-                            except Exception, e:
+                            except StopCrawl:
+                                common.logger.info('Stopping crawl signal')
+                                DownloadThread.running = False
+
+                            except Exception:
                                 # catch any callback error to avoid losing thread
                                 common.logger.exception('\nIn callback for: ' + str(url))
 

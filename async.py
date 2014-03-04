@@ -293,6 +293,9 @@ class TwistedCrawler:
             try:
                 # get links crawled from webpage
                 links = self.settings.cb(self.D, url, html) or []
+            except download.StopCrawl:
+                common.logger.info('Stopping crawl signal')
+                self.stop()
             except Exception as e:
                 common.logger.exception('\nIn callback for: ' + str(url))
             else:

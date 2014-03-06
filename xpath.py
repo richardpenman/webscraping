@@ -474,6 +474,38 @@ def find_children(html, tag, remove=None):
     """
     return Doc(html, remove=remove)._find_children(html, tag)
 
+
+
+class Form:
+    """Helper class for filling and submitting forms
+    """
+    def __init__(self, html, path):
+        form = get(html, path)
+        self.action = get(html, path + '/@action')
+
+        self.data = {}
+        for input_name, input_value in zip(search(form, '//input/@name'), search(form, '//input/@value')):
+            self.data[input_name] = input_value
+        for text_name, text_value in zip(search(form, '//textarea/@name'), search(form, '//textarea')):
+            self.data[text_name] = text_value
+        for select_name, select_contents in zip(search(form, '//select/@name'), search(form, '//select')):
+            self.data[select_name] = get(select_contents, '/option[@selected]/@value')
+
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __setitem__(self, key, value):
+        self.data[key] = value
+
+    def submit(self, D, action=''):
+        action = action or self.action
+        if not action:
+            raise common.WebScrapingError('URL action to submit form is unknown')
+        return D.get(url=action, data=self.data)
+
+
+
 js_re = re.compile('location.href ?= ?[\'"](.*?)[\'"]')
 def get_links(html, url=None, local=True, external=True):
     """Return all links from html and convert relative to absolute if source url is provided

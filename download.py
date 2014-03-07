@@ -643,8 +643,12 @@ class GoogleMaps:
         language:
             the language to set
         """
-        address = urllib.quote_plus(address.encode('utf-8'))
-        geocode_url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (address, '&language=' + language if language else '')
+        try:
+            address = address.encode('utf-8')
+        except UnicodeDecodeError:
+            common.logger.warning('Geocode failed to parse address and needed to cast to ascii: ' + address)
+            address = common.to_ascii(address)
+        geocode_url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (urllib.quote_plus(address), '&language=' + language if language else '')
         geocode_html = self.D.get(geocode_url, delay=delay, read_cache=read_cache, num_retries=num_retries)
         geocode_data = self.load_result(geocode_url, geocode_html)
         for result in geocode_data.get('results', []):

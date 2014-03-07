@@ -292,7 +292,10 @@ def normalize(s, encoding=settings.default_encoding):
     >>> normalize('''<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>''')
     'Tel.: 029 - 12345678'
     """
-    return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
+    if isinstance(s, basestring):
+        return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
+    else:
+        return s
 
 
 def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNORECASE, default=''):

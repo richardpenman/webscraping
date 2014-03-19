@@ -378,13 +378,14 @@ class Download:
         
         if isinstance(data, dict):
             # encode data for POST
-            data = urllib.urlencode(data) 
+            data = urllib.urlencode(sorted(data.items()))
         common.logger.info('Downloading %s %s' % (url, data or ''))
 
         try:
             request = urllib2.Request(url, data, headers)
             with contextlib.closing(opener.open(request)) as response:
                 content = response.read()
+                #print response.headers
                 if response.headers.get('content-encoding') == 'gzip':
                     # data came back gzip-compressed so decompress it          
                     content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()
@@ -1067,12 +1068,17 @@ class CrawlerCallback:
             # extract links to continue crawling
             links_re = re.compile('<a[^>]+href=["\'](.*?)["\']', re.IGNORECASE)
             for link in links_re.findall(html):
-                link = normalize(link)
-                if link not in CrawlerCallback.found:
-                    CrawlerCallback.found[link] = depth + 1
-                    if valid(link):
-                        # is a new link
-                        outstanding.append(link)
-                        if len(outstanding) == self.max_links:
-                            break
+                try:
+                    link = normalize(link)
+                except UnicodeDecodeError as e:
+                    # unicode error when joining url
+                    common.logger.info(e)
+                else:
+                    if link not in CrawlerCallback.found:
+                        CrawlerCallback.found[link] = depth + 1
+                        if valid(link):
+                            # is a new link
+                            outstanding.append(link)
+                            if len(outstanding) == self.max_links:
+                                break
         return outstanding

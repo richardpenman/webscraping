@@ -13,7 +13,7 @@ import sip
 sip.setapi('QString', 2)
 from PyQt4.QtGui import QApplication, QDesktopServices, QImage, QPainter
 from PyQt4.QtCore import QByteArray, QUrl, QTimer, QEventLoop, QIODevice, QObject
-from PyQt4.QtWebKit import QWebFrame, QWebView, QWebPage, QWebSettings
+from PyQt4.QtWebKit import QWebFrame, QWebView, QWebElement, QWebPage, QWebSettings
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkProxy, QNetworkRequest, QNetworkReply, QNetworkDiskCache
 """
 # XXX some seg faults with subclassing QNetworkAccessManager
@@ -67,17 +67,18 @@ class NetworkAccessManager(QNetworkAccessManager):
     def setProxy(self, proxy):
         """Allow setting string as proxy
         """
-        fragments = common.parse_proxy(proxy)
-        if fragments.host:
-            QNetworkAccessManager.setProxy(self, 
-                QNetworkProxy(QNetworkProxy.HttpProxy, 
-                  fragments.host, int(fragments.port), 
-                  fragments.username, fragments.password
+        if proxy:
+            fragments = common.parse_proxy(proxy)
+            if fragments.host:
+                QNetworkAccessManager.setProxy(self, 
+                    QNetworkProxy(QNetworkProxy.HttpProxy, 
+                      fragments.host, int(fragments.port), 
+                      fragments.username, fragments.password
+                    )
                 )
-            )
-        else:
-            common.logger.info('Invalid proxy:' + proxy)
-            proxy = None
+            else:
+                common.logger.info('Invalid proxy: ' + str(proxy))
+                proxy = None
 
 
     def createRequest(self, operation, request, data):
@@ -386,13 +387,25 @@ class WebkitBrowser(QWebView):
         return parsed_html
 
 
-    def wait(self, secs=1):
+    def wait(self, timeout=1, pattern=None):
         """Wait for delay time
         """
-        deadline = time() + secs
+        deadline = time() + timeout
         while time() < deadline:
             sleep(0)
             self.app.processEvents()
+
+
+    def wait_load(self, pattern, timeout=60):
+        """Wait for this content to be loaded up to maximum timeout
+        """
+        deadline = time() + timeout
+        while time() < deadline:
+            sleep(0)
+            self.app.processEvents()
+            if self.find(pattern):
+                return
+        common.logger.info('Wait load pattern timed out')
 
 
     def jsget(self, script, num_retries=1, jquery=True):
@@ -446,8 +459,20 @@ class WebkitBrowser(QWebView):
         
     def find(self, pattern):
         """Returns whether element matching css pattern exists
+        Note this uses CSS syntax, not Xpath
         """
-        return self.page().mainFrame().findAllElements(pattern).toList()
+        # format xpath to webkit style
+        #pattern = re.sub('["\']\]', ']', re.sub('=["\']', '=', pattern.replace('[@', '[')))
+        if isinstance(pattern, basestring):
+            matches = self.page().mainFrame().findAllElements(pattern).toList()
+        elif isinstance(pattern, list):
+            matches = pattern
+        elif isinstance(pattern, QWebElement):
+            matches = [pattern]
+        else:
+            common.logger.warning('Unknown pattern: ' + str(pattern))
+            matches = []
+        return matches
 
 
     def data(self, url):
@@ -467,6 +492,7 @@ class WebkitBrowser(QWebView):
         """
         self.app.exec_() # start GUI thread
 
+
     def finished(self, reply):
         """Override this method in subclasses to process downloaded urls
         """
@@ -485,6 +511,7 @@ class WebkitBrowser(QWebView):
         painter.end()
         common.logger.debug('saving', output_file)
         image.save(output_file)
+
 
     def closeEvent(self, event):
         """Catch the close window event and stop the script

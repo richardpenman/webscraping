@@ -607,13 +607,17 @@ class Download:
         filename:
             Output file to save to. If not set then will save to file based on URL
         """
-        _bytes = self.get(url, num_redirects=0)
-        if _bytes:
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
-            open(save_path, 'wb').write(_bytes)
-            return save_path
+        save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
+        if not os.path.exists(save_path):
+            # need to download
+            _bytes = self.get(url, num_redirects=0)
+            if _bytes:
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                open(save_path, 'wb').write(_bytes)
+            else:
+                return None
+        return save_path
 
 
 def get_redirect(url, html):

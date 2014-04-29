@@ -19,6 +19,7 @@ However this module tries to navigate the HTML structure directly without normal
 
 import re
 import sys
+import urllib
 import urllib2
 import urlparse
 from optparse import OptionParser
@@ -479,10 +480,7 @@ def find_children(html, tag, remove=None):
 class Form:
     """Helper class for filling and submitting forms
     """
-    def __init__(self, html, path):
-        form = get(html, path)
-        self.action = get(html, path + '/@action')
-
+    def __init__(self, form):
         self.data = {}
         for input_name, input_value in zip(search(form, '//input/@name'), search(form, '//input/@value')):
             self.data[input_name] = input_value
@@ -498,11 +496,11 @@ class Form:
     def __setitem__(self, key, value):
         self.data[key] = value
 
-    def submit(self, D, action=''):
-        action = action or self.action
-        if not action:
-            raise common.WebScrapingError('URL action to submit form is unknown')
-        return D.get(url=action, data=self.data)
+    def __str__(self):
+        return urllib.urlencode(self.data)
+
+    def submit(self, D, action, **argv):
+        return D.get(url=action, data=self.data, **argv)
 
 
 

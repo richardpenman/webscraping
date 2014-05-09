@@ -432,7 +432,9 @@ class Doc:
 try:
     from lxml import html as lxmlhtml
 except ImportError:
-    Tree = None
+    class Tree:
+        def __init__(**kwargs):
+            raise Exception('lxml not installed')
 else:
     # if lxml is supported create wrapper
     class Tree:

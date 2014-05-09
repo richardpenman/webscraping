@@ -29,7 +29,7 @@ def threaded_get(**kwargs):
 
 
 class TwistedCrawler:
-    def __init__(self, url=None, urls=None, num_threads=20, cb=None, depth=True, max_errors=None, pattern=None, **kwargs):
+    def __init__(self, url=None, urls=None, url_iter=None, num_threads=20, cb=None, depth=True, max_errors=None, pattern=None, **kwargs):
         self.settings = adt.Bag(
             read_cache = True,
             write_cache = True,
@@ -39,6 +39,7 @@ class TwistedCrawler:
             headers = {},
             num_threads = num_threads,
             cb = cb,
+            url_iter = url_iter,
             depth = depth,
             pattern = pattern
         )
@@ -48,7 +49,11 @@ class TwistedCrawler:
         # queue of html to be written to cache
         self.cache_queue = []
         # URL's that are waiting to download
-        self.download_queue = (urls or [url])[:] # XXX create compressed dict data type for large in memory?
+        self.download_queue = []
+        if urls:
+            self.download_queue.extend(urls)
+        if url:
+            self.download_queue.extend(url) # XXX create compressed dict data type for large in memory?
         # URL's currently downloading 
         self.processing = {}
         # defereds that are downloading
@@ -91,10 +96,19 @@ class TwistedCrawler:
         sys.exit()
 
 
+    def is_finished(self):
+        """Call finish callback in case more processing to do
+        """
+        for url in self.settings.url_iter or []:
+            self.download_queue.append(url)
+            return False
+        return True
+            
+
     def crawl(self):
         """Crawl more URLs if available
         """
-        if self.download_queue or self.processing or self.cache_queue:
+        if self.download_queue or self.processing or self.cache_queue or not self.is_finished():
             #print self.running, self.download_queue, len(self.cache_queue), self.processing, self.settings.num_threads
             while self.running and self.download_queue and len(self.processing) < self.settings.num_threads:
                 url = str(self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0))

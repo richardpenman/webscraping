@@ -772,7 +772,7 @@ class StopCrawl(Exception):
     pass
 
 
-def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
+def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
     """Download these urls in parallel
 
     url:
@@ -789,7 +789,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         A callback for customizing the download.
         Takes the download object and url and should return the HTML.
     depth:
-        Deprecated - will be removed in later version
+        True for depth first search
     wait_finish:
         whether to wait until all download threads have finished before returning
     reuse_queue:
@@ -802,12 +802,23 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
         common.logger.debug('threaded_get does not support cache flag')
     lock = threading.Lock()
 
+    def is_finished():
+        status = False 
+        if lock.acquire(False):
+            for url in url_iter or []:
+                download_queue.append(url)
+                print 'dl queue', download_queue
+                status = False
+                break
+            status = True 
+            lock.release()
+        return status
+
 
     class DownloadThread(threading.Thread):
         """Thread for downloading webpages
         """
         processing = collections.deque() # to track whether are still downloading
-        discovered = {} # the URL's that have been discovered
         running = True
 
         def __init__(self):
@@ -815,17 +826,16 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
 
         def run(self):
             D = Download(**kwargs)
-            queue = pdict.Queue(settings.queue_file)
 
-            while DownloadThread.running and (seed_urls or DownloadThread.processing):
+            while self.running and (download_queue or self.processing) or not is_finished():
                 # keep track that are processing url
-                DownloadThread.processing.append(1) 
+                self.processing.append(1) 
                 try:
-                    url = seed_urls.pop()
+                    url = download_queue.pop() if depth else download_queue.pop(0)
 
                 except IndexError:
                     # currently no urls to process
-                    DownloadThread.processing.popleft()
+                    self.processing.pop()
                     # so check again later
                     time.sleep(SLEEP_TIME)
 
@@ -840,7 +850,7 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
 
                             except StopCrawl:
                                 common.logger.info('Stopping crawl signal')
-                                DownloadThread.running = False
+                                self.running = False
 
                             except Exception:
                                 # catch any callback error to avoid losing thread
@@ -849,60 +859,27 @@ def threaded_get(url=None, urls=None, num_threads=10, dl=None, cb=None, depth=No
                             else:
                                 # add these URL's to crawl queue
                                 for link in result or []:
-                                    cb_url = urlparse.urljoin(url, link)
-                                    if isinstance(result, dict):
-                                        DownloadThread.discovered[cb_url] = result[link]
-                                    else:
-                                        DownloadThread.discovered[cb_url] = DEFAULT_PRIORITY
+                                    download_queue.append(urlparse.urljoin(url, link))
                                             
-                                if len(seed_urls) < max_queue:
-                                    # need to request more queue
-                                    if DownloadThread.discovered or len(queue) > 0:
-                                        # there are outstanding in the queue
-                                        if lock.acquire(False):
-                                            # no other thread is downloading
-                                            common.logger.debug('Loading from queue: %d' % len(seed_urls))
-                                            discovered = []
-                                            while DownloadThread.discovered:
-                                                discovered.append(DownloadThread.discovered.popitem())
-                                            queue.push(discovered)
-                                            # get next batch of URLs from cache
-                                            seed_urls.extend(queue.pull(limit=max_queue))
-                                            lock.release()
                     finally:
                         # have finished processing
                         # make sure this is called even on exception to avoid eternal loop
-                        DownloadThread.processing.pop()
+                        self.processing.pop()
                     # update the crawler state
                     # no download or error so must have read from cache
                     num_caches = 0 if D.num_downloads or D.num_errors else 1
-                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=len(queue))
+                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=len(download_queue))
 
-
-    queue = pdict.Queue(settings.queue_file)
-    if reuse_queue:
-        # command line flag to enable queue
-        queued_urls = queue.pull(limit=max_queue)
-    else:
-        queued_urls = []
-    if queued_urls:
-        # continue the previous crawl
-        seed_urls = collections.deque(queued_urls)
-        common.logger.debug('Loading crawl queue')
-    else:
-        # remove any queued URL's so can crawl again
-        queue.clear()
-        urls = urls or []
-        if url:
-            urls.append(url)
-        queue.push([(url, DEFAULT_PRIORITY) for url in urls])
-        # put urls into thread safe queue
-        seed_urls = collections.deque(queue.pull(limit=max_queue))
-        common.logger.debug('Start new crawl')
+    download_queue = []
+    if urls:
+        download_queue.extend(urls)
+    if url:
+        download_queue.append(url)
+    common.logger.debug('Start new crawl')
 
     # initiate the state file with the number of URL's already in the queue
     state = State()
-    state.update(queue_size=len(queue))
+    state.update(queue_size=len(download_queue))
 
     # start the download threads
     threads = [DownloadThread() for i in range(num_threads)]

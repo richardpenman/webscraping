@@ -53,7 +53,7 @@ class TwistedCrawler:
         if urls:
             self.download_queue.extend(urls)
         if url:
-            self.download_queue.extend(url) # XXX create compressed dict data type for large in memory?
+            self.download_queue.append(url) # XXX create compressed dict data type for large in memory?
         # URL's currently downloading 
         self.processing = {}
         # defereds that are downloading
@@ -109,7 +109,7 @@ class TwistedCrawler:
         """Crawl more URLs if available
         """
         if self.download_queue or self.processing or self.cache_queue or not self.is_finished():
-            #print self.running, self.download_queue, len(self.cache_queue), self.processing, self.settings.num_threads
+            #print 'Running: %d, queue: %d, cache: %d, processing: %d, threads: %d' % (self.running, len(self.download_queue), len(self.cache_queue), len(self.processing), self.settings.num_threads)
             while self.running and self.download_queue and len(self.processing) < self.settings.num_threads:
                 url = str(self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0))
                 self.processing[url] = ''

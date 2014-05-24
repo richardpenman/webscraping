@@ -71,6 +71,8 @@ def extract_phones(html):
     ['123.456.7890']
     >>> extract_phones('+1-123-456-7890<br />123 456 7890n')
     ['+1-123-456-7890', '123 456 7890']
+    >>> extract_phones('456-7890')
+    []
     """
     phones = []
     try:
@@ -81,8 +83,8 @@ def extract_phones(html):
         #for match in matches:
         for match in re.findall('[\d\-\+ \.\(\)]+', html):
             digits = ''.join([c for c in match if c.isdigit()])
-            if len(digits) >= 9:
-                # phone should have atleast 9 digits
+            if 9 <= len(digits) <= 11:
+                # phone should have 9-11 digits, depending on area codes included
                 phones.append(match.strip())
     return phones
 

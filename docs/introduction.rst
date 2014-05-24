@@ -15,7 +15,7 @@ Install
 Some options to install the webscraping package:
 
 #. Checkout the repository: *hg clone https://code.google.com/p/webscraping/*
-#. Download the zip: http://webscraping.googlecode.com/files/webscraping.zip
+#. Download the zip: https://pypi.python.org/pypi/webscraping/
 #. Install with pypi: *pip install webscraping*
 
 The only dependency is python 2.5 or higher.

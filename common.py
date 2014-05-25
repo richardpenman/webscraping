@@ -614,7 +614,9 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     if file is None:
         try:
             # add Windows version support
-            file = (glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default/cookies.sqlite')) or \
+            file = (glob.glob(os.path.join(os.environ['PROGRAMFILES'], 'Mozilla Firefox/profile/cookies.sqlite')) or \
+                    glob.glob(os.path.join(os.environ['PROGRAMFILES(X86)'], 'Mozilla Firefox/profile/cookies.sqlite')) or \
+                    glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default/cookies.sqlite')) or \
                     glob.glob(os.path.expanduser(r'~\AppData\Roaming\Mozilla\Firefox\Profiles\*.default\cookies.sqlite')))[0]
         except IndexError:
             raise WebScrapingError('Can not find filefox cookie file')
@@ -645,18 +647,19 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     session_cookie_path = os.path.join(os.path.dirname(file), 'sessionstore.js')  
     if os.path.exists(session_cookie_path):  
         try:  
-            json_data = json.loads(open(session_cookie_path, 'rb').read())  
+            json_data = json.loads(open(session_cookie_path, 'rb').read().strip('()'))  
         except Exception, e:  
             print str(e)
         else:
             ftstr = ['FALSE', 'TRUE']
             if 'windows' in json_data:  
-                for window in json_data['windows']:  
-                    for cookie in window['cookies']:
-                        row = "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (cookie.get('host', ''), ftstr[cookie.get('host', '').startswith('.')], \
-                                                                cookie.get('path', ''), False, str(int(time.time()) + 3600 * 24 * 7), \
-                                                                cookie.get('name', ''), cookie.get('value', ''))
-                        fp.write(row)
+                for window in json_data['windows']:
+                    if 'cookies' in window:
+                        for cookie in window['cookies']:
+                            row = "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (cookie.get('host', ''), ftstr[cookie.get('host', '').startswith('.')], \
+                                                                    cookie.get('path', ''), False, str(int(time.time()) + 3600 * 24 * 7), \
+                                                                    cookie.get('name', ''), cookie.get('value', ''))
+                            fp.write(row)
 
     fp.close()
     # close the connection before delete the sqlite file

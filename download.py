@@ -772,7 +772,7 @@ class StopCrawl(Exception):
     pass
 
 
-def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb=None, depth=None, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
+def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb=None, depth=True, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
     """Download these urls in parallel
 
     url:
@@ -831,7 +831,7 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
                 # keep track that are processing url
                 self.processing.append(1) 
                 try:
-                    url = download_queue.pop() if depth else download_queue.pop(0)
+                    url = download_queue.pop() if depth else download_queue.popleft()
 
                 except IndexError:
                     # currently no urls to process
@@ -870,7 +870,7 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
                     num_caches = 0 if D.num_downloads or D.num_errors else 1
                     state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=len(download_queue))
 
-    download_queue = []
+    download_queue = collections.deque()
     if urls:
         download_queue.extend(urls)
     if url:

@@ -119,12 +119,15 @@ class Download:
         a regular expression that the downloaded HTML has to match to be considered a valid download
     acceptable_errors:
         a list contains all acceptable HTTP codes, don't try downloading for them e.g. no need to retry for 404 error
+    throttle_additional_key:
+        Sometimes the website limits the request only by session(rather than IP), we can use this parameter to keep each thread delaying independently
     """
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0,
-            force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, **kwargs):
+            force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, 
+            throttle_additional_key=None, **kwargs):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
@@ -158,7 +161,7 @@ class Download:
         )
         self.last_load_time = self.last_mtime = time.time()
         self.num_downloads = self.num_errors = 0
-
+        self.throttle_additional_key = throttle_additional_key
 
     proxy_performance = ProxyPerformance()
     def get(self, url, **kwargs):
@@ -428,7 +431,7 @@ class Download:
             the amount of randomness in delay, 0-1
         """
         if delay > 0:
-            key = str(proxy) + ':' + common.get_domain(url)
+            key = ':'.join([str(proxy), self.throttle_additional_key or '', common.get_domain(url)])
             if key in Download._domains:
                 while datetime.datetime.now() < Download._domains.get(key):
                     time.sleep(SLEEP_TIME)

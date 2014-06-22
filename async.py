@@ -6,6 +6,7 @@ import cookielib
 import base64
 import signal
 import urlparse
+import collections
 
 from twisted.internet import reactor, defer, protocol, endpoints
 from twisted.web import client, error, http, http_headers
@@ -49,7 +50,7 @@ class TwistedCrawler:
         # queue of html to be written to cache
         self.cache_queue = []
         # URL's that are waiting to download
-        self.download_queue = []
+        self.download_queue = collections.deque()
         if urls:
             self.download_queue.extend(urls)
         if url:
@@ -111,7 +112,7 @@ class TwistedCrawler:
         if self.download_queue or self.processing or self.cache_queue or not self.is_finished():
             #print 'Running: %d, queue: %d, cache: %d, processing: %d, threads: %d' % (self.running, len(self.download_queue), len(self.cache_queue), len(self.processing), self.settings.num_threads)
             while self.running and self.download_queue and len(self.processing) < self.settings.num_threads:
-                url = str(self.download_queue.pop() if self.settings.depth else self.download_queue.pop(0))
+                url = str(self.download_queue.pop() if self.settings.depth else self.download_queue.popleft())
                 self.processing[url] = ''
                 downloaded = False
                 if self.D.cache and self.settings.read_cache:

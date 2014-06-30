@@ -121,7 +121,7 @@ class Download:
         a list contains all acceptable HTTP codes, don't try downloading for them e.g. no need to retry for 404 error
     """
 
-    def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
+    def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, num_caches=1,
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, **kwargs):
@@ -129,7 +129,7 @@ class Download:
         need_cache = read_cache or write_cache
         if pdict and need_cache:
             cache_file = cache_file or settings.cache_file
-            self.cache = cache or pdict.PersistentDict(cache_file)
+            self.cache = cache or pdict.PersistentDict(cache_file, num_caches=num_caches)
         else:
             self.cache = None
             if need_cache:
@@ -798,9 +798,8 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
         The maximum number of queued URLs to keep in memory.
         The rest will be in the cache.
     """
-    if kwargs.pop('cache', None):
-        common.logger.debug('threaded_get does not support cache flag')
     lock = threading.Lock()
+    D = Download(**kwargs)
 
     def is_finished():
         status = False 
@@ -825,8 +824,6 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
             threading.Thread.__init__(self)
 
         def run(self):
-            D = Download(**kwargs)
-
             while self.running and (download_queue or self.processing) or not is_finished():
                 # keep track that are processing url
                 self.processing.append(1) 

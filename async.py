@@ -359,8 +359,6 @@ class TwistedCrawler:
         else:
             cj = cookielib.CookieJar()
             self.cookiejars[proxy] = cj
-        #print self.cookiejars
-        #print proxy, 'cookie', cj
         agent = client.CookieAgent(agent, cj)
         return agent
 
@@ -369,22 +367,16 @@ class TwistedCrawler:
         """Cache the downloaded HTML
         """
         if self.cache_queue:
-            url_htmls = []
-            redirect_map = {}
             while self.cache_queue:
                 redirects, html = self.cache_queue.pop()
                 common.logger.debug('Cached: %d' % len(self.cache_queue))
                 url = redirects[0]
-                url_htmls.append((url, html))
-                redirect_map[url] = redirects[-1]
- 
-            self.D.cache.update(url_htmls)
-            # store the redirect map
-            for start_url, final_url in redirect_map.items():
-                if start_url != final_url:
+                self.D[url] = html
+                final_url = redirects[-1]
+                if url != final_url:
+                    # store the redirect map
                     self.D.cache.meta(start_url, dict(url=final_url))
-
-
+ 
 
 class TwistedError(Exception):
     pass

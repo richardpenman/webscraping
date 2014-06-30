@@ -63,34 +63,27 @@ class PersistentDict:
     >>> del cache[url]
     >>> url in cache
     False
-    >>> key, value = 'language', 'python'
-    >>> cache.update([(url, value), (key, value)])
-    >>> cache[url] == value
-    True
-    >>> cache[key] == value
-    True
     >>> os.remove(filename)
     """
-    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None):
+    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None, num_caches=1):
         """initialize a new PersistentDict with the specified database file.
         """
         self.filename = filename
-        self.compress_level = compress_level
-        self.expires = expires
-        self.timeout = timeout
-        self._conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
-        self._conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
-        sql = """
-        CREATE TABLE IF NOT EXISTS config (
-            key TEXT NOT NULL PRIMARY KEY UNIQUE,
-            value BLOB,
-            meta BLOB,
-            status INTEGER,
-            updated timestamp DEFAULT (datetime('now', 'localtime'))
-        );
-        """
-        self._conn.execute(sql)
-        self._conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
+        self.compress_level, self.expires, self.timeout, self.isolation_level, self.num_caches = \
+            compress_level, expires, timeout, isolation_level, num_caches
+        for i in range(num_caches):
+            conn = self.get_connection(i)
+            sql = """
+            CREATE TABLE IF NOT EXISTS config (
+                key TEXT NOT NULL PRIMARY KEY UNIQUE,
+                value BLOB,
+                meta BLOB,
+                status INTEGER,
+                updated timestamp DEFAULT (datetime('now', 'localtime'))
+            );
+            """
+            conn.execute(sql)
+            conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
 
 
     def __copy__(self):
@@ -102,14 +95,16 @@ class PersistentDict:
     def __contains__(self, key):
         """check the database to see if a key exists
         """
-        row = self._conn.execute("SELECT updated FROM config WHERE key=?;", (key,)).fetchone()
+        conn = self.get_connection(key)
+        row = conn.execute("SELECT updated FROM config WHERE key=?;", (key,)).fetchone()
         return row and self.is_fresh(row[0])
    
 
     def __iter__(self):
         """iterate each key in the database
         """
-        c = self._conn.cursor()
+        conn = self.get_connection(key)
+        c = conn.cursor()
         c.execute("SELECT key FROM config;")
         for row in c:
             yield row[0]
@@ -118,7 +113,8 @@ class PersistentDict:
     def __getitem__(self, key):
         """return the value of the specified key or raise KeyError if not found
         """
-        row = self._conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
+        conn = self.get_connection(key)
+        row = conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
         if row:
             if self.is_fresh(row[1]):
                 value = row[0]
@@ -132,16 +128,36 @@ class PersistentDict:
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
-        self._conn.execute("DELETE FROM config WHERE key=?;", (key,))
+        conn = self.get_connection(key)
+        conn.execute("DELETE FROM config WHERE key=?;", (key,))
 
 
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
         updated = datetime.datetime.now()
-        self._conn.execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (
+        conn = self.get_connection(key)
+        conn.execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (
             key, self.serialize(value), self.serialize({}), updated)
         )
+
+
+    def get_connection(self, key):
+        """Return sqlite connection for this key
+        Multiple sqlite connections are supported to minimize the write bottleneck
+        """
+        if self.num_caches == 1:
+            filename = self.filename
+        else:
+            if isinstance(key, int):
+                conn_i = key
+            else:
+                # map hash remainder to sqlite index
+                conn_i = hash(key) % self.num_caches
+            filename = '%s.%d' % (self.filename, conn_i)
+        conn = sqlite3.connect(filename, timeout=self.timeout, isolation_level=self.isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
+        return conn
 
 
     def serialize(self, value):
@@ -167,7 +183,8 @@ class PersistentDict:
         """
         data = default
         if key:
-            row = self._conn.execute("SELECT value, meta, updated FROM config WHERE key=?;", (key,)).fetchone()
+            conn = self.get_connection(key)
+            row = conn.execute("SELECT value, meta, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 value = row[0] 
                 data = dict(
@@ -184,35 +201,24 @@ class PersistentDict:
         if value is passed then set the meta attribute for this key
         if not then get the existing meta data for this key
         """
+        conn = self.get_connection(key)
         if value is None:
             # want to get meta
-            row = self._conn.execute("SELECT meta FROM config WHERE key=?;", (key,)).fetchone()
+            row = conn.execute("SELECT meta FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 return self.deserialize(row[0])
             else:
                 raise KeyError("Key `%s' does not exist" % key)
         else:
             # want to set meta
-            self._conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
-
-
-    def update(self, key_values):
-        """Add this list of (key, value) tuples in single transaction to database
-        """
-        meta = self.serialize({})
-        updated = datetime.datetime.now()
-        c = self._conn.cursor()
-        c.execute("BEGIN TRANSACTION")
-        c.executemany("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", 
-            [(key, self.serialize(value), meta, updated) for key, value in key_values]
-        )
-        c.execute("END TRANSACTION")
+            conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
     def clear(self):
         """Clear all cached data
         """
-        self._conn.execute("DELETE FROM config;")
+        conn = self.get_connection(key)
+        conn.execute("DELETE FROM config;")
 
 
     def merge(self, db, override=False):

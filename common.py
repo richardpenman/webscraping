@@ -614,8 +614,8 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     if file is None:
         try:
             # add Windows version support
-            file = (glob.glob(os.path.join(os.environ['PROGRAMFILES'], 'Mozilla Firefox/profile/cookies.sqlite')) or \
-                    glob.glob(os.path.join(os.environ['PROGRAMFILES(X86)'], 'Mozilla Firefox/profile/cookies.sqlite')) or \
+            file = (glob.glob(os.path.join(os.environ.get('PROGRAMFILES', ''), 'Mozilla Firefox/profile/cookies.sqlite')) or \
+                    glob.glob(os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Mozilla Firefox/profile/cookies.sqlite')) or \
                     glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default/cookies.sqlite')) or \
                     glob.glob(os.path.expanduser(r'~\AppData\Roaming\Mozilla\Firefox\Profiles\*.default\cookies.sqlite')))[0]
         except IndexError:

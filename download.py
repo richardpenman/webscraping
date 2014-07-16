@@ -218,7 +218,7 @@ class Download:
                 self.proxy = self.get_proxy(settings.proxies)
             # crawl slowly for each domain to reduce risk of being blocked
             self.throttle(url, delay=settings.delay, proxy=self.proxy) 
-            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern)
+            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern, max_size=settings.max_size)
 
             if html:
                 # successfully downloaded
@@ -357,7 +357,7 @@ class Download:
         return html is None or (pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(html))
 
 
-    def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None):
+    def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None, max_size=None):
         """Simply download the url and return the content
         """
         self.error_content = None
@@ -373,7 +373,7 @@ class Download:
         
         headers = headers or {}
         headers['User-agent'] = user_agent or self.get_user_agent(proxy)
-        if not self.settings.max_size:
+        if not max_size:
             headers['Accept-encoding'] = 'gzip'
         for name, value in settings.default_headers.items():
             if name not in headers:
@@ -389,8 +389,8 @@ class Download:
         try:
             request = urllib2.Request(url, data, headers)
             with contextlib.closing(opener.open(request)) as response:
-                if self.settings.max_size:
-                    content = response.read(self.settings.max_size)
+                if max_size is not None:
+                    content = response.read(max_size)
                 else:
                     content = response.read()
                 if response.headers.get('content-encoding') == 'gzip':

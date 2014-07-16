@@ -373,7 +373,8 @@ class Download:
         
         headers = headers or {}
         headers['User-agent'] = user_agent or self.get_user_agent(proxy)
-        headers['Accept-encoding'] = 'gzip'
+        if not self.settings.max_size:
+            headers['Accept-encoding'] = 'gzip'
         for name, value in settings.default_headers.items():
             if name not in headers:
                 if name == 'Referer':
@@ -388,8 +389,10 @@ class Download:
         try:
             request = urllib2.Request(url, data, headers)
             with contextlib.closing(opener.open(request)) as response:
-                content = response.read()
-                #print response.headers
+                if self.settings.max_size:
+                    content = response.read(self.settings.max_size)
+                else:
+                    content = response.read()
                 if response.headers.get('content-encoding') == 'gzip':
                     # data came back gzip-compressed so decompress it          
                     content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()

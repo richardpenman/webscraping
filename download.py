@@ -513,6 +513,7 @@ class Download:
             _, url = outstanding.pop(0)
             scraped[url] = True
             html = self.get(url)
+
             if html:
                 for email in alg.extract_emails(html):
                     if email not in emails:
@@ -525,6 +526,7 @@ class Download:
                         if link not in scraped:
                             outstanding.append((score(link), link))
                 # sort based on score to crawl most promising first
+                # XXX insertion sort more efficient here
                 outstanding.sort()
         return list(emails)
 
@@ -989,8 +991,6 @@ class State:
 class CrawlerCallback:
     """Example callback to crawl a website
     """
-    found = adt.HashDict(int) # track depth of found URLs
-
     def __init__(self, output_file=None, max_links=100, max_depth=1, allowed_urls='', banned_urls='^$', robots=None, crawl_existing=True):
         """
         output_file:
@@ -1008,6 +1008,7 @@ class CrawlerCallback:
         crawl_existing:
             sets whether to crawl content already downloaded previously in the cache
         """
+        self.found = adt.HashDict(int) # track depth of found URLs
         if output_file:
             self.writer = common.UnicodeWriter(output_file) 
         else:
@@ -1055,7 +1056,7 @@ class CrawlerCallback:
 
 
         domain = common.get_domain(url)
-        depth = CrawlerCallback.found[url]
+        depth = self.found[url]
         outstanding = []
         if depth != self.max_depth: 
             # extract links to continue crawling
@@ -1067,8 +1068,8 @@ class CrawlerCallback:
                     # unicode error when joining url
                     common.logger.info(e)
                 else:
-                    if link not in CrawlerCallback.found:
-                        CrawlerCallback.found[link] = depth + 1
+                    if link not in self.found:
+                        self.found[link] = depth + 1
                         if valid(link):
                             # is a new link
                             outstanding.append(link)

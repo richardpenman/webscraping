@@ -498,6 +498,11 @@ class Download:
             total += len(link)
             return total
 
+        # check for redirect URL
+        self.get(website)
+        redirect_url = self.cache.meta(website).get('url') if self.cache else self.final_url
+        website = redirect_url or website
+        
         domain = urlparse.urlparse(website).netloc
         scraped = adt.HashDict()
         c = CrawlerCallback(max_depth=max_depth)

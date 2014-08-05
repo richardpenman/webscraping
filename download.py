@@ -786,7 +786,7 @@ class StopCrawl(Exception):
     pass
 
 
-def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb=None, depth=True, wait_finish=True, reuse_queue=False, max_queue=1000, **kwargs):
+def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb=None, depth=True, wait_finish=True, **kwargs):
     """Download these urls in parallel
 
     url:
@@ -806,25 +806,18 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
         True for depth first search
     wait_finish:
         whether to wait until all download threads have finished before returning
-    reuse_queue:
-        Whether to continue the queue from the previous run.
-    max_queue:
-        The maximum number of queued URLs to keep in memory.
-        The rest will be in the cache.
     """
     if kwargs.pop('cache', None):
         common.logger.debug('threaded_get does not support cache flag')
     lock = threading.Lock()
 
     def is_finished():
-        status = False 
+        status = True 
         if lock.acquire(False):
             for url in url_iter or []:
                 download_queue.append(url)
-                print 'dl queue', download_queue
                 status = False
                 break
-            status = True 
             lock.release()
         return status
 
@@ -841,7 +834,7 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
         def run(self):
             D = Download(**kwargs)
 
-            while self.running and (download_queue or self.processing) or not is_finished():
+            while self.running and (download_queue or not is_finished() or self.processing):
                 # keep track that are processing url
                 self.processing.append(1) 
                 try:

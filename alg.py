@@ -30,8 +30,12 @@ def get_excerpt(html, try_meta=False, max_chars=255):
     return common.unescape(excerpt.strip())[:max_chars]
 
 
-def extract_emails(html):
+IGNORED_EMAILS = 'username@location.com', 'johndoe@domain.com'
+def extract_emails(html, ignored=IGNORED_EMAILS):
     """Remove common obfuscations from HTML and then extract all emails
+
+    ignored: 
+        list of dummy emails to ignore
 
     >>> extract_emails('')
     []
@@ -59,7 +63,7 @@ def extract_emails(html):
                 email = '%s@%s.%s' % (user, domain, ext)
                 if email not in emails:
                     emails.append(email)
-    return emails
+    return [email for email in emails if email not in ignored]
 
 
 def extract_phones(html):

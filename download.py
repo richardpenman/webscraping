@@ -107,6 +107,8 @@ class Download:
         how many times to try downloading a URL when get an error
     num_redirects:
         how many times the URL is allowed to be redirected, to avoid infinite loop
+    num_caches:
+        how many cache database(SQLite) files to be used
     force_html:
         whether to download non-text data
     force_ascii:
@@ -125,14 +127,14 @@ class Download:
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
-            opener=None, headers=None, data=None, num_retries=0, num_redirects=0,
+            opener=None, headers=None, data=None, num_retries=0, num_redirects=0, num_caches=1,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, 
             throttle_additional_key=None, **kwargs):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
             cache_file = cache_file or settings.cache_file
-            self.cache = cache or pdict.PersistentDict(cache_file)
+            self.cache = cache or pdict.PersistentDict(cache_file, num_caches=num_caches)
         else:
             self.cache = None
             if need_cache:
@@ -152,6 +154,7 @@ class Download:
             data = data,
             num_retries = num_retries,
             num_redirects = num_redirects,
+            num_caches=num_caches,
             force_html = force_html,
             force_ascii = force_ascii,
             max_size = max_size,

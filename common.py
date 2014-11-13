@@ -119,6 +119,19 @@ def is_html(html):
     return result
 
 
+def is_url(text):
+    """Returns whether passed text is a URL
+
+    >>> is_url('abc')
+    False
+    >>> is_url('webscraping.com')
+    False
+    >>> is_url('http://webscraping.com/blog')
+    True
+    """
+    return re.match('https?://', text) is not None
+
+
 def unique(l):
     """Remove duplicates from list, while maintaining order
 

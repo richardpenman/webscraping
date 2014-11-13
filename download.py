@@ -127,12 +127,12 @@ class Download:
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, 
-            throttle_additional_key=None, **kwargs):
+            throttle_additional_key=None):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
             cache_file = cache_file or settings.cache_file
-            self.cache = cache or pdict.PersistentDict(cache_file)
+            self.cache = cache or pdict.opendb(cache_file)
         else:
             self.cache = None
             if need_cache:
@@ -768,12 +768,6 @@ class GoogleMaps:
         if 'street' in results:
             results['address'] = (results['number'] + ' ' + results['street']).strip()
 
-        # extract latitude longitude
-        #m = re.compile(r'"location" : {\s*"lat" : ([\d\-\.]+),\s*"lng" : ([\d\-\.]+)').search(html)
-        #if m:
-        #    results['lat'] = m.groups()[0].strip()
-        #    results['lng'] = m.groups()[1].strip()
-        #else:
         results['lat'] = result['geometry']['location']['lat']
         results['lng'] = result['geometry']['location']['lng']
         return results
@@ -786,7 +780,7 @@ class StopCrawl(Exception):
     pass
 
 
-def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb=None, depth=True, wait_finish=True, **kwargs):
+def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb=None, depth=True, **kwargs):
     """Download these urls in parallel
 
     url:
@@ -804,78 +798,55 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
         Takes the download object and url and should return the HTML.
     depth:
         True for depth first search
-    wait_finish:
-        whether to wait until all download threads have finished before returning
     """
-    if kwargs.pop('cache', None):
-        common.logger.debug('threaded_get does not support cache flag')
+    running = True
     lock = threading.Lock()
-
-    def is_finished():
-        status = True 
+    def add_iter_urls():
         if lock.acquire(False):
             for url in url_iter or []:
                 download_queue.append(url)
-                status = False
                 break
             lock.release()
-        return status
 
 
-    class DownloadThread(threading.Thread):
+    def process_queue():
         """Thread for downloading webpages
         """
-        processing = collections.deque() # to track whether are still downloading
-        running = True
+        D = Download(**kwargs)
 
-        def __init__(self):
-            threading.Thread.__init__(self)
+        while True:
+            try:
+                url = download_queue.pop() if depth else download_queue.popleft()
 
-        def run(self):
-            D = Download(**kwargs)
+            except IndexError:
+                add_iter_urls()
+                break
 
-            while self.running and (download_queue or not is_finished() or self.processing):
-                # keep track that are processing url
-                self.processing.append(1) 
-                try:
-                    url = download_queue.pop() if depth else download_queue.popleft()
-
-                except IndexError:
-                    # currently no urls to process
-                    self.processing.pop()
-                    # so check again later
-                    time.sleep(SLEEP_TIME)
-
-                else:
+            else:
+                # download this url
+                html = dl(D, url, **kwargs) if dl else D.get(url, **kwargs)
+                if cb:
                     try:
-                        # download this url
-                        html = dl(D, url, **kwargs) if dl else D.get(url, **kwargs)
-                        if cb:
-                            try:
-                                # use callback to process downloaded HTML
-                                result = cb(D, url, html)
+                        # use callback to process downloaded HTML
+                        result = cb(D, url, html)
 
-                            except StopCrawl:
-                                common.logger.info('Stopping crawl signal')
-                                self.running = False
+                    except StopCrawl:
+                        common.logger.info('Stopping crawl signal')
+                        self.running = False
 
-                            except Exception:
-                                # catch any callback error to avoid losing thread
-                                common.logger.exception('\nIn callback for: ' + str(url))
+                    except Exception:
+                        # catch any callback error to avoid losing thread
+                        common.logger.exception('\nIn callback for: ' + str(url))
 
-                            else:
-                                # add these URL's to crawl queue
-                                for link in result or []:
-                                    download_queue.append(urlparse.urljoin(url, link))
-                                            
-                    finally:
-                        # have finished processing
-                        # make sure this is called even on exception to avoid eternal loop
-                        self.processing.pop()
-                    # update the crawler state
-                    # no download or error so must have read from cache
-                    num_caches = 0 if D.num_downloads or D.num_errors else 1
-                    state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=len(download_queue))
+                    else:
+                        # add these URL's to crawl queue
+                        for link in result or []:
+                            download_queue.append(urlparse.urljoin(url, link))
+                                        
+                # update the crawler state
+                # no download or error so must have read from cache
+                num_caches = 0 if D.num_downloads or D.num_errors else 1
+                state.update(num_downloads=D.num_downloads, num_errors=D.num_errors, num_caches=num_caches, queue_size=len(download_queue))
 
     download_queue = collections.deque()
     if urls:
@@ -888,17 +859,18 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
     state = State()
     state.update(queue_size=len(download_queue))
 
-    # start the download threads
-    threads = [DownloadThread() for i in range(num_threads)]
-    for thread in threads:
-        thread.setDaemon(True) # set daemon so main thread can exit when receives ctrl-c
-        thread.start()
-
-    # Wait for all download threads to finish
-    while threads and wait_finish:
+    # wait for all download threads to finish
+    threads = []
+    while running and (threads or download_queue):
         for thread in threads:
             if not thread.is_alive():
                 threads.remove(thread)
+        while len(threads) < num_threads and download_queue:
+            # cat start more threads
+            thread = threading.Thread(target=process_queue)
+            thread.setDaemon(True) # set daemon so main thread can exit when receives ctrl-c
+            thread.start()
+            threads.append(thread)
         time.sleep(SLEEP_TIME)
     # save the final state after threads finish
     state.save()

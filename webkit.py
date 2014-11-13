@@ -452,8 +452,8 @@ class WebkitBrowser(QWebView):
         for e in self.find(pattern):
             tag = str(e.tagName()).lower()
             if tag == 'input':
-                #e.setAttribute('value', value)
-                e.evaluateJavaScript('this.value = "%s"' % value)
+                e.setAttribute('value', value)
+                #e.evaluateJavaScript('this.value = "%s"' % value)
             else:
                 e.setPlainText(value)
         

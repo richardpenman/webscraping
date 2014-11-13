@@ -433,8 +433,8 @@ try:
     from lxml import html as lxmlhtml
 except ImportError:
     class Tree:
-        def __init__(**kwargs):
-            raise Exception('lxml not installed')
+        def __init__(*args, **kwargs):
+            raise ImportError('lxml not installed')
 else:
     # if lxml is supported create wrapper
     class Tree:

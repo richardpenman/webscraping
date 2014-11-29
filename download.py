@@ -123,13 +123,15 @@ class Download:
         a list contains all acceptable HTTP codes, don't try downloading for them e.g. no need to retry for 404 error
     throttle_additional_key:
         Sometimes the website limits the request only by session(rather than IP), we can use this parameter to keep each thread delaying independently
+    keep_ip_ua:
+        If it's True, one proxy IP will keep using the same User-agent, otherwise will use a random User-agent for each request.
     """
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0, num_caches=1,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, 
-            throttle_additional_key=None):
+            throttle_additional_key=None, keep_ip_ua=True, **kwargs):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
@@ -160,6 +162,7 @@ class Download:
             max_size = max_size,
             default = default,
             pattern = pattern,
+            keep_ip_ua = keep_ip_ua,
             acceptable_errors = acceptable_errors
         )
         self.last_load_time = self.last_mtime = time.time()
@@ -344,7 +347,7 @@ class Download:
     def get_user_agent(self, proxy):
         """Get user agent for this proxy
         """
-        if proxy in Download.proxy_agents:
+        if self.settings.keep_ip_ua and proxy in Download.proxy_agents:
             # have used this proxy before so return same user agent
             user_agent = Download.proxy_agents[proxy]
         else:
@@ -990,8 +993,8 @@ class CrawlerCallback:
 
 
     def __call__(self, D, url, html):
-       # override this method to add scraping code ...
-       return self.crawl(D, url, html)                                                                                                          
+        # override this method to add scraping code ...
+        return self.crawl(D, url, html)                                                                                                          
 
 
     def normalize(self, url, link):

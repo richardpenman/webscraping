@@ -21,6 +21,12 @@ import logging.handlers
 import threading
 import collections
 from datetime import datetime, timedelta
+try:
+    # should use pysqlite2 to read the cookies.sqlite on Windows
+    # otherwise will raise the "sqlite3.DatabaseError: file is encrypted or is not a database" exception
+    from pysqlite2 import dbapi2 as sqlite3
+except ImportError:
+    import sqlite3 
 import adt
 import settings
 
@@ -616,6 +622,91 @@ class UnicodeWriter:
         self.fp.close()
 
 
+
+# decrypt chrome cookies
+class Chrome:
+    def __init__(self):
+        import keyring
+        from Crypto.Protocol.KDF import PBKDF2
+        salt = b'saltysalt'
+        length = 16
+        # If running Chrome on OSX
+        if sys.platform == 'darwin':
+            my_pass = keyring.get_password('Chrome Safe Storage', 'Chrome')
+            my_pass = my_pass.encode('utf8')
+            iterations = 1003
+            self.cookie_file = os.path.expanduser('~/Library/Application Support/Google/Chrome/Default/Cookies')
+
+        # If running Chromium on Linux
+        elif 'linux' in sys.platform:
+            my_pass = 'peanuts'.encode('utf8')
+            iterations = 1
+            self.cookie_file = os.path.expanduser('~/.config/chromium/Default/Cookies')
+        else: 
+            raise Exception("This script only works on OSX or Linux.")
+        self.key = PBKDF2(my_pass, salt, length, iterations)
+    
+    def decrypt(self, value, encrypted_value):
+        if value or (encrypted_value[:3] != b'v10'):
+            return value
+    
+        from Crypto.Cipher import AES
+        
+        # Encrypted cookies should be prefixed with 'v10' according to the 
+        # Chromium code. Strip it off.
+        encrypted_value = encrypted_value[3:]
+ 
+        # Strip padding by taking off number indicated by padding
+        # eg if last is '\x0e' then ord('\x0e') == 14, so take off 14.
+        # You'll need to change this function to use ord() for python2.
+        def clean(x):
+            return x[:-ord(x[-1])].decode('utf8')
+
+        iv = b' ' * 16
+        cipher = AES.new(self.key, AES.MODE_CBC, IV=iv)
+        decrypted = cipher.decrypt(encrypted_value)
+        return clean(decrypted)
+
+
+# XXX merge common parts with firefox
+def chrome_cookie(filename=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file='cookies.txt'):
+    if filename is None:
+        filename = os.path.expanduser("~/.config/google-chrome/Default/Cookies")
+    if not os.path.exists(filename):
+        raise WebScrapingError('Can not find chrome cookie file')
+
+    open(tmp_sqlite_file, 'wb').write(open(filename, 'rb').read())
+    con = sqlite3.connect(tmp_sqlite_file)
+    cur = con.cursor()
+    cur.execute('SELECT host_key, path, secure, expires_utc, name, value, encrypted_value FROM cookies;')
+    # create standard cookies file that can be interpreted by cookie jar 
+    # XXX change to create directly without temp file
+    fp = open(tmp_cookie_file, 'w')
+    fp.write('# Netscape HTTP Cookie File\n')
+    fp.write('# http://www.netscape.com/newsref/std/cookie_spec.html\n')
+    fp.write('# This is a generated file!  Do not edit.\n')
+    ftstr = ['FALSE', 'TRUE']
+    chrome = Chrome()
+    for item in cur.fetchall():
+        value = chrome.decrypt(item[5], item[6])
+        row = '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (item[0], ftstr[item[0].startswith('.')], item[1], ftstr[item[2]], item[3], item[4], value)
+        fp.write(row)
+
+    fp.close()
+    # close the connection before delete the sqlite file
+    con.close()
+    os.remove(tmp_sqlite_file)
+    
+    cookie_jar = cookielib.MozillaCookieJar()
+    cookie_jar.load(tmp_cookie_file)
+    os.remove(tmp_cookie_file)
+
+    return cookie_jar
+
+
+
+
+
 def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file='cookies.txt'):
     """Create a cookie jar from this FireFox 3 sqlite cookie database
 
@@ -634,12 +725,6 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
         except IndexError:
             raise WebScrapingError('Can not find filefox cookie file')
 
-    try:
-        # should use pysqlite2 to read the cookies.sqlite on Windows
-        # otherwise will raise the "sqlite3.DatabaseError: file is encrypted or is not a database" exception
-        from pysqlite2 import dbapi2 as sqlite3
-    except ImportError:
-        import sqlite3 
     # copy firefox cookie file locally to avoid locking problems
     open(tmp_sqlite_file, 'wb').write(open(file, 'rb').read())
     con = sqlite3.connect(tmp_sqlite_file)

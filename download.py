@@ -671,7 +671,7 @@ class GoogleMaps:
         try:
             address = address.encode('utf-8')
         except UnicodeDecodeError:
-            common.logger.warning('Geocode failed to parse address and needed to cast to ascii: ' + address)
+            common.logger.debug('Geocode failed to parse address and needed to cast to ascii: ' + address)
             address = common.to_ascii(address)
         geocode_url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (urllib.quote_plus(address), '&language=' + language if language else '')
         geocode_html = self.D.get(geocode_url, delay=delay, read_cache=read_cache, num_retries=num_retries)

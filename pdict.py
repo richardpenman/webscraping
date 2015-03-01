@@ -245,6 +245,12 @@ class PersistentDict:
                 self[key] = db[key]
 
 
+    def vacuum(self):
+        for i in range(self.num_caches):
+            conn = self.get_connection(i)
+            conn.execute('VACUUM')
+
+
 class DbmDict:
     """Experimental new version of PersistentDict that uses the dbm modules instead
     This allows lazy writes instead of a transaction for each write

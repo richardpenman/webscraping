@@ -430,7 +430,7 @@ class Doc:
 
 
 try:
-    from lxml import html as lxmlhtml
+    import lxml.html
 except ImportError:
     class Tree:
         def __init__(*args, **kwargs):
@@ -439,24 +439,31 @@ else:
     # if lxml is supported create wrapper
     class Tree:
         def __init__(self, html, **kwargs):
-            self.doc = lxmlhtml.fromstring(html)
+            try:
+                self.doc = lxml.html.fromstring(html)
+            except lxml.etree.XMLSyntaxError:
+                self.doc = None
 
         def __eq__(self, html):
             return self.orig_html is html
 
+
+        def xpath(self, path):
+            return [] if self.doc is None else self.doc.xpath(path)
+
         def get(self, path):
-            es = self.doc.xpath(path)
+            es = self.xpath(path)
             if es:
                 return self.tostring(es[0])
             return ''
 
         def search(self, path):
-            return [self.tostring(e) for e in self.doc.xpath(path)]
+            return [self.tostring(e) for e in self.xpath(path)]
 
         def tostring(self, node):
             try:
                 return ''.join(filter(None, 
-                    [node.text] + [lxmlhtml.tostring(e) for e in node] + [node.tail] 
+                    [node.text] + [lxml.html.tostring(e) for e in node] + [node.tail] 
                 ))
             except AttributeError:
                 return node

@@ -63,7 +63,7 @@ class Doc:
     'img.png'
 
     >>> # test extracting attribute after self closing tag
-    >>> Doc('<div><br><p>content</p></div>').get('/div/p')
+    >>> Doc('<div><br><p>content</p></br></div>').get('/div/p')
     'content'
     """
 
@@ -76,7 +76,8 @@ class Doc:
 
 
     def __init__(self, html, remove=None):
-        self.html = self._clean(html, remove)
+        #self.html = self._clean(html, remove)
+        self.html = html
         self.num_searches = 0
 
     def get(self, xpath):
@@ -439,10 +440,14 @@ else:
     # if lxml is supported create wrapper
     class Tree:
         def __init__(self, html, **kwargs):
-            try:
-                self.doc = lxml.html.fromstring(html)
-            except lxml.etree.XMLSyntaxError:
-                self.doc = None
+            if isinstance(html, lxml.html.HtmlElement):
+                # input is already a passed lxml tree
+                self.doc = html
+            else:
+                try:
+                    self.doc = lxml.html.fromstring(html)
+                except lxml.etree.XMLSyntaxError:
+                    self.doc = None
 
         def __eq__(self, html):
             return self.orig_html is html
@@ -469,12 +474,12 @@ else:
                 return node
 
 
-def get(html, xpath, remove=('br', 'hr')):
+def get(html, xpath, remove=None):
     """Return first element from XPath search of HTML
     """
     return Doc(html, remove=remove).get(xpath)
 
-def search(html, xpath, remove=('br', 'hr')):
+def search(html, xpath, remove=None):
     """Return all elements from XPath search of HTML
     """
     return Doc(html, remove=remove).search(xpath)

@@ -61,9 +61,13 @@ class PersistentDict:
     >>>
     >>> url in cache
     False
+    >>> len(cache)
+    0
     >>> cache[url] = html
     >>> url in cache
     True
+    >>> len(cache)
+    1
     >>> cache[url] == html
     True
     >>> cache.get(url)['value'] == html
@@ -123,6 +127,19 @@ class PersistentDict:
             c.execute("SELECT key FROM config;")
             for row in c:
                 yield row[0]
+
+
+    def __len__(self):
+        """Return the number of entries in the cache
+        """
+        count = 0
+        for i in range(self.num_caches):
+            conn = self.get_connection(i)        
+            c = conn.cursor()
+            c.execute("SELECT count(*) FROM config;")
+            count += c.fetchone()[0]
+        return count
+
 
     def __getitem__(self, key):
         """return the value of the specified key or raise KeyError if not found
@@ -615,7 +632,7 @@ if __name__ == '__main__':
             value = cache[options.key]
             filename = tempfile.NamedTemporaryFile().name
             fp = open(filename, 'w')
-            fp.write(value)
+            fp.write(str(value))
             fp.flush()
             webbrowser.open(filename)
         else:

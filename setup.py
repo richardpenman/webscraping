@@ -13,7 +13,7 @@ setup(
     author_email='richard@webscraping.com',
     description='Pure python library aimed to make web scraping easier',
     long_description=read('README.rst'),
-    url='http://code.google.com/p/webscraping',
+    url='http://bitbucket.org/richardpenman/webscraping',
     classifiers = [
         'Environment :: Web Environment',
         'Intended Audience :: Developers',

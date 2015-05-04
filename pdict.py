@@ -128,6 +128,9 @@ class PersistentDict:
             for row in c:
                 yield row[0]
 
+    
+    def __nonzero__(self):
+        return True
 
     def __len__(self):
         """Return the number of entries in the cache

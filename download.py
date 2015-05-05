@@ -1059,7 +1059,7 @@ class DataCrawler:
                           and (max_results is None or len(results) < max_results):
             _, url = outstanding.pop(0)
             scraped[url] = True
-            html = self.D.get(url)
+            html = self.D.get(url, num_retries=0)
 
             if html:
                 for result in self.extract_fn(html):
@@ -1079,5 +1079,4 @@ class DataCrawler:
                                     break
                             else:
                                 outstanding.append((score, link))
-                print outstanding
         return results

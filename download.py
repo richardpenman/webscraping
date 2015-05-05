@@ -474,67 +474,10 @@ class Download:
 
 
     def get_emails(self, website, max_depth=1, max_urls=10, max_emails=1):
-        """Crawl this website and return all emails found
+        return DataCrawler(self, alg.extract_emails).find(website, max_depth, max_urls, max_emails)
 
-        website:
-            the URL of website to crawl
-        max_depth:
-            how many links deep to follow before stop crawl
-        max_urls:
-            how many URL's to download before stop crawl
-        max_emails:
-            The maximum number of emails to extract before stop crawl.
-            If None then extract all emails found in crawl.
-        """
-        def score(link):
-            """Return how valuable this link is for ordering crawling
-            The lower the better"""
-            link = link.lower()
-            total = 0
-            if 'contact' in link:
-                pass # this page is top priority
-            elif 'about' in link:
-                total += 10
-            elif 'help' in link:
-                total += 20
-            else:
-                # generic page
-                total += 100
-            # bias towards shorter links
-            total += len(link)
-            return total
-
-        # check for redirect URL
-        self.get(website)
-        redirect_url = self.cache.meta(website).get('url') if self.cache else self.final_url
-        website = redirect_url or website
-        
-        domain = urlparse.urlparse(website).netloc
-        scraped = adt.HashDict()
-        c = CrawlerCallback(max_depth=max_depth)
-        outstanding = [(0, website)] # list of URLs and their score
-        emails = []
-        while outstanding and (max_urls is None or len(scraped) < max_urls) \
-                          and (max_emails is None or len(emails) < max_emails):
-            _, url = outstanding.pop(0)
-            scraped[url] = True
-            html = self.get(url)
-
-            if html:
-                for email in alg.extract_emails(html):
-                    if email not in emails:
-                        emails.append(email)
-                        if len(emails) == max_emails:
-                            break
-                # crawl the linked URLs
-                for link in c.crawl(self, url, html):
-                    if urlparse.urlparse(link).netloc == domain:
-                        if link not in scraped:
-                            outstanding.append((score(link), link))
-                # sort based on score to crawl most promising first
-                # XXX insertion sort more efficient here
-                outstanding.sort()
-        return list(emails)
+    def get_phones(self, website, max_depth=1, max_urls=10, max_phones=1):
+        return DataCrawler(self, alg.extract_phones).find(website, max_depth, max_urls, max_phones)
 
 
     def gcache_get(self, url, **kwargs):
@@ -1059,3 +1002,82 @@ class CrawlerCallback:
                             if len(outstanding) == self.max_links:
                                 break
         return outstanding
+
+
+class DataCrawler:
+    """Crawl a website and return all matches extracted using a given function
+    """
+    def __init__(self, D, extract_fn):
+        """
+        extract_fn:
+            a function to parse given HTML and return a list of matches
+        """
+        self.D = D
+        self.extract_fn = extract_fn
+
+    def link_score(self, link):
+        """Return how valuable this link is for ordering crawling
+        The lower the better"""
+        link = link.lower()
+        total = 0
+        if 'contact' in link:
+            pass # this page is top priority
+        elif 'about' in link:
+            total += 10
+        elif 'help' in link:
+            total += 20
+        else:
+            # generic page
+            total += 100
+        # bias towards shorter links
+        total += len(link)
+        return total
+
+    def find(self, website, max_depth, max_urls, max_results):
+        """
+        website:
+            the URL of website to crawl
+        max_depth:
+            how many links deep to follow before stop crawl
+        max_urls:
+            how many URL's to download before stop crawl
+        max_results:
+            The maximum number of results to extract before stop crawl.
+            If None then extract all results found in crawl.
+        """
+        # check for redirect URL
+        self.D.get(website)
+        redirect_url = self.D.cache.meta(website).get('url') if self.D.cache else self.final_url
+        website = redirect_url or website
+        
+        domain = urlparse.urlparse(website).netloc
+        scraped = adt.HashDict()
+        c = CrawlerCallback(max_depth=max_depth)
+        outstanding = [(0, website)] # list of URLs and their score
+        results = []
+        while outstanding and (max_urls is None or len(scraped) < max_urls) \
+                          and (max_results is None or len(results) < max_results):
+            _, url = outstanding.pop(0)
+            scraped[url] = True
+            html = self.D.get(url)
+
+            if html:
+                for result in self.extract_fn(html):
+                    if result not in results:
+                        results.append(result)
+                        if len(results) == max_results:
+                            break
+                # crawl the linked URLs
+                for link in c.crawl(self, url, html):
+                    if urlparse.urlparse(link).netloc == domain:
+                        if link not in scraped:
+                            # insert sort this new record so crawl most promising first
+                            score = self.link_score(link)
+                            for i, (other_score, other_link) in enumerate(outstanding):
+                                if score < other_score:
+                                    outstanding.insert(i, ((score, link)))
+                                    break
+                            else:
+                                outstanding.append((score, link))
+                print outstanding
+        return results

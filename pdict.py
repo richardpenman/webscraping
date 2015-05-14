@@ -133,7 +133,7 @@ class PersistentDict:
         for i in range(self.num_caches):
             conn = self.get_connection(i)        
             c = conn.cursor()
-            c.execute("SELECT key, updated FROM config WHERE key in (%s);" % ','.join(len(keys)*'?'), (keys))
+            c.execute("SELECT key, updated FROM config WHERE key IN (%s);" % ','.join(len(keys)*'?'), keys)
             for row in c:
                 if ignore_expires or self.is_fresh(row[1]):
                     results.append(row[0])

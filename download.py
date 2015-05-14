@@ -127,7 +127,7 @@ class Download:
         If it's True, one proxy IP will keep using the same User-agent, otherwise will use a random User-agent for each request.
     """
 
-    def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, use_network=True, 
+    def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, cache_expires=None, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0, num_caches=1,
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, 
@@ -136,7 +136,7 @@ class Download:
         need_cache = read_cache or write_cache
         if pdict and need_cache:
             cache_file = cache_file or settings.cache_file
-            self.cache = cache or pdict.PersistentDict(cache_file, num_caches=num_caches)
+            self.cache = cache or pdict.PersistentDict(cache_file, num_caches=num_caches, expires=cache_expires)
         else:
             self.cache = None
             if need_cache:

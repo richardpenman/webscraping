@@ -54,8 +54,7 @@ class PersistentDict:
     isolation_level: 
         None for autocommit or else 'DEFERRED' / 'IMMEDIATE' / 'EXCLUSIVE'
 
-    >>> filename = 'cache.db'
-    >>> cache = PersistentDict(filename)
+    >>> cache = PersistentDict()
     >>> url = 'http://google.com/abc'
     >>> html = '<html>abc</html>'
     >>>
@@ -80,7 +79,7 @@ class PersistentDict:
     >>> del cache[url]
     >>> url in cache
     False
-    >>> os.remove(filename)
+    >>> os.remove(cache.filename)
     """
     def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None, num_caches=1):
         """initialize a new PersistentDict with the specified database file.
@@ -116,7 +115,30 @@ class PersistentDict:
         conn = self.get_connection(key)
         row = conn.execute("SELECT updated FROM config WHERE key=?;", (key,)).fetchone()
         return row and self.is_fresh(row[0])
-   
+
+
+    def contains(self, keys, ignore_expires=False):
+        """check if a list of keys exist
+    
+        >>> # try 0 second expiration so expires immediately
+        >>> cache = PersistentDict(expires=datetime.timedelta(seconds=0))
+        >>> cache['a'] = 1; 
+        >>> cache.contains(['a', 'b'])
+        []
+        >>> cache.contains(['a', 'b'], ignore_expires=True)
+        [u'a']
+        >>> os.remove(cache.filename)
+        """
+        results = []
+        for i in range(self.num_caches):
+            conn = self.get_connection(i)        
+            c = conn.cursor()
+            c.execute("SELECT key, updated FROM config WHERE key in (%s);" % ','.join(len(keys)*'?'), (keys))
+            for row in c:
+                if ignore_expires or self.is_fresh(row[1]):
+                    results.append(row[0])
+        return results
+        
 
     def __iter__(self):
         """iterate each key in the database
@@ -131,6 +153,7 @@ class PersistentDict:
     
     def __nonzero__(self):
         return True
+
 
     def __len__(self):
         """Return the number of entries in the cache

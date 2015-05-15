@@ -244,12 +244,13 @@ class PersistentDict:
             conn = self.get_connection(key)
             row = conn.execute("SELECT value, meta, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
-                value = row[0] 
-                data = dict(
-                    value=self.deserialize(value),
-                    meta=self.deserialize(row[1]),
-                    updated=row[2]
-                )
+                if self.is_fresh(row[2]):
+                    value = row[0] 
+                    data = dict(
+                        value=self.deserialize(value),
+                        meta=self.deserialize(row[1]),
+                        updated=row[2]
+                    )
         return data
 
 

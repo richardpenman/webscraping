@@ -16,6 +16,7 @@ import datetime
 import subprocess
 import socket
 import gzip
+import zlib
 import thread
 import threading
 import contextlib
@@ -380,7 +381,7 @@ class Download:
         headers = headers or {}
         headers['User-agent'] = user_agent or self.get_user_agent(proxy)
         if not max_size:
-            headers['Accept-encoding'] = 'gzip'
+            headers['Accept-encoding'] = 'gzip, deflate'
         for name, value in settings.default_headers.items():
             if name not in headers:
                 if name == 'Referer':
@@ -391,7 +392,6 @@ class Download:
             # encode data for POST
             data = urllib.urlencode(sorted(data.items()))
         common.logger.info('Downloading %s %s' % (url, data or ''))
-
         try:
             request = urllib2.Request(url, data, headers)
             with contextlib.closing(opener.open(request)) as response:
@@ -402,6 +402,8 @@ class Download:
                 if response.headers.get('content-encoding') == 'gzip':
                     # data came back gzip-compressed so decompress it          
                     content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()
+                elif response.headers.get('content-encoding') == 'deflate':
+                    content = zlib.decompress(content)
                 self.final_url = response.url # store where redirected to
                 if self.invalid_response(content, pattern):
                     # invalid result from download
@@ -510,22 +512,29 @@ class Download:
             The webpage to download
         timestamp:
             When passed a datetime object will download the cached webpage closest to this date,
+            If passed a string will use this as timestamp
             Else when None (default) will download the most recent archived page.
         """
-        if timestamp:
+        if hasattr(timestamp, 'strftime'):
             formatted_ts = timestamp.strftime('%Y%m%d%H%M%S')
+        elif isinstance(timestamp, basestring):
+            formatted_ts = timestamp
         else:
             formatted_ts = '2' # will return most recent archive
-        html = self.get('http://wayback.archive.org/web/%s/%s' % (formatted_ts, url), **kwargs)
+        html = self.get('https://web.archive.org/web/%s/%s' % (formatted_ts, url), **kwargs)
         if not html and timestamp is None:
             # not cached, so get live version
             html = self.get('http://liveweb.archive.org/' + url)
+        match = re.search('<p class="impatient"><a href="(/web/\d+.*?)"', html)
+        if match:
+            redirect = match.groups()[0]
+            html = self.get('https://web.archive.org' + redirect, **kwargs)
 
         if html:
             # remove wayback toolbar
             html = re.compile('<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->', re.DOTALL).sub('', html)
             html = re.compile('<!--\s+FILE ARCHIVED ON.*?-->', re.DOTALL).sub('', html)
-            html = re.sub('http://web\.archive\.org/web/\d+/', '', html)
+            html = re.sub('/web/\d+/', '', html)
         return html
 
 

@@ -799,7 +799,7 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
                     else:
                         # add these URL's to crawl queue
                         for link in result or []:
-                            download_queue.append(urlparse.urljoin(url, link))
+                            download_queue.append(link)
                                         
                 # update the crawler state
                 # no download or error so must have read from cache

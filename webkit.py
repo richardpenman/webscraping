@@ -526,7 +526,7 @@ if __name__ == '__main__':
     # load webpage
     w.get('http://duckduckgo.com')
     # fill search textbox 
-    w.fill('input[id=search_form_input_homepage]', 'sitescraper')
+    w.fill('input[id=search_form_input_homepage]', 'web scraping')
     # take screenshot of webpage
     w.screenshot('duckduckgo.jpg')
     # click search button 

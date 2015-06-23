@@ -81,39 +81,38 @@ class PersistentDict:
     False
     >>> os.remove(cache.filename)
     """
-    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None, num_caches=1):
+    def __init__(self, filename='cache.db', compress_level=6, expires=None, timeout=DEFAULT_TIMEOUT, isolation_level=None):
         """initialize a new PersistentDict with the specified database file.
         """
         self.filename = filename
-        self.compress_level, self.expires, self.timeout, self.isolation_level, self.num_caches = \
-            compress_level, expires, timeout, isolation_level, num_caches
-        for i in range(num_caches):
-            conn = self.get_connection(i)
-            sql = """
-            CREATE TABLE IF NOT EXISTS config (
-                key TEXT NOT NULL PRIMARY KEY UNIQUE,
-                value BLOB,
-                meta BLOB,
-                status INTEGER,
-                updated timestamp DEFAULT (datetime('now', 'localtime'))
-            );
-            """
-            conn.execute(sql)
-            conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
+        self.compress_level, self.expires, self.timeout, self.isolation_level = \
+            compress_level, expires, timeout, isolation_level
+        self.conn = sqlite3.connect(filename, timeout=timeout, isolation_level=isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self.conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
+        sql = """
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT NOT NULL PRIMARY KEY UNIQUE,
+            value BLOB,
+            meta BLOB,
+            status INTEGER,
+            updated timestamp DEFAULT (datetime('now', 'localtime'))
+        );
+        """
+        self.conn.execute(sql)
+        self.conn.execute("CREATE INDEX IF NOT EXISTS keys ON config (key);")
 
 
     def __copy__(self):
         """make a copy of current cache settings
         """
         return PersistentDict(filename=self.filename, compress_level=self.compress_level, expires=self.expires, 
-                              timeout=self.timeout, isolation_level=self.isolation_level, num_caches=self.num_caches)
+                              timeout=self.timeout, isolation_level=self.isolation_level)
 
 
     def __contains__(self, key):
         """check the database to see if a key exists
         """
-        conn = self.get_connection(key)
-        row = conn.execute("SELECT updated FROM config WHERE key=?;", (key,)).fetchone()
+        row = self.conn.execute("SELECT updated FROM config WHERE key=?;", (key,)).fetchone()
         return row and self.is_fresh(row[0])
 
 
@@ -130,25 +129,21 @@ class PersistentDict:
         >>> os.remove(cache.filename)
         """
         results = []
-        for i in range(self.num_caches):
-            conn = self.get_connection(i)        
-            c = conn.cursor()
-            c.execute("SELECT key, updated FROM config WHERE key IN (%s);" % ','.join(len(keys)*'?'), keys)
-            for row in c:
-                if ignore_expires or self.is_fresh(row[1]):
-                    results.append(row[0])
+        c = self.conn.cursor()
+        c.execute("SELECT key, updated FROM config WHERE key IN (%s);" % ','.join(len(keys)*'?'), keys)
+        for row in c:
+            if ignore_expires or self.is_fresh(row[1]):
+                results.append(row[0])
         return results
         
 
     def __iter__(self):
         """iterate each key in the database
         """
-        for i in range(self.num_caches):
-            conn = self.get_connection(i)        
-            c = conn.cursor()
-            c.execute("SELECT key FROM config;")
-            for row in c:
-                yield row[0]
+        c = self.conn.cursor()
+        c.execute("SELECT key FROM config;")
+        for row in c:
+            yield row[0]
 
     
     def __nonzero__(self):
@@ -158,20 +153,15 @@ class PersistentDict:
     def __len__(self):
         """Return the number of entries in the cache
         """
-        count = 0
-        for i in range(self.num_caches):
-            conn = self.get_connection(i)        
-            c = conn.cursor()
-            c.execute("SELECT count(*) FROM config;")
-            count += c.fetchone()[0]
-        return count
+        c = self.conn.cursor()
+        c.execute("SELECT count(*) FROM config;")
+        return c.fetchone()[0]
 
 
     def __getitem__(self, key):
         """return the value of the specified key or raise KeyError if not found
         """
-        conn = self.get_connection(key)
-        row = conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
+        row = self.conn.execute("SELECT value, updated FROM config WHERE key=?;", (key,)).fetchone()
         if row:
             if self.is_fresh(row[1]):
                 value = row[0]
@@ -185,37 +175,16 @@ class PersistentDict:
     def __delitem__(self, key):
         """remove the specifed value from the database
         """
-        conn = self.get_connection(key)
-        conn.execute("DELETE FROM config WHERE key=?;", (key,))
+        self.conn.execute("DELETE FROM config WHERE key=?;", (key,))
 
 
     def __setitem__(self, key, value):
         """set the value of the specified key
         """
         updated = datetime.datetime.now()
-        conn = self.get_connection(key)
-        conn.execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (
+        self.conn.execute("INSERT OR REPLACE INTO config (key, value, meta, updated) VALUES(?, ?, ?, ?);", (
             key, self.serialize(value), self.serialize({}), updated)
         )
-
-
-    def get_connection(self, key):
-        """Return sqlite connection for this key
-        Multiple sqlite connections are supported to minimize the write bottleneck
-        """
-        #XXX
-        if self.num_caches == 1:
-            filename = self.filename
-        else:
-            if isinstance(key, int):
-                conn_i = key
-            else:
-                # map hash remainder to sqlite index
-                conn_i = hash(key) % self.num_caches
-            filename = '%s.%d' % (self.filename, conn_i)
-        conn = sqlite3.connect(filename, timeout=self.timeout, isolation_level=self.isolation_level, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
-        conn.text_factory = lambda x: unicode(x, 'utf-8', 'replace')
-        return conn
 
 
     def serialize(self, value):
@@ -241,8 +210,7 @@ class PersistentDict:
         """
         data = default
         if key:
-            conn = self.get_connection(key)
-            row = conn.execute("SELECT value, meta, updated FROM config WHERE key=?;", (key,)).fetchone()
+            row = self.conn.execute("SELECT value, meta, updated FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 if self.is_fresh(row[2]):
                     value = row[0] 
@@ -260,24 +228,22 @@ class PersistentDict:
         if value is passed then set the meta attribute for this key
         if not then get the existing meta data for this key
         """
-        conn = self.get_connection(key)
         if value is None:
             # want to get meta
-            row = conn.execute("SELECT meta FROM config WHERE key=?;", (key,)).fetchone()
+            row = self.conn.execute("SELECT meta FROM config WHERE key=?;", (key,)).fetchone()
             if row:
                 return self.deserialize(row[0])
             else:
                 raise KeyError("Key `%s' does not exist" % key)
         else:
             # want to set meta
-            conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
+            self.conn.execute("UPDATE config SET meta=?, updated=? WHERE key=?;", (self.serialize(value), datetime.datetime.now(), key))
 
 
     def clear(self):
         """Clear all cached data
         """
-        conn = self.get_connection(key)
-        conn.execute("DELETE FROM config;")
+        self.conn.execute("DELETE FROM config;")
 
 
     def merge(self, db, override=False):
@@ -290,9 +256,7 @@ class PersistentDict:
 
 
     def vacuum(self):
-        for i in range(self.num_caches):
-            conn = self.get_connection(i)
-            conn.execute('VACUUM')
+        self.conn.execute('VACUUM')
 
 
 class DbmDict:

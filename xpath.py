@@ -502,6 +502,8 @@ class Form:
             self.data[text_name] = text_value
         for select_name, select_contents in zip(search(form, '//select/@name'), search(form, '//select')):
             self.data[select_name] = get(select_contents, '/option[@selected]/@value')
+        if '' in self.data:
+            del self.data['']
 
 
     def __getitem__(self, key):
@@ -547,9 +549,10 @@ def get_links(html, url=None, local=True, external=True):
             link = None # ignore mailto, etc
         return link
     a_links = search(html, '//a/@href')
+    i_links = search(html, '//iframe/@src')
     js_links = js_re.findall(html)
     links = []
-    for link in a_links + js_links:
+    for link in a_links + i_links + js_links:
         try:
             link = normalize_link(link)
         except UnicodeError:

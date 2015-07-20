@@ -255,7 +255,7 @@ def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
         else:
             # named entity
             try:
-                text = unichr(htmlentitydefs.name2codepoint[text[1:-1]])
+                text = unichr(htmlentitydefs.name2codepoint[text[1:-1].lower()])
             except KeyError:
                 pass
         return text # leave as is

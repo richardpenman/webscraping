@@ -376,7 +376,7 @@ class Download:
                 opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
         
         headers = headers or {}
-        headers['User-agent'] = user_agent or self.get_user_agent(proxy)
+        headers['User-agent'] = headers.get('User-agent') or user_agent or self.get_user_agent(proxy)
         if not max_size:
             headers['Accept-encoding'] = 'gzip, deflate'
         for name, value in settings.default_headers.items():
@@ -568,18 +568,20 @@ class Download:
             return text
 
         
-    def save_as(self, url, filename=None, save_dir='images'):
-        """Download url and save to disk
+    def save_as(self, url, filename=None, save_dir='images', override=False):
+        """Download url and save to disk if does not already exist
 
         url:
             the webpage to download
         filename:
-            Output file to save to. If not set then will save to file based on URL
+            output file to save to if not set then will save to file based on URL
+        override:
+            whether to download if output file already exists
         """
         save_path = os.path.join(save_dir, filename or '%s.%s' % (hashlib.md5(url).hexdigest(), common.get_extension(url)))
-        if not os.path.exists(save_path):
+        if not os.path.exists(save_path) or override:
             # need to download
-            _bytes = self.get(url, num_redirects=0)
+            _bytes = self.get(url, num_redirects=0, write_cache=False)
             if _bytes:
                 if not os.path.exists(save_dir):
                     os.makedirs(save_dir)
@@ -598,7 +600,6 @@ def get_redirect(url, html):
 
 
 class GoogleMaps:
-
     def __init__(self, D):
         self.D = D
 

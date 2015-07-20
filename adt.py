@@ -2,6 +2,10 @@ __doc__ = 'High level abstract datatypes'
 
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
+try:
+    import pybloom
+except ImportError:
+    pass
 
 
 class Bag(dict):
@@ -54,6 +58,9 @@ class HashDict:
     def __setitem__(self, name, value):
         return self.d.__setitem__(self.get_hash(name), value)
 
+    def add(self, name):
+        self[name] = True
+
     def get(self, name, default=None):
         """Get the value at this key
 
@@ -65,3 +72,17 @@ class HashDict:
         """get the hash value of this value
         """
         return hash(value)
+
+
+class Bloom:
+    """A bloom filter is a space efficient way to tell if an element is in a set.
+    False positive are possible - set by err rate - but false negatives are not.
+    """
+    def __init__(self, start_items=10000, err_rate=0.0001):
+        self.bloom = pybloom.ScalableBloomFilter(10000, err, 4)
+
+    def __contains__(self, key):
+        return key in self.bloom
+
+    def add(self, key):
+        return self.bloom.add(key)

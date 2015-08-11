@@ -308,11 +308,11 @@ def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
 def normalize(s, encoding=settings.default_encoding):
     """Normalize the string by removing tags, unescaping, and removing surrounding whitespace
     
-    >>> normalize('''<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>''')
+    >>> normalize('<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>')
     'Tel.: 029 - 12345678'
     """
     if isinstance(s, basestring):
-        return re.sub('\s+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
+        return re.sub('[\n\r]+', '\n', re.sub('[ \t]+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode)))).strip()
     else:
         return s
 

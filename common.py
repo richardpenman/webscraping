@@ -705,8 +705,6 @@ def chrome_cookie(filename=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_fi
 
 
 
-
-
 def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file='cookies.txt'):
     """Create a cookie jar from this FireFox 3 sqlite cookie database
 
@@ -770,6 +768,12 @@ def firefox_cookie(file=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_file=
     os.remove(tmp_sqlite_file)
     os.remove(tmp_cookie_file)
     return cookie_jar
+
+
+def build_opener(cj=None):
+    if cj is None:
+        cj = cookielib.CookieJar()
+    return urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
 
 
 def start_threads(fn, num_threads=20, args=(), wait=True):

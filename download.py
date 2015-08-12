@@ -8,7 +8,6 @@ import collections
 import random
 import urllib
 import urllib2
-import cookielib
 import urlparse
 import StringIO
 import time
@@ -367,24 +366,22 @@ class Download:
         self.error_content = None
         # create opener with headers
         if not opener:
-            cj = cookielib.CookieJar()
-            opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+            opener = common.build_opener()
         if proxy:
-            if url.lower().startswith('https://'):
-                opener.add_handler(urllib2.ProxyHandler({'https' : proxy}))
-            else:
-                opener.add_handler(urllib2.ProxyHandler({'http' : proxy}))
+            opener.add_handler(urllib2.ProxyHandler({urlparse.urlparse(url).scheme : proxy}))
         
         headers = headers or {}
-        headers['User-agent'] = headers.get('User-agent') or user_agent or self.get_user_agent(proxy)
+        default_headers = settings.default_headers.copy()
+        default_headers['User-Agent'] = user_agent or self.get_user_agent(proxy)
         if not max_size:
-            headers['Accept-encoding'] = 'gzip, deflate'
-        for name, value in settings.default_headers.items():
-            if name not in headers:
+            default_headers['Accept-Encoding'] = 'gzip, deflate'
+        lowercase_headers = [name.lower() for name in headers.keys()]
+        for name, value in default_headers.items():
+            if name.lower() not in lowercase_headers:
                 if name == 'Referer':
                     value = url
                 headers[name] = value
-        
+
         if isinstance(data, dict):
             # encode data for POST
             data = urllib.urlencode(sorted(data.items()))
@@ -396,10 +393,10 @@ class Download:
                     content = response.read(max_size)
                 else:
                     content = response.read()
-                if response.headers.get('content-encoding') == 'gzip':
+                if response.headers.get('Content-Encoding') == 'gzip':
                     # data came back gzip-compressed so decompress it          
                     content = gzip.GzipFile(fileobj=StringIO.StringIO(content)).read()
-                elif response.headers.get('content-encoding') == 'deflate':
+                elif response.headers.get('Content-Encoding') == 'deflate':
                     content = zlib.decompress(content)
                 self.final_url = response.url # store where redirected to
                 if self.invalid_response(content, pattern):

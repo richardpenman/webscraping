@@ -6,7 +6,7 @@ def read(filename):
 
 setup(
     name='webscraping', 
-    version='1.4',
+    version='1.5',
     packages=['webscraping'],
     package_dir={'webscraping':'.'}, # look for package contents in current directory
     author='Richard Penman',

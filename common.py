@@ -155,6 +155,15 @@ def unique(l):
     return checked
 
 
+def flatten(l):
+    """Flatten a list of lists into a single list
+
+    >>> flatten([[1,2,3], [4,5,6]])
+    [1, 2, 3, 4, 5, 6]
+    """
+    return [item for sublist in l for item in sublist]
+
+
 def nth(l, i, default=''):
     """Return nth item from list or default value if out of range
     """
@@ -259,7 +268,6 @@ def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
             except KeyError:
                 pass
         return text # leave as is
-    #text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = re.sub('&#?\w+;', fixup, text)
     text = urllib.unquote(text)
     if keep_unicode:
@@ -689,7 +697,7 @@ def chrome_cookie(filename=None, tmp_sqlite_file='cookies.sqlite', tmp_cookie_fi
     chrome = Chrome()
     for item in cur.fetchall():
         value = chrome.decrypt(item[5], item[6])
-        row = '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (item[0], ftstr[item[0].startswith('.')], item[1], ftstr[item[2]], item[3], item[4], value)
+        row = u'%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (item[0], ftstr[item[0].startswith('.')], item[1], ftstr[item[2]], item[3], item[4], value)
         fp.write(row)
 
     fp.close()

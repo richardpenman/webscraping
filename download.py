@@ -123,13 +123,15 @@ class Download:
         Sometimes the website limits the request only by session(rather than IP), we can use this parameter to keep each thread delaying independently
     keep_ip_ua:
         If it's True, one proxy IP will keep using the same User-agent, otherwise will use a random User-agent for each request.
+    ssl_context:
+        provide ssl context argument to urlopen
     """
 
     def __init__(self, cache=None, cache_file=None, read_cache=True, write_cache=True, cache_expires=None, use_network=True, 
             user_agent=None, timeout=30, delay=5, proxies=None, proxy_file=None, max_proxy_errors=5,
             opener=None, headers=None, data=None, num_retries=0, num_redirects=0, 
             force_html=False, force_ascii=False, max_size=None, default='', pattern=None, acceptable_errors=None, 
-            throttle_additional_key=None, keep_ip_ua=True, **kwargs):
+            throttle_additional_key=None, keep_ip_ua=True, ssl_context=None, **kwargs):
         socket.setdefaulttimeout(timeout)
         need_cache = read_cache or write_cache
         if pdict and need_cache:
@@ -160,7 +162,8 @@ class Download:
             default = default,
             pattern = pattern,
             keep_ip_ua = keep_ip_ua,
-            acceptable_errors = acceptable_errors
+            acceptable_errors = acceptable_errors,
+            ssl_context = ssl_context
         )
         self.last_load_time = self.last_mtime = time.time()
         self.num_downloads = self.num_errors = 0
@@ -283,7 +286,7 @@ class Download:
             request = urllib2.Request(url)
             request.get_method = lambda : 'HEAD'
             try:
-                response = urllib2.urlopen(request)
+                response = urllib2.urlopen(request, context=self.settings.ssl_context)
             except Exception, e:
                 common.logger.warning('HEAD check miss: %s %s' % (url, e))
             else:
@@ -723,6 +726,7 @@ class GoogleMaps:
 
         results['lat'] = result['geometry']['location']['lat']
         results['lng'] = result['geometry']['location']['lng']
+        results['types'] = result['types']
         return results
 
 

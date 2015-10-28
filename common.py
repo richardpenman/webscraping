@@ -313,16 +313,17 @@ def unescape(text, encoding=settings.default_encoding, keep_unicode=False):
     return re.sub('(' + '|'.join(chars.keys()) + ')', replace_chars, text)
 
    
-def normalize(s, encoding=settings.default_encoding):
+def normalize(s, encoding=settings.default_encoding, newlines=False):
     """Normalize the string by removing tags, unescaping, and removing surrounding whitespace
     
     >>> normalize('<span>Tel.:   029&nbsp;-&nbsp;12345678   </span>')
     'Tel.: 029 - 12345678'
     """
     if isinstance(s, basestring):
-        return re.sub('[\n\r]+', '\n', re.sub('[ \t]+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode)))).strip()
-    else:
-        return s
+        s = re.sub('[\n\r]+', '\n', re.sub('[ \t]+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode)))).strip()
+        if not newlines:
+            s = s.replace('\n', ' ')
+    return s
 
 
 def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNORECASE, default=''):

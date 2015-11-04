@@ -446,7 +446,7 @@ else:
             else:
                 try:
                     self.doc = lxml.html.fromstring(html)
-                except lxml.etree.XMLSyntaxError:
+                except lxml.etree.LxmlError:
                     self.doc = None
 
         def __eq__(self, html):

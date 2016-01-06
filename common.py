@@ -320,11 +320,11 @@ def normalize(s, encoding=settings.default_encoding, newlines=False):
     'Tel.: 029 - 12345678'
     """
     if isinstance(s, basestring):
-        s = re.sub('[ \t]+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
         if newlines:
             s = re.sub('[\n\r]+', '\n', s)
         else:
             s = re.sub('[\n\r]+', ' ', s) 
+        s = re.sub('[ \t\f\v]+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
     return s
 
 

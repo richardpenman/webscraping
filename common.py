@@ -320,15 +320,20 @@ def normalize(s, encoding=settings.default_encoding, newlines=False):
     'Tel.: 029 - 12345678'
     """
     if isinstance(s, basestring):
+        # remove tags and set encoding
+        s = unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))
         if newlines:
+            # keep multiple newlines
             s = re.sub('[\n\r]+', '\n', s)
+            s = re.sub('[ \t\f\v]+', ' ', s)
         else:
-            s = re.sub('[\n\r]+', ' ', s) 
-        s = re.sub('[ \t\f\v]+', ' ', unescape(remove_tags(s), encoding=encoding, keep_unicode=isinstance(s, unicode))).strip()
+            # replace all subsequent whitespace with single space
+            s = re.sub('[\s]+', ' ', s) 
+        s = s.strip()
     return s
 
 
-def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNORECASE, default=''):
+def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNORECASE, default='', one=False):
     """Helper method to extract content from regular expression
     
     >>> regex_get('<div><span>Phone: 029&nbsp;01054609</span><span></span></div>', r'<span>Phone:([^<>]+)')

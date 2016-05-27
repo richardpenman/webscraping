@@ -810,6 +810,7 @@ def threaded_get(url=None, urls=None, url_iter=None, num_threads=10, dl=None, cb
         download_queue.extend(urls)
     if url:
         download_queue.append(url)
+    add_iter_urls()
     common.logger.debug('Start new crawl')
 
     # initiate the state file with the number of URL's already in the queue

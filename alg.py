@@ -116,6 +116,8 @@ def distance(p1, p2, scale=None):
     >>> int(distance(melbourne, san_francisco, 'km'))
     12659
     """
+    if p1 == p2:
+        return 0
     lat1, long1 = p1
     lat2, long2 = p2
     # Convert latitude and longitude to 
@@ -139,7 +141,7 @@ def distance(p1, p2, scale=None):
     # distance = rho * arc length
     
     cos = (math.sin(phi1)*math.sin(phi2)*math.cos(theta1 - theta2) + math.cos(phi1)*math.cos(phi2))
-    arc = math.acos( cos )
+    arc = math.acos(cos)
 
     if scale is None:
         return arc

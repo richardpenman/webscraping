@@ -505,7 +505,6 @@ class Form:
         if '' in self.data:
             del self.data['']
 
-
     def __getitem__(self, key):
         return self.data[key]
 

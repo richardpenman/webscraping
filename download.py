@@ -371,7 +371,12 @@ class Download:
         if not opener:
             opener = common.build_opener()
         if proxy:
-            opener.add_handler(urllib2.ProxyHandler({urlparse.urlparse(url).scheme : proxy}))
+            # avoid duplicate ProxyHandler
+            for handler in opener.handlers:
+                if handler.__class__.__name__ == 'ProxyHandler':
+                    break
+            else:
+                opener.add_handler(urllib2.ProxyHandler({urlparse.urlparse(url).scheme : proxy}))
         
         headers = headers or {}
         default_headers = settings.default_headers.copy()

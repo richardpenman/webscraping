@@ -68,18 +68,18 @@ class NetworkAccessManager(QNetworkAccessManager):
         url = request.url().toString()
         if str(request.url().path()).endswith('.ttf'):
             # block fonts, which can cause webkit to crash
-            common.logger.debug('Blocking: {}'.format(url))
+            common.logger.debug(u'Blocking: {}'.format(url))
             request.setUrl(QUrl())
 
         data = post if post is None else post.peek(MAX_POST_SIZE)
-        key = '{} {}'.format(url, data)
+        key = u'{} {}'.format(url, data)
         use_cache = not url.startswith('file')
         if self.cache is not None and use_cache and key in self.cache:
-            common.logger.debug('Load from cache: ' + key)
+            common.logger.debug(u'Load from cache: {}'.format(key))
             content, headers, attributes = self.cache[key]
             reply = CachedNetworkReply(self, request.url(), content, headers, attributes)
         else:
-            common.logger.debug('Request: {} {}'.format(url, post or ''))
+            common.logger.debug(u'Request: {} {}'.format(url, post or ''))
             reply = QNetworkAccessManager.createRequest(self, operation, request, post)
             reply.error.connect(self.catch_error)
             self.active_requests.append(reply)
@@ -130,7 +130,7 @@ class NetworkAccessManager(QNetworkAccessManager):
                 if isinstance(result, dict):
                     result = result.items()
                 if not isinstance(result, list):
-                    common.logger.info('Unexpected data format: {}'.format(result))
+                    common.logger.info(u'Unexpected data format: {}'.format(result))
                     result = []
             except ValueError:
                 url = QUrl('')
@@ -287,6 +287,7 @@ class Browser(QWebView):
         manager = NetworkAccessManager(proxy, use_cache)
         page.setNetworkAccessManager(manager)
         self.setPage(page)
+        page.networkAccessManager().finished.connect(self.finished)
         # set whether to enable plugins, images, and java
         self.settings().setAttribute(QWebSettings.AutoLoadImages, load_images)
         self.settings().setAttribute(QWebSettings.JavascriptEnabled, load_javascript)
@@ -603,6 +604,11 @@ class Browser(QWebView):
         self.trigger_js_event(element, "mouseout");
         self.trigger_js_event(element, "blur");
     
+    
+    def finished(self, reply):
+        """Override the reply finished signal to check the result of each request
+        """
+        pass
 
 
 

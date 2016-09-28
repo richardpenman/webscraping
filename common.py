@@ -329,7 +329,7 @@ def normalize(s, encoding=settings.default_encoding, newlines=False):
         else:
             # replace all subsequent whitespace with single space
             s = re.sub('[\s]+', ' ', s) 
-        s = s.strip()
+        s = re.compile('<!--.*?-->', re.DOTALL).sub('', s).strip()
     return s
 
 

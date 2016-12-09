@@ -203,6 +203,15 @@ class Download:
                 pass # have not downloaded yet
             else:
                 if not html and settings.num_retries > 0:
+                    try:
+                        meta = self.cache.meta(key)
+                    except KeyError:
+                        pass
+                    else:
+                        if meta.get('status', '').startswith('404'):
+                            # don't retry 4XX errors
+                            common.logger.debug('Ignoring URL with previous status {}'.format(meta['status']))
+                            return settings.default
                     # try downloading again
                     common.logger.debug('Redownloading')
                     settings.num_retries -= 1
@@ -263,9 +272,14 @@ class Download:
         if self.cache and settings.write_cache:
             # cache results
             self.cache[key] = html
-            if url != self.final_url:
+            meta = {}
+            if self.final_url and url != self.final_url:
                 # cache what URL was redirected to
-                self.cache.meta(key, dict(url=self.final_url))
+                meta['url'] = self.final_url
+            if self.response_code and self.response_code != '200':
+                meta['status'] = self.response_code
+            if meta:
+                self.cache.meta(key, meta)
         
         # return default if no content
         return html or settings.default 
@@ -381,6 +395,7 @@ class Download:
         headers = headers or {}
         default_headers = settings.default_headers.copy()
         default_headers['User-Agent'] = user_agent or self.get_user_agent(proxy)
+        default_headers['Host'] = headers.get('Host', common.get_domain(url))
         if not max_size:
             default_headers['Accept-Encoding'] = 'gzip, deflate'
         lowercase_headers = [name.lower() for name in headers.keys()]
@@ -389,7 +404,7 @@ class Download:
                 if name == 'Referer':
                     value = url
                 headers[name] = value
-
+        
         if isinstance(data, dict):
             # encode data for POST
             data = urllib.urlencode(sorted(data.items()))
@@ -417,13 +432,18 @@ class Download:
             self.downloading_error = str(e)
             if hasattr(e, 'code'):
                 self.response_code = str(e.code)
+            else:
+                m = re.search('\D(\d\d\d)\D', str(e))
+                if m:
+                    self.response_code = m.groups()[0]
+                
             if hasattr(e, 'read'):
                 try:
                     self.error_content = e.read()
                 except Exception, e:
                     self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
-            common.logger.warning('Download error: %s %s' % (url, e))
+            common.logger.warning('Download error: {} {} ({})'.format(url, e, self.response_code))
             if self.settings.acceptable_errors and self.response_code in self.settings.acceptable_errors:
                 content, self.final_url = self.settings.default, url
             else:

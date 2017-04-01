@@ -8,6 +8,7 @@ import csv
 csv.field_size_limit(sys.maxint)
 import time
 import glob
+import json
 import string
 import urllib
 import string
@@ -350,6 +351,16 @@ def regex_get(html, pattern, index=None, normalized=True, flag=re.DOTALL|re.IGNO
         else:
             return [normalize(item) if normalized else item for item in m.groups()]
     return default
+
+
+def parse_jsonp(s):
+    try:
+        rindex = s.index('(')
+        lindex = s.rindex(')')
+    except IndexError:
+        pass
+    else:
+        return json.loads(s[rindex+1 : lindex])
 
 
 def safe(s):

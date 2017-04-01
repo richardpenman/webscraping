@@ -404,7 +404,9 @@ class Download:
                 if name == 'Referer':
                     value = url
                 headers[name] = value
-        
+        if not headers['Host']:
+            del headers['Host'] # some websites raise an error when host is included
+
         if isinstance(data, dict):
             # encode data for POST
             data = urllib.urlencode(sorted(data.items()))

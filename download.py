@@ -628,7 +628,6 @@ class GoogleMaps:
     def __init__(self, D):
         self.D = D
 
-
     def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None):
         """Geocode address using Google's API and return dictionary of useful fields
 

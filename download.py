@@ -386,11 +386,7 @@ class Download:
             opener = common.build_opener()
         if proxy:
             # avoid duplicate ProxyHandler
-            for handler in opener.handlers:
-                if handler.__class__.__name__ == 'ProxyHandler':
-                    break
-            else:
-                opener.add_handler(urllib2.ProxyHandler({urlparse.urlparse(url).scheme : proxy}))
+            opener.add_handler(urllib2.ProxyHandler({urlparse.urlparse(url).scheme : proxy}))
         
         headers = headers or {}
         default_headers = settings.default_headers.copy()
@@ -712,6 +708,7 @@ class GoogleMaps:
                     pass
                 elif status == 'OVER_QUERY_LIMIT':
                     # error geocoding - try again later
+                    common.logger.info('Over query limit')
                     self.D.cache[url] = ''
                 elif status in ('REQUEST_DENIED', 'INVALID_REQUEST'):
                     common.logger.info('{0}: {1}'.format(status, url))

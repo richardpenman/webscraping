@@ -607,6 +607,7 @@ if __name__ == '__main__':
     parser.add_option('-v', '--value', dest='value', help='The value to store')
     parser.add_option('-b', '--browser', action='store_true', dest='browser', default=False, help='View content of this key in a web browser')
     parser.add_option('-c', '--clear', action='store_true', dest='clear', default=False, help='Clear all data for this cache')
+    parser.add_option('-s', '--size', action='store_true', dest='size', default=False, help='Display size of database')
     options, args = parser.parse_args()
     if not args:
         parser.error('Must specify the cache file')
@@ -634,5 +635,7 @@ if __name__ == '__main__':
         if raw_input('Really? Clear the cache? (y/n) ') == 'y':
             cache.clear()
             print 'cleared'
+    elif options.size:
+        print len(cache)
     else:
         parser.error('No options selected')

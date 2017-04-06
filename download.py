@@ -20,7 +20,6 @@ import thread
 import threading
 import contextlib
 import tempfile
-import traceback
 try:
     import hashlib
 except ImportError:
@@ -391,7 +390,6 @@ class Download:
         headers = headers or {}
         default_headers = settings.default_headers.copy()
         default_headers['User-Agent'] = user_agent or self.get_user_agent(proxy)
-        default_headers['Host'] = headers.get('Host', common.get_domain(url))
         if not max_size:
             default_headers['Accept-Encoding'] = 'gzip, deflate'
         lowercase_headers = [name.lower() for name in headers.keys()]
@@ -400,7 +398,7 @@ class Download:
                 if name == 'Referer':
                     value = url
                 headers[name] = value
-        if not headers['Host']:
+        if 'Host' in headers and not headers['Host']:
             del headers['Host'] # some websites raise an error when host is included
 
         if isinstance(data, dict):
@@ -441,7 +439,7 @@ class Download:
                 except Exception, e:
                     self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
-            common.logger.warning('Download error: {} {} ({})'.format(url, e, self.response_code))
+            common.logger.warning(u'Download error: {} {} ({})'.format(url, e, self.response_code))
             if self.settings.acceptable_errors and self.response_code in self.settings.acceptable_errors:
                 content, self.final_url = self.settings.default, url
             else:

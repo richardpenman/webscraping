@@ -45,10 +45,12 @@ def extract_emails(html, ignored=IGNORED_EMAILS):
     ['contact@webscraping.com']
     >>> extract_emails('hello contact AT webscraping DOT com world')
     ['contact@webscraping.com']
+    >>> extract_emails(' info+hn@gmail.com ')
+    ['info+hn@gmail.com']
     """
     emails = []
     if html:
-        email_re = re.compile('([\w\.-]{1,64})@(\w[\w\.-]{1,255})\.(\w+)')
+        email_re = re.compile('([\w\.\-\+]{1,64})@(\w[\w\.-]{1,255})\.(\w+)')
         # remove comments, which can obfuscate emails
         html = re.compile('<!--.*?-->', re.DOTALL).sub('', html).replace('mailto:', '')
         for user, domain, ext in email_re.findall(html):
@@ -58,7 +60,7 @@ def extract_emails(html, ignored=IGNORED_EMAILS):
                     emails.append(email)
 
         # look for obfuscated email
-        for user, domain, ext in re.compile('([\w\.-]{1,64})\s?.?AT.?\s?([\w\.-]{1,255})\s?.?DOT.?\s?(\w+)', re.IGNORECASE).findall(html):
+        for user, domain, ext in re.compile('([\w\.\-\+]{1,64})\s?.?AT.?\s?([\w\.-]{1,255})\s?.?DOT.?\s?(\w+)', re.IGNORECASE).findall(html):
             if ext.lower() not in common.MEDIA_EXTENSIONS and len(ext)>=2 and not re.compile('\d').search(ext) and domain.count('.')<=3:
                 email = '%s@%s.%s' % (user, domain, ext)
                 if email not in emails:

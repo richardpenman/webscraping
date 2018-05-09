@@ -1,12 +1,7 @@
 __doc__ = 'High level functions for interpreting useful data from input'
 
-import os
-import re
-import math
-import logging
-import random
-import common
-import xpath
+import csv, logging, math, os, random, re
+import common, xpath
 
 
 def get_excerpt(html, try_meta=False, max_chars=255):
@@ -153,6 +148,21 @@ def distance(p1, p2, scale=None):
         return arc * 3960
     else:
         raise common.WebScrapingError('Invalid scale: %s' % str(scale))
+
+
+def get_zip_codes(filename, min_distance=100, scale='miles', lat_key='Latitude', lng_key='Longitude', zip_key='Zip'):
+    """Reads CSV file of zip,lat,lng and returns zip codes that aren't within the minimum distance of each other
+    """
+    locations = []
+    for record in csv.DictReader(open(filename)):
+        lat, lng = float(record[lat_key]), float(record[lng_key])
+        for other_lat, other_lng in locations:
+            if distance((lat, lng), (other_lat, other_lng), scale=scale) < min_distance:
+                break
+        else:
+            locations.append((lat, lng))
+            yield record[zip_key]
+
 
 
 # support to generate a random user agent

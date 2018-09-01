@@ -153,6 +153,10 @@ def distance(p1, p2, scale=None):
 def get_zip_codes(filename, min_distance=100, scale='miles', lat_key='Latitude', lng_key='Longitude', zip_key='Zip'):
     """Reads CSV file of zip,lat,lng and returns zip codes that aren't within the minimum distance of each other
     """
+    for zip_code, lat, lng in get_zip_lat_lngs(filename, min_distance, scale, lat_key, lng_key, zip_key):
+        yield zip_code
+
+def get_zip_lat_lngs(filename, min_distance=100, scale='miles', lat_key='Latitude', lng_key='Longitude', zip_key='Zip'):
     locations = []
     for record in csv.DictReader(open(filename)):
         lat, lng = float(record[lat_key]), float(record[lng_key])
@@ -161,7 +165,7 @@ def get_zip_codes(filename, min_distance=100, scale='miles', lat_key='Latitude',
                 break
         else:
             locations.append((lat, lng))
-            yield record[zip_key]
+            yield record[zip_key], record[lat_key], record[lng_key]
 
 
 

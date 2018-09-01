@@ -232,7 +232,7 @@ class Download:
                 self.proxy = self.get_proxy(settings.proxies)
             # crawl slowly for each domain to reduce risk of being blocked
             self.throttle(url, delay=settings.delay, proxy=self.proxy) 
-            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern, max_size=settings.max_size)
+            html = self.fetch(url, headers=settings.headers, data=settings.data, proxy=self.proxy, user_agent=settings.user_agent, opener=settings.opener, pattern=settings.pattern, max_size=settings.max_size, ssl_context=settings.ssl_context)
 
             if html:
                 # successfully downloaded
@@ -376,7 +376,7 @@ class Download:
         return html is None or (pattern and not re.compile(pattern, re.DOTALL | re.IGNORECASE).search(html))
 
 
-    def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None, max_size=None):
+    def fetch(self, url, headers=None, data=None, proxy=None, user_agent=None, opener=None, pattern=None, max_size=None, ssl_context=None):
         """Simply download the url and return the content
         """
         self.error_content = None
@@ -386,7 +386,11 @@ class Download:
         if proxy:
             # avoid duplicate ProxyHandler
             opener.add_handler(urllib2.ProxyHandler({urlparse.urlparse(url).scheme : proxy}))
-        
+        if ssl_context is not None:
+            # add ssl context XXX does not work
+            https_handler = urllib2.HTTPSHandler(context=ssl_context)
+            opener.add_handler(https_handler)
+            
         headers = headers or {}
         default_headers = settings.default_headers.copy()
         default_headers['User-Agent'] = user_agent or self.get_user_agent(proxy)

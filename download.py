@@ -488,9 +488,9 @@ class Download:
                     common.logger.debug('Reloaded proxies from updated file.')
 
 
-    def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None):
+    def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None, api_key=None):
         gm = GoogleMaps(self)
-        return gm.geocode(address, delay, read_cache, num_retries, language)
+        return gm.geocode(address, delay, read_cache, num_retries, language, api_key=api_key)
 
     def places(self, api_key, keyword, latitude, longitude, radius=10000, delay=5, num_retries=1, language='en'):
         gm = GoogleMaps(self)
@@ -628,7 +628,7 @@ class GoogleMaps:
     def __init__(self, D):
         self.D = D
 
-    def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None):
+    def geocode(self, address, delay=5, read_cache=True, num_retries=1, language=None, api_key=None):
         """Geocode address using Google's API and return dictionary of useful fields
 
         address:
@@ -649,7 +649,16 @@ class GoogleMaps:
             address = common.to_ascii(address)
         address = re.sub('%C2%9\d', '', urllib.quote_plus(address))
         geocode_url = 'http://maps.google.com/maps/api/geocode/json?address=%s&sensor=false%s' % (address, '&language=' + language if language else '')
-        geocode_html = self.D.get(geocode_url, delay=delay, read_cache=read_cache, num_retries=num_retries)
+        try:
+            # legacy data without api key
+            geocode_html = self.D.cache[geocode_url]
+            if geocode_html:
+                self.D.response_code = '200'
+            else:
+                raise KeyError()
+        except KeyError:
+            geocode_url = 'https://maps.google.com/maps/api/geocode/json?address=%s&key=%s&sensor=false%s' % (address, api_key or '', '&language=' + language if language else '')
+            geocode_html = self.D.get(geocode_url, delay=delay, read_cache=read_cache, num_retries=num_retries)
         geocode_data = self.load_result(geocode_url, geocode_html)
         for result in geocode_data.get('results', []):
             return self.parse_location(result)

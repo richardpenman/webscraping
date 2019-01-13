@@ -443,7 +443,7 @@ class Download:
                 except Exception, e:
                     self.error_content = ''
             # so many kinds of errors are possible here so just catch them all
-            common.logger.warning(u'Download error: {} {} ({})'.format(url, e, self.response_code))
+            common.logger.warning(u'Download error: {} {}'.format(url, self.response_code))
             if self.settings.acceptable_errors and self.response_code in self.settings.acceptable_errors:
                 content, self.final_url = self.settings.default, url
             else:

@@ -468,7 +468,7 @@ else:
         def tostring(self, node):
             try:
                 return ''.join(filter(None, 
-                    [node.text] + [lxml.html.tostring(e) for e in node]
+                    [node.text] + [self.tostring(e) for e in node]
                 ))
             except AttributeError:
                 return node

@@ -101,6 +101,17 @@ def parse_us_address(address):
     return address, city, state, zipcode
 
 
+def get_earth_radius(scale):
+    if scale is None:
+        return 1.0
+    elif scale == 'km':
+        return 6373.0
+    elif scale == 'miles':
+        return 3960.0
+    else:
+        raise common.WebScrapingError('Invalid scale: %s' % str(scale))
+
+
 def distance(p1, p2, scale=None):
     """Calculate distance between 2 (latitude, longitude) points.
 
@@ -139,15 +150,28 @@ def distance(p1, p2, scale=None):
     
     cos = (math.sin(phi1)*math.sin(phi2)*math.cos(theta1 - theta2) + math.cos(phi1)*math.cos(phi2))
     arc = math.acos(cos)
+    return arc * get_earth_radius(scale)
 
-    if scale is None:
-        return arc
-    elif scale == 'km':
-        return arc * 6373
-    elif scale == 'miles':
-        return arc * 3960
-    else:
-        raise common.WebScrapingError('Invalid scale: %s' % str(scale))
+
+def find_coordinates(ch_lat=100, ch_lng=100, ch_scale='miles', min_lat=-90, max_lat=90, min_lng=0, max_lng=180):
+    """Find all latitude/longitude coordinates within bounding box, with given increments
+    """
+    cur_lat = min_lat
+    while cur_lat < max_lat:
+        cur_lng = min_lng
+        while cur_lng < max_lng:
+            yield cur_lat, cur_lng
+            _, cur_lng = move_coordinate(cur_lat, cur_lng, 0, ch_lng, ch_scale)
+        cur_lat, _ = move_coordinate(cur_lat, cur_lng, ch_lat, 0, ch_scale)
+
+
+def move_coordinate(lat, lng, ch_lat, ch_lng, ch_scale=None):
+    """Move latitude/longitude coordinate a given increment
+    """
+    r_earth = get_earth_radius(ch_scale)
+    new_lat = lat + (ch_lat / r_earth) * (180 / math.pi);
+    new_lng = lng + (ch_lng / r_earth) * (180 / math.pi) / math.cos(lat * math.pi/180.0)
+    return new_lat, new_lng
 
 
 def get_zip_codes(filename, min_distance=100, scale='miles', lat_key='Latitude', lng_key='Longitude', zip_key='Zip'):

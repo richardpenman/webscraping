@@ -153,7 +153,7 @@ def distance(p1, p2, scale=None):
     return arc * get_earth_radius(scale)
 
 
-def find_coordinates(ch_lat=100, ch_lng=100, ch_scale='miles', min_lat=-90, max_lat=90, min_lng=0, max_lng=180):
+def find_coordinates(ch_lat=100, ch_lng=100, ch_scale='miles', min_lat=-90, max_lat=90, min_lng=-180, max_lng=180):
     """Find all latitude/longitude coordinates within bounding box, with given increments
     """
     cur_lat = min_lat

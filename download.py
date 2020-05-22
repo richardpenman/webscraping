@@ -410,7 +410,7 @@ class Download:
             data = urllib.urlencode(sorted(data.items()))
         common.logger.info('Downloading %s %s' % (url, data or ''))
         try:
-            request = urllib2.Request(urllib.quote(url, safe='/:'), data, headers)
+            request = urllib2.Request(urllib.quote(url, safe='/:?&+'), data, headers)
             with contextlib.closing(opener.open(request)) as response:
                 if max_size is not None:
                     content = response.read(max_size)

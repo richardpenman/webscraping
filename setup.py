@@ -6,14 +6,14 @@ def read(filename):
 
 setup(
     name='webscraping', 
-    version='1.5',
+    version='1.7.1',
     packages=['webscraping'],
     package_dir={'webscraping':'.'}, # look for package contents in current directory
     author='Richard Penman',
     author_email='richard@webscraping.com',
     description='Pure python library aimed to make web scraping easier',
     long_description=read('README.rst'),
-    url='http://bitbucket.org/richardpenman/webscraping',
+    url='https://github.com/richardpenman/webscraping',
     classifiers = [
         'Environment :: Web Environment',
         'Intended Audience :: Developers',

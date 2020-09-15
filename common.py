@@ -649,6 +649,18 @@ class UnicodeWriter:
         self.fp.close()
 
 
+def csv_to_xls(filename):
+    from xlsxwriter.workbook import Workbook
+    workbook = Workbook(filename[:-4] + '.xlsx')
+    worksheet = workbook.add_worksheet()
+    with open(filename, 'rt') as f:
+        reader = csv.reader(f)
+        for r, row in enumerate(reader):
+            for c, col in enumerate(row):
+                worksheet.write(r, c, col.decode('utf-8'))
+    workbook.close()
+
+
 
 # decrypt chrome cookies
 class Chrome:

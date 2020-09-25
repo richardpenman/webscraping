@@ -17,15 +17,9 @@ However this module tries to navigate the HTML structure directly without normal
 # - return xpath for most similar to text
 # - multiple filters for a tag
 
-import re
-import sys
-import urllib
-import urllib2
-import urlparse
+import itertools, re, sys, urllib, urllib2, urlparse
 from optparse import OptionParser
-import adt
-import common
-import settings
+import adt, common, settings
 
 
 class Doc:
@@ -467,11 +461,10 @@ else:
 
         def tostring(self, node):
             try:
-                return ''.join(filter(None, 
-                    [node.text] + [self.tostring(e) for e in node]
-                ))
+                parts = [node.text] + [str(c) if isinstance(c, basestring) else lxml.etree.tostring(c) for c in node] + [node.tail]
+                return ''.join(filter(None, parts)) or str(node)
             except AttributeError:
-                return node
+                return str(node)
 
 
 def get(html, xpath, remove=None):

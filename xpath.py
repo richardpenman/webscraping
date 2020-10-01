@@ -461,10 +461,10 @@ else:
 
         def tostring(self, node):
             try:
-                parts = [node.text] + [str(c) if isinstance(c, basestring) else lxml.etree.tostring(c) for c in node] + [node.tail]
+                parts = [node.text] + [unicode(c) if isinstance(c, basestring) else lxml.etree.tostring(c) for c in node] + [node.tail]
                 return ''.join(filter(None, parts)) or str(node)
             except AttributeError:
-                return str(node)
+                return unicode(node)
 
 
 def get(html, xpath, remove=None):

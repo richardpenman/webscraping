@@ -42,6 +42,8 @@ def extract_emails(html, ignored=IGNORED_EMAILS):
     ['contact@webscraping.com']
     >>> extract_emails(' info+hn@gmail.com ')
     ['info+hn@gmail.com']
+    >>> extract_emails('<a href="mailto:first.last@mail.co.uk">Contact</a>')
+    ['first.last@mail.co.uk']
     """
     emails = []
     if html:
@@ -74,8 +76,10 @@ def extract_phones(html):
     ['123-456-7890', '123 456 7890']
     >>> extract_phones('456-7890')
     []
+    >>> extract_phones('<a href="tel:0234673460">Contact</a>')
+    ['0234673460']
     """
-    return [match.group() for match in re.finditer('(\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}', html)]
+    return [match.group() for match in re.finditer('(\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}', html)] + re.findall('tel:(\d+)', html)
 
 
 def parse_us_address(address):

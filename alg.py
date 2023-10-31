@@ -196,6 +196,22 @@ def get_zip_lat_lngs(filename, min_distance=100, scale='miles', lat_key='Latitud
             yield record[zip_key], record[lat_key], record[lng_key]
 
 
+def find_json_path(e, value, path=''):
+    """Find the JSON path that points to this value
+    """
+    results = []
+    if e == value:
+        results.append(path)
+    if isinstance(e, dict):
+        for k, v in e.items():
+            key_path = '{}["{}"]'.format(path, k)
+            results.extend(find_json_path(v, value, key_path))
+    elif isinstance(e, list):
+        for i, v in enumerate(e):
+            index_path = '{}[{}]'.format(path, i)
+            results.extend(find_json_path(v, value, index_path))
+    return results
+
 
 # support to generate a random user agent
 

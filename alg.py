@@ -185,16 +185,20 @@ def get_zip_codes(filename, min_distance=100, scale='miles', lat_key='Latitude',
         yield zip_code
 
 def get_zip_lat_lngs(filename, min_distance=100, scale='miles', lat_key='Latitude', lng_key='Longitude', zip_key='Zip'):
-    locations = []
-    for record in csv.DictReader(open(filename)):
-        lat, lng = float(record[lat_key]), float(record[lng_key])
-        for other_lat, other_lng in locations:
-            if distance((lat, lng), (other_lat, other_lng), scale=scale) < min_distance:
-                break
-        else:
-            locations.append((lat, lng))
+    if min_distance > 0:
+        locations = []
+        for record in csv.DictReader(open(filename)):
+            lat, lng = float(record[lat_key]), float(record[lng_key])
+            for other_lat, other_lng in locations:
+                if distance((lat, lng), (other_lat, other_lng), scale=scale) < min_distance:
+                    break
+            else:
+                locations.append((lat, lng))
+                yield record[zip_key], record[lat_key], record[lng_key]
+    else:
+        for record in csv.DictReader(open(filename)):
             yield record[zip_key], record[lat_key], record[lng_key]
-
+        
 
 def find_json_path(e, value, path=''):
     """Find the JSON path that points to this value
